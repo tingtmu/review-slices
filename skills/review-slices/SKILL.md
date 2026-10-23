@@ -70,7 +70,8 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    new commit and goes through step 6's second round.
 9. **Push** only with the user's go-ahead. The pre-push hook checks the stamp and the trailers in about a second.
    If it refuses, fix what it names. `git push --no-verify`, changing the hook's git config, an edited guard or
-   bootstrap and a hand-written stamp are the user's override, never yours; using one is an incident.
+   bootstrap and a hand-written stamp are the user's override, never yours; using one is an incident. Where the
+   repo has the agent hook, it refuses these for you.
 
 ## Record an incident
 
@@ -92,17 +93,23 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
 1. Copy [templates/REVIEW.md](templates/REVIEW.md) to the repo root and fill in its level table (one glob per
    line), its `test:` lines (one per check of the suite) and its failure list. Copy
    [templates/INCIDENTS.md](templates/INCIDENTS.md) to `docs/INCIDENTS.md`.
-2. Run `python3 <skill>/scripts/setup_tools.py install`, show the user what it would change, and with their
-   go-ahead run it again with `--apply`. It copies the guard to `.githooks/` if missing, writes this clone's
-   bootstrap, records the base branch, and wires pre-push: a git config hook on git 2.54+, else a hook file that
-   runs any hook already there after the guard. It never sets `core.hooksPath`, so git-lfs, Husky and pre-commit
-   keep running. If it reports a problem, tell the user.
+2. Run `python3 <skill>/scripts/setup_tools.py install --agent-hooks`, show the user what it would change, and
+   with their go-ahead run it again with `--apply`. It copies the guard to `.githooks/` if missing, writes this
+   clone's bootstrap, records the base branch, and wires pre-push with a hook file that runs any hook already
+   there after the guard (pre-commit's through its `.legacy` hook). Where another tool owns `core.hooksPath`
+   (Husky), it registers a git config hook instead, which only git 2.54+ runs. It never sets `core.hooksPath`,
+   so git-lfs, Husky and pre-commit keep running. `--agent-hooks` adds the agent hook to `.claude/settings.json`
+   and `.codex/hooks.json`, keeping what is there; Codex runs it once its hooks feature is on and the user trusts
+   the hook. If install reports a problem, tell the user.
 3. Run `python3 .githooks/review_slices.py check` until it reports no error, and `setup_tools.py doctor` until
    it reports ok.
-4. Commit REVIEW.md, `docs/INCIDENTS.md` and `.githooks/review_slices.py` together; REVIEW.md puts them at
-   Important or higher, so they are reviewed like any change. Every other clone that wants the guard runs
-   `install --apply` once; teammates who do not are never blocked by it.
-5. Point the repo's agent instructions (AGENTS.md or CLAUDE.md) at REVIEW.md with a plain path, not an import.
+4. Commit REVIEW.md, `docs/INCIDENTS.md`, `.githooks/` and the agent hook settings together; REVIEW.md puts them
+   at Important or higher, so they are reviewed like any change. Every other clone that wants the guard runs
+   `install --apply` once; teammates who do not are never blocked by it, and the agent hook does nothing for them.
+5. Offer the user [templates/review-slices-ci.yml](templates/review-slices-ci.yml) as
+   `.github/workflows/review-slices.yml`: it runs `review_slices.py ci` on every pull request, so trailers are
+   checked even from clones that never installed the hook.
+6. Point the repo's agent instructions (AGENTS.md or CLAUDE.md) at REVIEW.md with a plain path, not an import.
 
 When the skill is newer than the repo's guard, `setup_tools.py upgrade --apply` copies it in; commit it as a
 reviewed change. What gets installed:
@@ -112,10 +119,15 @@ reviewed change. What gets installed:
 <repo>/docs/INCIDENTS.md               incidents and their plugs           committed
 <repo>/.githooks/review_slices.py      the guard; the base branch's copy   committed
                                        judges every push
+<repo>/.githooks/agent_hook.py         blocks an agent's overrides         committed
+<repo>/.claude/settings.json           runs the agent hook (Claude Code)   committed
+<repo>/.codex/hooks.json               runs the agent hook (Codex)         committed
+<repo>/.github/workflows/...           optional: `ci` on pull requests     committed
 <git-common-dir>/review-slices/        per clone, never committed:
     bootstrap.py                       runs the base branch's guard on pre-push
     suite-pass                         pass stamps
-git config (per clone)                 hook.review-slices.* or a pre-push hook file; review-slices.base
+<git-common-dir>/hooks/pre-push        per clone: runs the bootstrap, then any hook that was there
+git config (per clone)                 review-slices.base; hook.review-slices.* only beside a foreign core.hooksPath
 ```
 
 ## Report

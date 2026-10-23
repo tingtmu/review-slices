@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""review-slices guard (skill version 0.3.0): review levels, pass stamps and the pre-push check.
+"""review-slices guard (skill version 0.4.0): review levels, pass stamps and the pre-push check.
 
     review_slices.py status [BASE]         where this work stands: its review level and the trailer to write, the
                                            rules it is judged by, the pass stamp, the hook, and the next step
@@ -7,6 +7,7 @@
     review_slices.py check                 lint REVIEW.md's review-slices block; exit 1 on an error
     review_slices.py run-suite             run every check in the suite; on a pass, stamp the tested tree
     review_slices.py pre-push REMOTE URL   git pre-push hook: refuse a push with no fitting trailer or stamp
+    review_slices.py ci BASE HEAD          for a CI job: refuse when HEAD's new commits over BASE lack fitting trailers
     review_slices.py --version
 
 Configuration is the first ```review-slices fenced block in REVIEW.md at the repo root:
@@ -16,8 +17,10 @@ Configuration is the first ```review-slices fenced block in REVIEW.md at the rep
     default: simple                      # level of a path no glob matches (default: simple)
     critical: engine/src/*/approval.py   # "<level>: <glob>", one per line; "*" also matches "/"
 
-A path takes the highest level whose glob matches it, and REVIEW.md and .githooks/* are always at least important;
-a range takes the highest level of its paths. The standing rules judge a change: REVIEW.md as committed where its
+A path takes the highest level whose glob matches it, and REVIEW.md and .githooks/* are always at least important.
+A push is judged by its new commits only (those neither the target ref nor the base branch has), each by its own
+paths; a merge counts only where it differs from git's own merge of its parents. Each review trailer must cover
+the highest level of the new commits since the previous trailer. The standing rules judge a change: REVIEW.md as committed where its
 branch left the base branch, so a change cannot lower the levels it is judged by. A change to the suite is reported
 and reviewed (REVIEW.md is at least important), not blocked. `status` and `pre-push` hand off to the guard committed
 on the base branch when this copy differs from it, so an edited copy does not judge its own push.
@@ -26,6 +29,7 @@ Standard library only, Python 3.8+, git 2.32+.
 import collections
 import datetime
 import fnmatch
+import functools
 import os
 import re
 import shutil
@@ -34,14 +38,14 @@ import sys
 import tempfile
 import time
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 LEVELS = ("trivial", "simple", "important", "critical")
 FLOOR = (("REVIEW.md", "important"), (".githooks/*", "important"))
 GUARD_PATH = ".githooks/review_slices.py"
 HANDOFF = "REVIEW_SLICES_HANDOFF"
 # The first guard version that has each command; the base branch's guard runs a command only if it has it.
 SINCE = {"level": (0, 1, 0), "run-suite": (0, 1, 0), "pre-push": (0, 1, 0), "check": (0, 2, 0),
-         "status": (0, 3, 0)}
+         "status": (0, 3, 0), "ci": (0, 4, 0)}
 SLICE2 = {"trivial": "no review",
           "simple": "1-2 adversarial reviewers",
           "important": "a Standards, a Spec and an adversarial reviewer",
@@ -89,6 +93,7 @@ def source_version(source):
     return version_tuple(match.group(1)) if match else (0, 1, 0)
 
 
+@functools.lru_cache(maxsize=None)
 def git_version():
     return version_tuple(git("--version"))
 
@@ -144,7 +149,11 @@ def read_config(root):
 
 
 def working_config(root):
-    return read_config(root) if os.path.exists(os.path.join(root, "REVIEW.md")) else None
+    """The working copy's rules, or None if it has no REVIEW.md with a review-slices block."""
+    path = os.path.join(root, "REVIEW.md")
+    with open(path, encoding="utf-8") if os.path.exists(path) else open(os.devnull) as handle:
+        text = handle.read()
+    return parse_config(text) if re.search(r"^```review-slices", text, re.M) else None
 
 
 def rules_text(commit):
@@ -152,9 +161,10 @@ def rules_text(commit):
 
 
 def rules_at(commit):
-    """REVIEW.md's rules as committed at COMMIT: None if it has none, every path critical if they do not parse."""
+    """REVIEW.md's rules as committed at COMMIT: None if it has none (or a REVIEW.md with no review-slices block,
+    which is some other document), every path critical if they do not parse."""
     text = rules_text(commit)
-    if text is None:
+    if text is None or not re.search(r"^```review-slices", text, re.M):
         return None
     try:
         return parse_config(text + "\n")
@@ -194,16 +204,28 @@ def untracked_paths():
     return split_nul(git("ls-files", "-z", "--others", "--exclude-standard", "--full-name", ":/"))
 
 
-def default_base(config, head="HEAD"):
-    branch = git("symbolic-ref", "--short", "--quiet", "HEAD", check=False)
-    for remote in ("@{upstream}", "@{push}", "refs/remotes/origin/%s" % branch if branch else None):
-        found = remote and git("rev-parse", "--verify", "--quiet", remote, check=False)
-        if found:
-            return git("merge-base", found, head)
-    base = git("merge-base", config["base"], head, check=False)
-    if not base:
-        raise GuardError("no upstream and no merge-base with %r; pass BASE explicitly" % config["base"])
-    return base
+def new_commits(head, trusted):
+    """Commits HEAD has that no TRUSTED commit has, parents first. Only the target ref and the base branch are
+    trusted: another branch someone pushed has not been through the base branch's rules."""
+    return git("rev-list", "--reverse", "--topo-order", head, *(("--not",) + tuple(trusted) if trusted else ())).split()
+
+
+def commit_paths(commit):
+    """The paths COMMIT itself changed: against its parent, or for a merge, only where it differs from git's own
+    merge of its parents (a conflict resolution, a dropped change, an edit made in the merge)."""
+    parents = git("rev-list", "--parents", "-n", "1", commit).split()[1:]
+    if not parents:
+        return split_nul(git("diff-tree", "--root", "-r", "--no-commit-id", *DIFF_PATHS, commit))
+    if len(parents) == 1:
+        return changed_paths(parents[0], commit)
+    if len(parents) == 2 and git_version() >= (2, 36):
+        return split_nul(git("show", "--remerge-diff", "--format=", *DIFF_PATHS, commit))
+    combined = set(split_nul(git("diff-tree", "--cc", "--no-commit-id", *DIFF_PATHS, commit)))
+    base = git("merge-base", "--octopus", *parents, check=False)
+    sides = [set(changed_paths(base, parent)) for parent in parents] if base else []
+    both = {path for index, side in enumerate(sides) for path in side
+            if any(path in other for other in sides[index + 1:])}
+    return sorted(combined | both)
 
 
 def base_tip():
@@ -215,20 +237,20 @@ def base_tip():
     return name, git("rev-parse", "--verify", "--quiet", "refs/remotes/%s^{commit}" % name, check=False)
 
 
-def standing_commit(local_sha, others=()):
-    """The commit whose REVIEW.md judges LOCAL_SHA: where it left the base branch, else where it left one of
-    OTHERS (the ref it is pushed over); None if it shares no history with them."""
-    for other in (base_tip()[1],) + tuple(others):
-        found = other and git("merge-base", local_sha, other, check=False)
+def standing_commit(local_sha, tips):
+    """The commit whose REVIEW.md judges LOCAL_SHA: where it left the first of TIPS (the base branch first) that it
+    shares history with; None if it shares none."""
+    for tip in tips:
+        found = tip and git("merge-base", local_sha, tip, check=False)
         if found:
             return found
     return None
 
 
 def trailer_level(commit):
-    """The level of COMMIT's `Review:` trailer (in the message's last paragraph), or None."""
+    """The level of COMMIT's last `Review:` trailer (in the message's last paragraph), or None."""
     value = git("log", "-1", "--no-show-signature", "--format=%(trailers:key=Review,valueonly,unfold)", commit)
-    words = value.split() if value else []
+    words = value.splitlines()[-1].split() if value else []
     return words[0].lower() if words and words[0].lower() in LEVELS else None
 
 
@@ -262,9 +284,10 @@ def lint(config):
 
 
 def hook_wiring():
-    """How this clone's pre-push reaches the guard, or None if it does not."""
+    """How this clone's pre-push reaches the guard, or None if it does not. A config hook runs only for git 2.54+,
+    so it is named as such: an older git pushing from this clone runs nothing."""
     if git_version() >= (2, 54) and "review-slices" in (git("hook", "list", "pre-push", check=False) or "").split():
-        return "config hook review-slices"
+        return "config hook review-slices (only git 2.54+ runs it)"
     hook = git("rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push")
     for path in (hook, hook + ".legacy"):
         if os.access(path, os.X_OK):
@@ -275,6 +298,14 @@ def hook_wiring():
             if "review_slices.py" in text:
                 return "hook file %s (0.1.0's: it runs the checkout's guard; run setup_tools.py install)" % path
     return None
+
+
+def base_mismatch(config, tip_name):
+    """A warning when the base branch the hook uses is not the one REVIEW.md names, or None."""
+    if config is None or tip_name.split("/", 1)[-1] == config["base"]:
+        return None
+    return ("the hook measures from %s, but REVIEW.md's base is %s; run setup_tools.py install, or fix REVIEW.md"
+            % (tip_name, config["base"]))
 
 
 def worktree_tree(root):
@@ -321,13 +352,13 @@ def write_stamp(tree, seconds):
         handle.write("\n".join((lines + ["%s %s %.0fs" % (tree, now, seconds)])[-STAMP_KEEP:]) + "\n")
 
 
-def handoff(command, args, data=None):
-    """The exit code of the base branch's guard, run instead of this copy, or None to run this copy. The base's
-    guard runs when it differs from this file and has COMMAND, so an edited copy does not judge its own push."""
+def handoff(command, args, data=None, judge=None):
+    """The exit code of the guard committed at JUDGE (the base branch), run instead of this copy, or None to run
+    this copy. It runs when it differs from this file and has COMMAND, so an edited copy does not judge itself."""
     if os.environ.get(HANDOFF):
         return None
-    _name, tip = base_tip()
-    source = tip and git_raw("show", "%s:%s" % (tip, GUARD_PATH))
+    judge = judge or base_tip()[1]
+    source = judge and git_raw("show", "%s:%s" % (judge, GUARD_PATH))
     if not source:
         return None
     with open(os.path.abspath(__file__), encoding="utf-8") as handle:
@@ -375,14 +406,14 @@ def last_trailer(commits):
     return next((commit for commit in reversed(commits) if trailer_level(commit)), None)
 
 
-def next_step(config, level, start, base, commits, uncommitted):
+def next_step(config, level, start, commits, uncommitted):
     if uncommitted:
         return "commit this work locally (no trailer yet), then run status again"
     if level != "trivial":
         return ("review at %s: %s, on `git diff %s..HEAD`; then add the trailer to the last commit with "
-                "`git commit --amend --only --no-edit --trailer \"Review: %s %s\"`"
+                "`git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer \"Review: %s %s\"`"
                 % (level, SLICE2[level], start[:12], level, start[:12]))
-    problems = review_problems(config, base, "HEAD")
+    problems = review_problems(config, commits)
     if problems:
         return "fix the trailers: " + problems[0]
     if config["tests"] and commits and git("rev-parse", "HEAD^{tree}") not in stamps():
@@ -390,25 +421,45 @@ def next_step(config, level, start, base, commits, uncommitted):
     return "ask the user's go-ahead, then push" if commits else "nothing to push"
 
 
+def status_tips(args):
+    """The commits a push from here would be measured against: BASE if given, else the base branch and this
+    branch's push or upstream target."""
+    if args:
+        return (git("rev-parse", "--verify", args[0] + "^{commit}"),)
+    found = [git("rev-parse", "--verify", "--quiet", ref + "^{commit}", check=False)
+             for ref in ("@{push}", "@{upstream}")]
+    return tuple(tip for tip in [base_tip()[1]] + found if tip)
+
+
+def open_unit(commits):
+    """(start, paths): where the open review unit starts, and every path it and the working tree change."""
+    last = last_trailer(commits)
+    tail = commits[commits.index(last) + 1:] if last else commits
+    paths = set(changed_paths("HEAD")) | set(untracked_paths())
+    for commit in tail:
+        paths = paths | set(commit_paths(commit))
+    first = git("rev-parse", "--verify", "--quiet", commits[0] + "^", check=False) if commits else None
+    return last or first or git("rev-parse", "HEAD"), sorted(paths)
+
+
 def cmd_status(args):
-    """Where this work stands. The level covers the open review unit: commits since the last trailer, plus edits
-    and new files a commit would carry."""
+    """Where this work stands. The level covers the open review unit: new commits since the last trailer, plus
+    the edits and new files a commit would carry."""
     root = git("rev-parse", "--show-toplevel")
     working = working_config(root)
-    base = git("rev-parse", args[0]) if args else default_base(working or {"base": "main"})
-    tip_name, _tip = base_tip()
-    standing = standing_commit("HEAD")
-    config = (standing and rules_at(standing)) or rules_at(base) or working
+    tips, tip_name = status_tips(args), base_tip()[0]
+    standing = standing_commit("HEAD", tips)
+    config = (standing and rules_at(standing)) or working
     if config is None:
-        raise GuardError("REVIEW.md not found at the repo root or at %s" % base[:12])
-    commits = commits_since(base, "HEAD")
-    start = last_trailer(commits) or base
-    uncommitted = sorted(set(changed_paths("HEAD") + untracked_paths()))
-    level, rows = range_level(config, sorted(set(changed_paths(start) + untracked_paths())))
+        raise GuardError("no REVIEW.md here or where this branch left %s" % tip_name)
+    commits = new_commits("HEAD", tips)
+    start, paths = open_unit(commits)
+    level, rows = range_level(config, paths)
     print("level: %s" % level)
     for row in rows[:20]:
         print("  %s  (%s)" % (row.path, row.pattern))
     print("trailer: Review: %s %s" % (level, start[:12]))
+    print("new commits: %d not yet on %s or this branch's remote" % (len(commits), tip_name))
     print("standing rules: %s" % ("REVIEW.md at %s, where this branch left %s" % (standing[:12], tip_name)
                                   if standing and rules_at(standing) else "this branch's own REVIEW.md (%s not fetched "
                                   "or without one)" % tip_name))
@@ -417,11 +468,16 @@ def cmd_status(args):
     wiring = hook_wiring()
     print("hook: %s" % (wiring or "NOT WIRED: pushes from this clone are not checked; run the skill's "
                                   "setup_tools.py install"))
+    print("guard: %s, %s" % (VERSION, "the base branch's copy" if os.environ.get(HANDOFF) else "this copy"))
+    mismatch = base_mismatch(working, tip_name)
+    if mismatch:
+        print("note: " + mismatch)
     note = suite_change(config, working)
     if note:
         print("note: " + note)
-    print_rule_messages(config, working, (standing or base)[:12])
-    print("next: " + next_step(config, level, start, base, commits, uncommitted))
+    print_rule_messages(config, working, (standing or start)[:12])
+    uncommitted = sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
+    print("next: " + next_step(config, level, start, commits, uncommitted))
     return 0
 
 
@@ -438,9 +494,13 @@ def cmd_run_suite(_args):
     config = read_config(root)
     if not config["tests"]:
         raise GuardError("REVIEW.md's review-slices block names no test command")
-    if not hook_wiring():
-        print("warning: this clone's pre-push does not reach the guard; run the skill's setup_tools.py install",
-              file=sys.stderr)
+    wiring = hook_wiring()
+    if not wiring or "0.1.0" in wiring:
+        print("warning: this clone's pre-push does not reach the bootstrap, so pushes are not checked by the base "
+              "branch's guard; run the skill's setup_tools.py install", file=sys.stderr)
+    mismatch = base_mismatch(config, base_tip()[0])
+    if mismatch:
+        print("warning: " + mismatch, file=sys.stderr)
     untracked = untracked_paths()
     if untracked:
         print("note: the stamp includes these untracked files; commit them all, or run again without them:\n  "
@@ -474,60 +534,40 @@ def cmd_run_suite(_args):
     return 0
 
 
-def push_base(remote, local_sha, remote_sha):
-    """(base, problem): what the remote already has that the pushed range starts from, or why it cannot be found.
-    Nothing in the pushed commits can move the base: a new ref is measured against every commit the remote is
-    known to have, and a clone that never fetched measures from the empty tree (the whole repo)."""
-    if remote_sha.strip("0"):
-        remote_commit = git("rev-parse", "--verify", "--quiet", remote_sha + "^{commit}", check=False)
-        if not remote_commit:
-            return None, "the remote is at %s, which this clone does not have: fetch first" % remote_sha[:12]
-        return git("merge-base", remote_commit, local_sha, check=False), None
-    new = git("rev-list", "--reverse", "--topo-order", local_sha, "--not", "--remotes=%s" % remote).split()
-    if not new:
-        return local_sha, None
-    parent = git("rev-parse", "--verify", "--quiet", new[0] + "^", check=False)
-    return parent or git("hash-object", "-t", "tree", "/dev/null"), None
-
-
-def commits_since(base, local_sha):
-    """Commits from BASE (a commit, or the empty tree) to LOCAL_SHA, oldest first."""
-    is_commit = git("cat-file", "-e", base + "^{commit}", check=False) is not None
-    return git("rev-list", "--reverse", "%s..%s" % (base, local_sha) if is_commit else local_sha).split()
-
-
-def review_problems(config, base, local_sha):
-    """Each trailer must cover the level of the paths changed since the previous trailer; only trivial work may
-    follow the last one."""
-    problems, start = [], base
-    for commit in commits_since(base, local_sha):
+def review_problems(config, commits):
+    """Each trailer must cover the highest level of the new commits since the previous trailer; only trivial work
+    may follow the last one."""
+    problems, pending, last = [], set(), None
+    for commit in commits:
+        pending = pending | set(commit_paths(commit))
         declared = trailer_level(commit)
         if not declared:
             continue
-        level, rows = range_level(config, changed_paths(start, commit))
+        level, rows = range_level(config, sorted(pending))
         if rank(declared) < rank(level):
             problems.append("the trailer on %s says %s, but the commits it covers change %s-level paths, for "
                             "example %s (%s)" % (commit[:12], declared, level, rows[0].path, rows[0].pattern))
-        start = commit
-    level, rows = range_level(config, changed_paths(start, local_sha))
+        pending, last = set(), commit
+    level, rows = range_level(config, sorted(pending))
     if level == "trivial":
         return problems
-    if start == base:
-        problems.append("the pushed range needs a review at level %s (for example %s matches %s), and no commit "
-                        "in it carries `Review: %s ...` or higher" % (level, rows[0].path, rows[0].pattern, level))
+    if last is None:
+        problems.append("the new commits need a review at level %s (for example %s matches %s), and none carries "
+                        "`Review: %s ...` or higher" % (level, rows[0].path, rows[0].pattern, level))
     else:
         problems.append("commits after the last review trailer (%s) change %s-level paths, for example %s; "
-                        "review them and add a new trailer" % (start[:12], level, rows[0].path))
+                        "review them and add a new trailer" % (last[:12], level, rows[0].path))
     return problems
 
 
-def standing_rules(base, local_sha, remote_sha):
-    """(rules, problem, notes): the standing rules for pushing LOCAL_SHA, whose new commits start after BASE. A push
-    may bring REVIEW.md (adoption) but never take it away."""
-    standing = standing_commit(local_sha, (remote_sha,) if remote_sha.strip("0") else ())
-    config = (standing and rules_at(standing)) or rules_at(base)
-    if config is not None and rules_text(local_sha) is None:
-        return None, "this push deletes or moves REVIEW.md; removing the rules is the user's decision", []
+def standing_rules(local_sha, tips):
+    """(rules, problem, notes): the standing rules for pushing LOCAL_SHA, from where it left the first of TIPS it
+    shares history with. A push may bring REVIEW.md (adoption) but never take it away."""
+    standing = standing_commit(local_sha, tips)
+    config = rules_at(standing) if standing else None
+    if config is not None and rules_at(local_sha) is None:
+        return None, ("this push deletes or moves REVIEW.md or its review-slices block; removing the rules is the "
+                      "user's decision"), []
     if config is not None:
         return config, None, []
     config = rules_at(local_sha)
@@ -538,17 +578,21 @@ def standing_rules(base, local_sha, remote_sha):
     if deleted:
         return None, None, ["REVIEW.md was deleted in %s, before this push, so the push is NOT checked; restoring it "
                             "is the user's decision" % deleted]
-    return None, None, ["no REVIEW.md on this ref or at the remote, so the push is not checked"]
+    return None, None, ["no REVIEW.md on this ref or where it left the base branch, so the push is not checked"]
 
 
-def check_ref(remote, local_sha, remote_sha, stamped):
+def check_ref(local_sha, remote_sha, stamped):
     """(problems, notes) for pushing LOCAL_SHA over REMOTE_SHA; no problems means the push may go."""
-    base, problem = push_base(remote, local_sha, remote_sha)
-    if problem:
-        return [problem], []
-    if not commits_since(base, local_sha):
+    remote_commit = None
+    if remote_sha.strip("0"):
+        remote_commit = git("rev-parse", "--verify", "--quiet", remote_sha + "^{commit}", check=False)
+        if not remote_commit:
+            return ["the remote is at %s, which this clone does not have: fetch first" % remote_sha[:12]], []
+    tips = tuple(tip for tip in (base_tip()[1], remote_commit) if tip)
+    commits = new_commits(local_sha, tips)
+    if not commits:
         return [], []
-    config, problem, notes = standing_rules(base, local_sha, remote_sha)
+    config, problem, notes = standing_rules(local_sha, tips)
     if problem or config is None:
         return [problem] if problem else [], notes
     notes = notes + [note for note in (config.get("unreadable"), suite_change(config, rules_at(local_sha))) if note]
@@ -556,11 +600,10 @@ def check_ref(remote, local_sha, remote_sha, stamped):
     if config["tests"] and git("rev-parse", local_sha + "^{tree}") not in stamped:
         problems.append("no pass stamp for %s: run `python3 %s run-suite` on this commit (the full suite, once), "
                         "then push" % (local_sha[:12], GUARD_PATH))
-    return problems + review_problems(config, base, local_sha), notes
+    return problems + review_problems(config, commits), notes
 
 
 def cmd_pre_push(args, data=""):
-    remote = args[0] if args else "origin"
     stamped = stamps()
     problems, notes = [], []
     for line in data.splitlines():
@@ -577,7 +620,7 @@ def cmd_pre_push(args, data=""):
         if remote_ref.startswith("refs/notes/") or not local_commit:
             notes.append("%s: not a commit history (notes, or a tag of a tree or blob), so not checked" % remote_ref)
             continue
-        ref_problems, ref_notes = check_ref(remote, local_commit, remote_sha, stamped)
+        ref_problems, ref_notes = check_ref(local_commit, remote_sha, stamped)
         problems += ["%s: %s" % (remote_ref, problem) for problem in ref_problems]
         notes += ["%s: %s" % (remote_ref, note) for note in ref_notes]
     if notes:
@@ -588,8 +631,27 @@ def cmd_pre_push(args, data=""):
     return 0
 
 
+def cmd_ci(args):
+    """Trailer coverage of HEAD's new commits over BASE, for a CI job; no stamp, since CI runs the suite itself."""
+    if len(args) != 2:
+        raise GuardError("usage: review_slices.py ci BASE HEAD")
+    base, head = (git("rev-parse", "--verify", "%s^{commit}" % arg) for arg in args)
+    commits = new_commits(head, (base,))
+    config, problem, notes = standing_rules(head, (base,))
+    if config is not None:
+        notes = notes + [note for note in (config.get("unreadable"), suite_change(config, rules_at(head))) if note]
+    problems = [problem] if problem else (review_problems(config, commits) if config else [])
+    for note in notes:
+        print("note: " + note)
+    if problems:
+        print("review-slices ci: refused\n- " + "\n- ".join(problems))
+        return 1
+    print("review-slices ci: %d new commit(s) over %s, every one covered" % (len(commits), base[:12]))
+    return 0
+
+
 COMMANDS = {"status": cmd_status, "level": cmd_status, "check": cmd_check, "run-suite": cmd_run_suite,
-            "pre-push": cmd_pre_push}
+            "pre-push": cmd_pre_push, "ci": cmd_ci}
 
 
 def main(argv):
@@ -605,8 +667,10 @@ def main(argv):
             data = sys.stdin.read()
             code = handoff(command, args, data)
             return cmd_pre_push(args, data) if code is None else code
-        if command in ("status", "level"):
-            code = handoff(command, args)
+        if command in ("status", "level", "ci"):
+            judge = git("rev-parse", "--verify", "--quiet", args[0] + "^{commit}", check=False) \
+                if command == "ci" and args else None
+            code = handoff(command, args, judge=judge)
             if code is not None:
                 return code
         return COMMANDS[command](args)

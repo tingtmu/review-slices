@@ -2,7 +2,7 @@
 import os
 import unittest
 
-from support import GUARD, ROOT, load_guard
+from support import GUARD, ROOT, SCRIPTS, load_guard
 
 
 class DogfoodTest(unittest.TestCase):
@@ -10,6 +10,11 @@ class DogfoodTest(unittest.TestCase):
         with open(GUARD, encoding="utf-8") as skill, \
                 open(os.path.join(ROOT, ".githooks", "review_slices.py"), encoding="utf-8") as copy:
             self.assertEqual(copy.read(), skill.read(), "copy skills/review-slices/scripts/review_slices.py to .githooks/ and commit it")
+
+    def test_the_repo_agent_hook_copy_matches_the_skill(self):
+        with open(os.path.join(SCRIPTS, "agent_hook.py"), encoding="utf-8") as skill, \
+                open(os.path.join(ROOT, ".githooks", "agent_hook.py"), encoding="utf-8") as copy:
+            self.assertEqual(copy.read(), skill.read(), "copy skills/review-slices/scripts/agent_hook.py to .githooks/")
 
     def test_the_repo_rules_parse(self):
         with open(os.path.join(ROOT, "REVIEW.md"), encoding="utf-8") as handle:

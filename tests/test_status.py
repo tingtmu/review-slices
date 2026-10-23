@@ -30,7 +30,7 @@ class StatusTest(unittest.TestCase):
         start = repo.out("rev-parse", "--short=12", "origin/main")
         self.assertIn("git diff %s..HEAD" % start, step)  # H12: reviewers see the committed work
         self.assertIn("a Standards, a Spec and an adversarial reviewer", step)
-        command = step[step.index("`git commit"):].strip("`")
+        command = step[step.index("`git -c"):].strip("`")
         repo.git(*shlex.split(command)[1:])
         self.assertIn("run the suite", self.next_step())
         self.assertEqual(repo.run_suite().returncode, 0)
@@ -45,7 +45,7 @@ class StatusTest(unittest.TestCase):
         step = self.next_step()
         repo.write("src/later.py")
         repo.git("add", "src/later.py")
-        repo.git(*shlex.split(step[step.index("`git commit"):].strip("`"))[1:])
+        repo.git(*shlex.split(step[step.index("`git -c"):].strip("`"))[1:])
         self.assertEqual(repo.out("log", "-1", "--format=%s"), "the change itself")
         self.assertNotIn("src/later.py", repo.out("show", "--name-only", "--format=", "HEAD"))
         self.assertIn("Review: critical", repo.out("log", "-1", "--format=%B"))
@@ -55,6 +55,39 @@ class StatusTest(unittest.TestCase):
         self.assertIn("standing rules: REVIEW.md at", out)
         self.assertIn("hook: ", out)
         self.assertNotIn("NOT WIRED", out)
+
+    def test_a_too_low_trailer_is_fixed_by_the_printed_command(self):
+        repo = self.repo
+        repo.write("core/a.py")
+        repo.commit("reviewed too lightly", trailer=repo.trailer("simple"))
+        step = self.next_step()
+        self.assertIn("fix the trailers", step)
+        self.assertNotIn("go-ahead", step)
+        command = 'git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer "%s"' % (
+            repo.trailer("critical"))
+        repo.git(*shlex.split(command)[1:])
+        self.assertEqual(repo.out("log", "-1", "--format=%(trailers:key=Review,valueonly)").count("\n"), 0)
+        self.assertEqual(repo.run_suite().returncode, 0)
+        done = repo.try_push()
+        self.assertEqual(done.returncode, 0, done.stderr)
+
+    def test_status_counts_unpushed_work_on_main_like_the_hook_does(self):
+        repo = self.repo
+        repo.write("core/a.py")
+        repo.commit("unpushed and unreviewed, on main")
+        repo.git("switch", "-q", "-c", "feature")
+        repo.write("src/b.py")
+        repo.commit("a feature", trailer=repo.trailer("simple"))
+        self.assertIn("fix the trailers", self.next_step())
+        self.assertEqual(repo.run_suite().returncode, 0)
+        self.assertNotEqual(repo.try_push("origin", "feature").returncode, 0)
+
+    def test_status_names_the_guard_and_a_base_mismatch(self):
+        repo = self.repo
+        repo.git("config", "review-slices.base", "origin/develop")
+        out = self.status()
+        self.assertIn("guard: ", out)
+        self.assertIn("REVIEW.md's base is main", out)
 
     def test_an_unwired_clone_is_named(self):
         repo = Repo(self)

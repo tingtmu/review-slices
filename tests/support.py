@@ -31,11 +31,15 @@ ENV.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_P
            XDG_CONFIG_HOME=HOME)
 
 
-def load_guard():
-    spec = importlib.util.spec_from_file_location("review_slices", GUARD)
+def load_script(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def load_guard():
+    return load_script("review_slices", GUARD)
 
 
 def git_version():

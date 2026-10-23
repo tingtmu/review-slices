@@ -1,0 +1,24 @@
+# Copy to .github/workflows/review-slices.yml. On every pull request it checks that each new commit is covered by
+# a review trailer, on the server, where no clone can skip the hook. It runs the guard committed on the base branch.
+# CI runs the suite in its own jobs, so this job needs no pass stamp.
+name: review-slices
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  trailers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Review trailers cover every new commit
+        run: python3 .githooks/review_slices.py ci "$BASE" "$HEAD"
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}

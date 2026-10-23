@@ -38,10 +38,15 @@ python3 .githooks/review_slices.py run-suite   # every check in the suite, once 
 python3 <skill>/scripts/setup_tools.py doctor  # is this clone's hook wired, and is the setup sound
 ```
 
-`install` never sets `core.hooksPath`: on git 2.54+ it registers a config hook beside git-lfs, Husky or
-pre-commit, and on older git it chains any pre-push hook already there. Each clone keeps a small bootstrap that
-runs the guard committed on the base branch, so an edited copy never judges its own push and a fix to the guard
-reaches every clone by push. Only clones that run `install` are checked; nobody else is blocked.
+`install` never sets `core.hooksPath`: it writes a pre-push hook file that every git runs and chains any hook
+already there (git-lfs, pre-commit), or beside Husky registers a git config hook. Each clone keeps a small
+bootstrap that runs the guard committed on the base branch, so an edited copy never judges its own push and a fix
+to the guard reaches every clone by push. Only clones that run `install` are checked; nobody else is blocked.
+
+`install --agent-hooks` also adds a PreToolUse hook for Claude Code (`.claude/settings.json`) and Codex
+(`.codex/hooks.json`, once its hooks feature is on) that refuses an agent's overrides: `--no-verify`, rewiring the
+hook, writing pass stamps, amending content into reviewed work. For checks no clone can skip, copy
+`templates/review-slices-ci.yml` to `.github/workflows/`: it runs `review_slices.py ci` on every pull request.
 
 The guard needs Python 3.8+ and git 2.32+, and nothing else.
 
@@ -61,3 +66,9 @@ Spec reviewer briefs.
 `0.3.0`: `setup_tools.py install`, `upgrade` and `doctor`; a per-clone bootstrap that runs the base branch's guard;
 `status`, which names the standing rules, the pass stamp, the hook and the next step; pushes to any ref, not only
 branches and tags, are checked; `run-suite` says when the stamped tree is not HEAD's; git 2.32+.
+
+`0.4.0`: a push is judged by its new commits only (those neither the target ref nor the base branch has), so
+merging main no longer asks for main to be reviewed, and a merge counts only where it differs from git's own merge
+(`--remerge-diff`). `ci BASE HEAD` for pull requests, with a workflow template. An agent hook for Claude Code and
+Codex. `install` writes a hook file by default, since a config hook is invisible to older git. The last `Review:`
+trailer counts, and the printed amend command replaces an earlier one.

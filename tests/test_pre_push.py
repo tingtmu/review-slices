@@ -115,8 +115,7 @@ class PrePushTest(unittest.TestCase):
         self.suite()
         self.assert_refused(repo.try_push("origin", "feature"), "core/a.py")
 
-    @unittest.expectedFailure  # H2
-    def test_a_clean_merge_of_main_needs_no_review(self):
+    def test_a_clean_merge_of_main_needs_no_review(self):  # H2
         repo = self.repo
         repo.write("core/a.py", "one\n1\n2\n3\n4\ntwo\n")
         repo.commit("base", trailer=repo.trailer("critical"))
@@ -137,8 +136,7 @@ class PrePushTest(unittest.TestCase):
         self.suite()
         self.assert_pushed(repo.try_push("origin", "feature"))
 
-    @unittest.expectedFailure  # H2
-    def test_merging_main_into_a_branch_does_not_ask_to_review_main(self):
+    def test_merging_main_into_a_branch_does_not_ask_to_review_main(self):  # H2
         repo = self.repo
         repo.git("switch", "-q", "-c", "feature")
         repo.write("src/f.py")
@@ -155,6 +153,43 @@ class PrePushTest(unittest.TestCase):
         repo.commit("f2", trailer=repo.trailer("simple"))
         self.suite()
         self.assert_pushed(repo.try_push("origin", "feature"))
+
+    def test_a_branch_another_clone_pushed_is_not_trusted(self):
+        repo = self.repo
+        other = os.path.join(repo.tmp, "other")
+        repo.run_git(repo.tmp, "clone", "-q", repo.remote, other)
+        repo.run_git(other, "switch", "-q", "-c", "theirs")
+        os.makedirs(os.path.join(other, "core"))
+        with open(os.path.join(other, "core", "x.py"), "w", encoding="utf-8") as handle:
+            handle.write("unreviewed\n")
+        repo.run_git(other, "add", "-A")
+        repo.run_git(other, "-c", "user.name=O", "-c", "user.email=o@e", "commit", "-q", "-m", "unreviewed")
+        repo.run_git(other, "push", "-q", "--no-verify", "origin", "theirs")
+        repo.git("fetch", "-q")
+        repo.git("switch", "-q", "-c", "mine", "origin/theirs")
+        self.suite()
+        self.assert_refused(repo.try_push("origin", "mine"), "core/x.py")
+
+    def test_status_and_pre_push_agree_after_a_trailer(self):  # H11
+        repo = self.repo
+        repo.write("core/a.py")
+        repo.commit("reviewed", trailer=repo.trailer("critical"))
+        repo.write("src/b.py")
+        repo.commit("not reviewed")
+        self.assertIn("level: simple", repo.guard("status").stdout)
+        self.suite()
+        self.assert_refused(repo.try_push(), "simple")
+
+    def test_a_push_to_a_fork_is_measured_against_the_base_branch(self):
+        repo = self.repo
+        fork = os.path.join(repo.tmp, "fork.git")
+        repo.run_git(repo.tmp, "init", "-q", "--bare", fork)
+        repo.git("remote", "add", "fork", fork)
+        repo.git("switch", "-q", "-c", "feature")
+        repo.write("src/f.py")
+        repo.commit("feature", trailer=repo.trailer("simple"))
+        self.suite()
+        self.assert_pushed(repo.try_push("fork", "feature"))
 
     def test_a_tag_push_is_checked(self):  # H6
         repo = self.repo
@@ -221,7 +256,7 @@ class PrePushTest(unittest.TestCase):
         repo.git("push", "-q", "--no-verify", "origin", "main")
         repo.write("notes/n.md")
         repo.commit("notes, normally trivial")
-        self.assert_refused(repo.try_push(), "needs a review at level critical")
+        self.assert_refused(repo.try_push(), "a review at level critical")
 
     def test_a_push_to_a_review_ref_is_checked(self):
         repo = self.repo
@@ -273,6 +308,9 @@ class PrePushTest(unittest.TestCase):
         repo.commit("unreviewed")
         self.suite_in(repo)
         self.assert_refused(repo.try_push(), "critical")
+        repo.git("commit", "-q", "--amend", "--no-edit", "--trailer", repo.trailer("critical"))
+        self.suite_in(repo)
+        self.assert_pushed(repo.try_push())
         with open(marker, encoding="utf-8") as handle:
             self.assertIn("refs/heads/main", handle.read())
 

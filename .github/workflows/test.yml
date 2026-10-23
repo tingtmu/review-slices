@@ -21,3 +21,17 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: git --version
       - run: python -m unittest discover -s tests -v
+
+  review-trailers:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Review trailers cover every new commit
+        run: python3 .githooks/review_slices.py ci "$BASE" "$HEAD"
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
