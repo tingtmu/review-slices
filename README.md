@@ -30,4 +30,4 @@ The guard needs Python 3.8+ and git 2.31+, and nothing else.
 
 ## Versions
 
-`0.1.0`: first release, extracted from the seqslab-skill repo (2026-10-23).
+`0.1.0`: first release, 2026-10-23.
