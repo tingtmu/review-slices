@@ -72,6 +72,11 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    If it refuses, fix what it names. `git push --no-verify`, changing the hook's git config, an edited guard or
    bootstrap and a hand-written stamp are the user's override, never yours; using one is an incident. Where the
    repo has the agent hook, it refuses these for you.
+10. **Read the CI result** after the push, for every remote check REVIEW.md lists: on GitHub
+    `gh run list --commit <sha>`, then `gh run watch <run-id> --exit-status`; elsewhere the repo's own command.
+    Red: rerun it once (`gh run rerun <run-id> --failed`). Still red: the work is not done. Fix it from step 1, and
+    record an incident of failure class "the local suite differs from CI"; its plug is the missing check, added to
+    the suite as a `test:` line or listed under REVIEW.md's "Remote checks".
 
 ## Record an incident
 
@@ -85,15 +90,33 @@ find one, in your own work or another agent's:
 3. Choose the plug in this order: a test or guard that fails on the class; else a rule in REVIEW.md's "Failure
    looks like" list. An incident stays open until its plug exists.
 4. A new failure class gets a one-line entry in REVIEW.md's "Failure looks like" list, linked to the incident.
+5. **Check the log:** `python3 <skill>/scripts/incidents.py` lists open incidents with their age, counts per slice
+   and recurrences; `--check` exits 1 when a plugged incident's plug is gone (the hole is open again: reopen it).
+   Write plugs as `test <path>::<function>`, `guard <path>` or `rule REVIEW.md "<line>"` so it can check them. To
+   make that part of the suite, copy the script to `.githooks/incidents.py` (`upgrade` keeps it current) and add
+   `test: python3 .githooks/incidents.py --check`.
 
 ## Set up a repo
 
 Ask the user before each step; these change how the repo works. `<skill>` is this skill's directory.
 
-1. Copy [templates/REVIEW.md](templates/REVIEW.md) to the repo root and fill in its level table (one glob per
-   line), its `test:` lines (one per check of the suite) and its failure list. Copy
-   [templates/INCIDENTS.md](templates/INCIDENTS.md) to `docs/INCIDENTS.md`.
-2. Run `python3 <skill>/scripts/setup_tools.py install --agent-hooks`, show the user what it would change, and
+1. **Find the suite.** `python3 <skill>/scripts/discover.py` lists the checks the repo already has (CI files,
+   package.json, Makefile, justfile, pyproject, tox, nox, pre-commit, Cargo, go.mod, CONTRIBUTING), each marked
+   local or remote with the reason; it runs nothing. With the user's go-ahead (it runs the repo's commands),
+   `discover.py --run` on a clean tree runs each local check and prints the `test:` lines that passed, the checks
+   already red (record each as an incident or a roadmap item and leave it out of the suite), the checks that
+   write files (with `.gitignore` entries), and the remote checks for REVIEW.md.
+2. Copy [templates/REVIEW.md](templates/REVIEW.md) to the repo root and fill in its level table (one glob per
+   line), its `test:` lines and remote checks from step 1, and its failure list. Copy
+   [templates/INCIDENTS.md](templates/INCIDENTS.md) to `docs/INCIDENTS.md`. If the repo already has review rules
+   (CONTRIBUTING, a PR template, CODEOWNERS, AGENTS.md or CLAUDE.md), list where they agree with REVIEW.md and
+   where they conflict, for the user to decide; link to them rather than copy them. CODEOWNERS paths are good
+   candidates for important or critical globs.
+3. **Calibrate the table** before committing it: `python3 <skill>/scripts/calibrate.py` shows how it would have
+   judged the base branch's last 50 first-parent commits. Over 30% critical means people will route around it;
+   over 60% trivial means most changes get no review. Tune the globs and run it again (`--rules PATH` tries a
+   draft kept elsewhere).
+4. Run `python3 <skill>/scripts/setup_tools.py install --agent-hooks`, show the user what it would change, and
    with their go-ahead run it again with `--apply`. It copies the guard to `.githooks/` if missing, writes this
    clone's bootstrap, records the base branch, and wires pre-push with a hook file that runs any hook already
    there after the guard (pre-commit's through its `.legacy` hook). Where another tool owns `core.hooksPath`
@@ -101,15 +124,15 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    so git-lfs, Husky and pre-commit keep running. `--agent-hooks` adds the agent hook to `.claude/settings.json`
    and `.codex/hooks.json`, keeping what is there; Codex runs it once its hooks feature is on and the user trusts
    the hook. If install reports a problem, tell the user.
-3. Run `python3 .githooks/review_slices.py check` until it reports no error, and `setup_tools.py doctor` until
+5. Run `python3 .githooks/review_slices.py check` until it reports no error, and `setup_tools.py doctor` until
    it reports ok.
-4. Commit REVIEW.md, `docs/INCIDENTS.md`, `.githooks/` and the agent hook settings together; REVIEW.md puts them
+6. Commit REVIEW.md, `docs/INCIDENTS.md`, `.githooks/` and the agent hook settings together; REVIEW.md puts them
    at Important or higher, so they are reviewed like any change. Every other clone that wants the guard runs
    `install --apply` once; teammates who do not are never blocked by it, and the agent hook does nothing for them.
-5. Offer the user [templates/review-slices-ci.yml](templates/review-slices-ci.yml) as
+7. Offer the user [templates/review-slices-ci.yml](templates/review-slices-ci.yml) as
    `.github/workflows/review-slices.yml`: it runs `review_slices.py ci` on every pull request, so trailers are
    checked even from clones that never installed the hook.
-6. Point the repo's agent instructions (AGENTS.md or CLAUDE.md) at REVIEW.md with a plain path, not an import.
+8. Point the repo's agent instructions (AGENTS.md or CLAUDE.md) at REVIEW.md with a plain path, not an import.
 
 When the skill is newer than the repo's guard, `setup_tools.py upgrade --apply` copies it in; commit it as a
 reviewed change. What gets installed:

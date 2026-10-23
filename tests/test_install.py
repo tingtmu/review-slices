@@ -198,6 +198,16 @@ class UpgradeAndDoctorTest(unittest.TestCase):
         with open(path, encoding="utf-8") as handle:
             self.assertEqual(handle.read(), source)
 
+    def test_upgrade_refreshes_only_the_copies_a_repo_has(self):
+        repo = Repo(self)
+        repo.write(".githooks/incidents.py", "# an old copy\n")
+        done = repo.setup("upgrade", "--apply")
+        self.assertEqual(done.returncode, 0, done.stdout)
+        with open(os.path.join(repo.path, ".githooks", "incidents.py"), encoding="utf-8") as handle:
+            self.assertIn("incident log report", handle.read())
+        self.assertFalse(os.path.exists(os.path.join(repo.path, ".githooks", "agent_hook.py")))
+        self.assertIn("are this skill's", repo.setup("upgrade").stdout)
+
     def test_doctor_names_an_unwired_clone(self):
         repo = Repo(self)
         done = repo.setup("doctor")

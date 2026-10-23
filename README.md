@@ -43,6 +43,11 @@ already there (git-lfs, pre-commit), or beside Husky registers a git config hook
 bootstrap that runs the guard committed on the base branch, so an edited copy never judges its own push and a fix
 to the guard reaches every clone by push. Only clones that run `install` are checked; nobody else is blocked.
 
+Before writing REVIEW.md, `discover.py` lists the checks the repo already has (CI files, package scripts, Makefile
+and more), marked local or remote, and `--run` tries the local ones on a clean tree. `calibrate.py` shows how a draft
+level table would have judged the base branch's last 50 commits. `incidents.py [--check]` reports
+docs/INCIDENTS.md and checks that every plug still exists. All three stay in the skill's `scripts/`.
+
 `install --agent-hooks` also adds a PreToolUse hook for Claude Code (`.claude/settings.json`) and Codex
 (`.codex/hooks.json`, once its hooks feature is on) that refuses an agent's overrides: `--no-verify`, rewiring the
 hook, writing pass stamps, amending content into reviewed work. For checks no clone can skip, copy
@@ -72,3 +77,9 @@ merging main no longer asks for main to be reviewed, and a merge counts only whe
 (`--remerge-diff`). `ci BASE HEAD` for pull requests, with a workflow template. An agent hook for Claude Code and
 Codex. `install` writes a hook file by default, since a config hook is invisible to older git. The last `Review:`
 trailer counts, and the printed amend command replaces an earlier one.
+
+`0.5.0`: `discover.py` finds a repo's existing checks and tries them on a clean tree; `calibrate.py` shows how a
+level table would have judged recent history.
+
+`0.6.0`: `incidents.py` reports the incident log and checks that every plug still exists; the procedure reads CI
+after the push; `upgrade` refreshes every script a repo keeps in `.githooks/`.

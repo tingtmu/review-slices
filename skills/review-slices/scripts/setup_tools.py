@@ -26,6 +26,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_GUARD = os.path.join(HERE, "review_slices.py")
 SKILL_AGENT_HOOK = os.path.join(HERE, "agent_hook.py")
 AGENT_HOOK_PATH = ".githooks/agent_hook.py"
+# Scripts a repo keeps copies of in .githooks/; upgrade refreshes the ones it has.
+COPIED = (SKILL_GUARD, SKILL_AGENT_HOOK, os.path.join(HERE, "incidents.py"))
 # Runs the checkout's agent hook; a clone without one, or any error, allows the action.
 AGENT_COMMAND = ("sh -c 'top=$(git -C \"${CLAUDE_PROJECT_DIR:-.}\" rev-parse --show-toplevel 2>/dev/null) && "
                  "[ -f \"$top/%s\" ] && exec python3 \"$top/%s\"' 2>/dev/null || true" % (AGENT_HOOK_PATH,
@@ -285,33 +287,33 @@ def cmd_install(args):
 
 
 def cmd_upgrade(args):
+    """Copy this skill's scripts over the repo's copies in .githooks/: the guard always, the agent hook and the
+    incident report only where the repo already has them."""
     root, _common, _bootstrap = paths()
-    copy = os.path.join(root, guard.GUARD_PATH)
-    current = read(copy)
+    current = read(os.path.join(root, guard.GUARD_PATH))
     if current is None:
         print("no %s here: run install first" % guard.GUARD_PATH)
         return 1
-    have, skill = guard.source_version(current), guard.version_tuple(guard.VERSION)
-    if current == read(SKILL_GUARD) and read(os.path.join(root, AGENT_HOOK_PATH)) in (None, read(SKILL_AGENT_HOOK)):
-        print("the repo's guard is this skill's (%s)" % guard.VERSION)
-        return 0
-    if have > skill:
+    have = guard.source_version(current)
+    if have > guard.version_tuple(guard.VERSION):
         print("the repo's guard (%s) is newer than this skill's (%s): update the skill instead" % (
             ".".join(map(str, have)), guard.VERSION))
         return 1
-    print("copy this skill's guard (%s) over %s (%s)%s" % (guard.VERSION, guard.GUARD_PATH, ".".join(map(str, have)),
-                                                         "" if "--apply" in args else "; add --apply to do it"))
-    print("then commit it as a reviewed change (REVIEW.md puts it at important or higher); it judges pushes once it "
-          "is on the base branch")
+    stale = [(source, os.path.join(root, ".githooks", os.path.basename(source))) for source in COPIED
+             if read(os.path.join(root, ".githooks", os.path.basename(source))) not in (None, read(source))]
+    if not stale:
+        print("the repo's copies are this skill's (%s)" % guard.VERSION)
+        return 0
+    for source, copy in stale:
+        print("copy this skill's %s (%s) over %s%s" % (os.path.basename(source), guard.VERSION,
+                                                       os.path.relpath(copy, root),
+                                                       "" if "--apply" in args else "; add --apply to do it"))
+        if "--apply" in args:
+            shutil.copy(source, copy)
+    print("then commit them as a reviewed change (REVIEW.md puts .githooks/ at important or higher); the guard "
+          "judges pushes once it is on the base branch")
     if os.path.exists(os.path.join(root, ".githooks", "pre-push")):
         print("also delete .githooks/pre-push (0.1.0's hook) in that commit, once every clone has run install")
-    hook_copy = os.path.join(root, AGENT_HOOK_PATH)
-    if read(hook_copy) not in (None, read(SKILL_AGENT_HOOK)):
-        print("and copy this skill's agent hook over %s" % AGENT_HOOK_PATH)
-        if "--apply" in args:
-            shutil.copy(SKILL_AGENT_HOOK, hook_copy)
-    if "--apply" in args:
-        shutil.copy(SKILL_GUARD, copy)
     return 0
 
 

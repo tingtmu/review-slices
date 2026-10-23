@@ -11,6 +11,7 @@ The guard computes a change's level from this block: the highest level any chang
 
 ```review-slices
 test: python3 -m unittest discover -s tests -q
+test: python3 skills/review-slices/scripts/incidents.py --check
 base: main
 default: simple
 important: skills/review-slices/*
