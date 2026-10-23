@@ -19,6 +19,8 @@ import argparse
 import collections
 import importlib.util
 import os
+import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -110,6 +112,44 @@ def run_all(root, found, timeout):
     return results
 
 
+def tool_key(command):
+    """The tool COMMAND runs: its `cd` prefix, program and subcommand, such as ('ruff', 'check') or ('npm', 'lint'),
+    with environment assignments and runners (uv run, python -m, npx) set aside, so `pytest -q` and `uv run pytest`
+    are one tool."""
+    prefix = re.match(r"(?:cd \S+ && )*", command).group(0)
+    try:
+        words = shlex.split(command[len(prefix):])
+    except ValueError:
+        words = command[len(prefix):].split()
+    while words and re.match(r"[A-Za-z_]\w*=", words[0]):
+        words = words[1:]
+    runner = " ".join(words[:2])
+    while words and (words[0] in ("npx", "bunx") or runner in ("uv run", "poetry run", "pdm run", "pipenv run",
+                                                                 "hatch run", "python -m", "python3 -m", "py -m")):
+        words = words[1:] if words[0] in ("npx", "bunx") else words[2:]
+        runner = " ".join(words[:2])
+    if len(words) > 2 and words[0] in ("npm", "pnpm", "yarn", "bun") and words[1] == "run":
+        words = words[:1] + words[2:]
+    key = words[:3] if words[1:2] == ["-c"] else words[:1] + [word for word in words[1:2] if word[:1] != "-"]
+    return (prefix,) + tuple(key)
+
+
+def suggestions(passed):
+    """`test:` lines for PASSED [(candidate, seconds)]: one per tool, the CI form first, with the others that also
+    passed as a comment, so the suite runs each tool once."""
+    groups = collections.OrderedDict()
+    for candidate, seconds in passed:
+        groups.setdefault(tool_key(candidate.command), []).append((candidate, seconds))
+    lines = []
+    for group in groups.values():
+        group = sorted(group, key=lambda item: not item[0].source.startswith((".github/", ".gitlab-ci")))
+        (best, seconds), others = group[0], group[1:]
+        lines.append("test: %s    # %s, %.0fs" % (best.command, best.kind, seconds))
+        if others:
+            lines.append("# or, the same tool: %s" % "; ".join(candidate.command for candidate, _s in others))
+    return lines
+
+
 def verdicts(results, timeout):
     """{heading: [line]} for the results of run_all, in the order to print them."""
     groups = collections.OrderedDict((heading, []) for heading in (
@@ -121,6 +161,7 @@ def verdicts(results, timeout):
         "Timed out after %ds: raise --timeout, or leave it out of the suite:" % timeout,
         "Suggested .gitignore entries, for files the checks wrote:"))
     pass_, wrote, red, missing, slow, ignore = groups.values()
+    passed = []
     for candidate, code, seconds, changed in results:
         also = "; it changed %s" % ", ".join(changed) if changed else ""
         if code is None:
@@ -132,10 +173,11 @@ def verdicts(results, timeout):
         elif changed:
             wrote.append("%s (%s)" % (candidate.command, ", ".join(changed)))
         else:
-            pass_.append("test: %s    # %s, %.0fs" % (candidate.command, candidate.kind, seconds))
+            passed.append((candidate, seconds))
         ignore += [line[3:] for line in changed if line.startswith("?? ") and line[3:] not in ignore]
     if any(not line.startswith("?? ") for _c, _code, _s, changed in results for line in changed):
         ignore.append("(a check rewrote tracked files, which .gitignore cannot help: use its check-only mode)")
+    pass_ += suggestions(passed)
     return groups
 
 
@@ -159,6 +201,8 @@ def positive(text):
 
 
 def main(argv):
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")  # a non-UTF-8 path prints escaped, not as a traceback
     parser = argparse.ArgumentParser(prog="discover.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--run", action="store_true", help="run each local candidate (needs a clean tree)")
@@ -169,8 +213,9 @@ def main(argv):
         root = guard.git("rev-parse", "--show-toplevel")
         dirty = sorted(status(root)) if options.run else []
         if dirty:
-            print("discover: --run needs a clean tree, so that what each check writes shows; commit or stash these "
-                  "first:\n  " + "\n  ".join(dirty[:10]), file=sys.stderr)
+            print("discover: --run needs a clean tree, so that what each check writes shows. These may be the "
+                  "user's edits: ask the user to commit or stash these; never stash or commit someone else's edits."
+                  "\n  " + "\n  ".join(dirty[:10]), file=sys.stderr)
             return 1
         found = [candidate for source in sources.SOURCES for candidate in source(root)]
         if not found:

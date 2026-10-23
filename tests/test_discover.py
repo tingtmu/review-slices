@@ -4,6 +4,7 @@ import re
 import subprocess
 import sys
 import time
+import importlib.util
 import unittest
 
 from support import ENV, SCRIPTS, Repo
@@ -56,10 +57,29 @@ jobs:
 """
 
 
-def discover(repo, *args, cwd=None):
-    env = dict(ENV, GIT_CEILING_DIRECTORIES=os.path.dirname(repo.tmp))
+def discover(repo, *args, cwd=None, env=None):
+    env = dict(ENV, GIT_CEILING_DIRECTORIES=os.path.dirname(repo.tmp), **(env or {}))
     return subprocess.run((PYTHON, DISCOVER) + args, cwd=cwd or repo.path, capture_output=True, text=True,
                           env=env, timeout=120)
+
+
+def load_discover():
+    spec = importlib.util.spec_from_file_location("discover", DISCOVER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def fake_tools(repo, *names):
+    """A PATH whose first directory holds NAMES as tools that just succeed."""
+    folder = os.path.join(repo.tmp, "bin")
+    os.makedirs(folder, exist_ok=True)
+    for name in names:
+        path = os.path.join(folder, name)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("#!/bin/sh\nexit 0\n")
+        os.chmod(path, 0o755)
+    return {"PATH": folder + os.pathsep + ENV.get("PATH", "")}
 
 
 def rows(done):
@@ -121,13 +141,37 @@ class ListTest(unittest.TestCase):
         self.assertEqual(found["make deploy-prod"][2], "remote: its job deploys to an environment")
         self.assertEqual(found["./scripts/build.sh"][2], "remote: its job uses secrets")
         self.assertEqual(found["python manage.py migrate"][2], "remote: its job uses secrets")  # round 2
+        self.assertEqual(found["./scripts/upload-site.sh"][2], "remote: uploads to a service (upload)")
         for command, word in (("npx semantic-release", "release"), ("npx gh-pages -d dist", "gh"),
-                              ("./scripts/upload-site.sh", "upload"), ("rsync -av dist/ me@example.com:/srv", "rsync"),
+                              ("rsync -av dist/ me@example.com:/srv", "rsync"),
                               ("docker buildx build --push -t ghcr.io/acme/app .", "push"),
                               ("npx electron-builder --publish always", "publish")):
             self.assertEqual(found[command][2], "remote: deploys or publishes (%s)" % word)
         self.assertEqual(found["cargo build --release"][2], "local")
         self.assertEqual(found["pytest $PYTEST_ARGS"][2], "remote: needs CI values or variables")
+
+    def test_coverage_and_report_uploads_are_remote(self):  # acceptance trial
+        repo = Repo(self)
+        repo.write(".github/workflows/ci.yml",
+                   "jobs:\n  t:\n    steps:\n      - run: pytest --cov\n      - run: npx coveralls\n"
+                   "      - run: ./codecov -f coverage.xml\n      - run: sonar-scanner\n"
+                   "      - name: Upload the report\n        run: ./scripts/report.sh\n")
+        found = self.listing(repo)
+        self.assertEqual(found["pytest --cov"][2], "local")
+        for command, word in (("npx coveralls", "coveralls"), ("./codecov -f coverage.xml", "codecov"),
+                              ("sonar-scanner", "sonar-scanner"), ("./scripts/report.sh", "Upload")):
+            self.assertEqual(found[command][2], "remote: uploads to a service (%s)" % word)
+
+    def test_package_scripts_and_contributing_lines_that_publish_are_remote(self):  # Standards review
+        repo = Repo(self)
+        repo.write("package.json", '{"scripts": {"test": "jest", "posttest": "npm publish", "lint": "eslint .",'
+                                   ' "build": "tsc && npm run release"}}')
+        repo.write("CONTRIBUTING.md", "```sh\nnpm publish && npm test\nnpm run lint\n```\n")
+        found = self.listing(repo)
+        self.assertEqual(found["npm run test"][2], "remote: deploys or publishes (publish)")
+        self.assertEqual(found["npm run build"][2], "remote: deploys or publishes (release)")
+        self.assertEqual(found["npm publish && npm test"][2], "remote: deploys or publishes (publish)")
+        self.assertEqual(found["npm run lint"][2], "local")
 
     def test_comments_setup_flags_and_the_jobs_own_working_directory(self):
         repo = Repo(self)
@@ -222,6 +266,17 @@ class ListTest(unittest.TestCase):
         self.assertEqual(found["just test"], ("justfile:6", "test", "local"))
         self.assertNotIn("make deploy", found)
 
+    def test_a_target_whose_recipe_deploys_is_remote(self):  # the Standards finding's class: Make and just too
+        repo = Repo(self)
+        repo.write("Makefile", "build:\n\tdocker build -t x .\n\tdocker push x\n\ntest: upload-coverage\n\tpytest\n"
+                               "lint:\n\t${RUFF} check .\n")
+        repo.write("justfile", "check:\n    cargo test\n    cargo publish\n")
+        found = self.listing(repo)
+        self.assertEqual(found["make build"][2], "remote: deploys or publishes (push)")
+        self.assertEqual(found["make test"][2], "remote: uploads to a service (upload)")
+        self.assertEqual(found["make lint"][2], "local")
+        self.assertEqual(found["just check"][2], "remote: deploys or publishes (publish)")
+
     def test_pyproject_sections_and_marker_files(self):
         repo = Repo(self)
         repo.write("pyproject.toml", "[project]\nname = 'x'\n[tool.pytest.ini_options]\n[tool.ruff.lint]\n"
@@ -290,6 +345,60 @@ class RunTest(unittest.TestCase):
                          ["- ./deploy.sh (.github/workflows/ci.yml:9): deploys or publishes (deploy)"])
         self.assertIn("left the tree changed", out)
 
+    def test_the_reviews_publishing_commands_are_remote_in_every_non_ci_source(self):  # final adversarial review
+        repo = Repo(self)
+        repo.write("package.json", '{"scripts": {"test": "npm test && npm publish", "build": "tsc && npm run deploy",'
+                                   ' "lint": "eslint .", "postlint": "./scripts/release-check.sh --push"}}')
+        repo.write("Makefile", "test:\n\tpython -m pytest && twine upload dist/*\n")
+        repo.write("justfile", "check:\n    cargo test && cargo publish\n")
+        repo.write("CONTRIBUTING.md", "```sh\nnpm test && npm publish\ncargo test && cargo publish\n"
+                                      "python -m pytest && twine upload dist/*\n"
+                                      "./scripts/release-check.sh --push\n```\n")
+        done = discover(repo)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        found = rows(done)
+        for command in ("npm run test", "npm run build", "npm run lint", "make test", "just check",
+                        "npm test && npm publish", "cargo test && cargo publish",
+                        "python -m pytest && twine upload dist/*", "./scripts/release-check.sh --push"):
+            self.assertTrue(found[command][2].startswith("remote: "), (command, found[command]))
+
+    @unittest.skipIf(sys.platform == "win32", "fake tools are shell scripts")
+    def test_run_never_runs_a_publishing_script_recipe_or_contributing_line(self):  # Standards and final review
+        repo = Repo(self)
+        repo.write("package.json", '{"scripts": {"test": "touch pkg-ran && npm publish"}}')
+        repo.write("Makefile", "test:\n\ttouch make-ran && cargo publish\n")
+        repo.write("justfile", "lint:\n    touch just-ran && twine upload dist/*\n")
+        repo.write("CONTRIBUTING.md", "```sh\ntouch doc-ran-check && npx semantic-release\n"
+                                      "touch doc-ran-test && ./scripts/release-check.sh --push\n```\n")
+        self.workflow(repo, "true")
+        out = discover(repo, "--run", env=fake_tools(repo, "npm", "npx", "make", "just", "cargo", "twine")).stdout
+        self.assertIn("[1/1] true", out)
+        for marker in ("pkg-ran", "make-ran", "just-ran", "doc-ran-check", "doc-ran-test"):
+            self.assertFalse(os.path.exists(os.path.join(repo.path, marker)), marker)
+        self.assertIn("- npm run test (package.json:1): deploys or publishes (publish)", out)
+
+    @unittest.skipIf(sys.platform == "win32", "fake tools are shell scripts")
+    def test_one_test_line_per_tool_preferring_the_ci_form(self):  # acceptance trial
+        repo = Repo(self)
+        repo.write("pyproject.toml", "[tool.pytest.ini_options]\n")
+        repo.write("CONTRIBUTING.md", "```sh\nuv run pytest\n```\n")
+        self.workflow(repo, "pytest -q")
+        out = discover(repo, "--run", env=fake_tools(repo, "pytest", "uv")).stdout
+        lines = section(out, "Suggested `test:` lines")
+        self.assertEqual(len(lines), 2, out)
+        self.assertRegex(lines[0], r"^test: pytest -q    # test, \d+s$")
+        self.assertEqual(lines[1], "# or, the same tool: pytest; uv run pytest")
+
+    def test_tool_key_groups_one_tool_and_keeps_others_apart(self):
+        key = load_discover().tool_key
+        for same in (("pytest -q", "pytest", "uv run pytest", "FOO=1 python -m pytest -x"),
+                     ("npm test", "npm run test"), ("ruff check .", "ruff check src")):
+            self.assertEqual(len({key(command) for command in same}), 1, same)
+        for apart in (("python scripts/a.py", "python scripts/b.py"), ("npm test", "npm run lint"),
+                      ("npm test", "cd web && npm test"), ("ruff check .", "ruff format --check ."),
+                      ("python -c 'print(1)'", "python -c 'print(2)'")):
+            self.assertEqual(len({key(command) for command in apart}), 2, apart)
+
     def test_run_never_runs_a_deploy(self):
         repo = Repo(self)
         repo.write(".github/workflows/ci.yml", "jobs:\n  site:\n    environment: production\n    steps:\n"
@@ -325,6 +434,8 @@ class RunTest(unittest.TestCase):
         done = discover(repo, "--run")
         self.assertEqual(done.returncode, 1)
         self.assertIn("needs a clean tree", done.stderr)
+        self.assertIn("ask the user to commit or stash these; never stash or commit someone else's edits",
+                      done.stderr)
         self.assertIn("stray.txt", done.stderr)
         self.assertFalse(os.path.exists(os.path.join(repo.path, "test-ran")))
 
