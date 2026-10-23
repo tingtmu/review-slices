@@ -33,7 +33,7 @@ format, or to how the hook is installed, since every adopting clone depends on t
 - The guard trusts input the change itself controls ([I1](docs/INCIDENTS.md#i1-the-guard-trusts-input-the-change-controls))
 - The guard fails open on input it did not expect ([I2](docs/INCIDENTS.md#i2-the-guard-fails-open-on-unexpected-input))
 - A push is measured across commits that are not the author's ([I3](docs/INCIDENTS.md#i3-a-push-is-measured-across-other-peoples-commits))
-- Setup breaks the host repo's existing hooks ([I4](docs/INCIDENTS.md#i4-setup-breaks-the-host-repos-hooks))
+- Setup breaks the host repo's existing hooks or checks ([I4](docs/INCIDENTS.md#i4-setup-breaks-the-host-repos-existing-tooling))
 
 ## Repo rules for reviewers
 

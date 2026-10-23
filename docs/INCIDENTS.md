@@ -22,10 +22,13 @@ each failure class from getting through again. Terms: the skill's
 - **Plug:** test tests/test_level.py::test_a_changed_test_command_is_reported,
   test tests/test_pre_push.py::test_an_edited_guard_does_not_judge_its_own_push,
   test tests/test_ci.py::test_ci_runs_the_guard_committed_at_base,
-  test tests/test_agent_hook.py::test_the_settings_command_runs_the_base_branch_copy_not_an_edited_one
+  test tests/test_agent_hook.py::test_the_settings_command_runs_the_base_branch_copy_not_an_edited_one,
+  test tests/test_install.py::BootstrapTest::test_an_edited_checkout_guard_does_not_judge_after_the_base_lost_its_own
 - **Recurrences:**
   - 2026-10-24, review finding on 0.4.0: the agent hook ran the checkout's copy, which the agent can edit. The plug
     covered the guard and `ci`, not the agent hook added after it.
+  - 2026-10-24, final review: when the base branch lost its guard, the bootstrap ran the checkout's copy. The plug
+    tested a base branch with a guard; the last guard the base branch had now judges.
 
 ## I2. The guard fails open on unexpected input
 
@@ -50,7 +53,8 @@ each failure class from getting through again. Terms: the skill's
   test tests/test_pre_push.py::test_broken_standing_rules_fail_closed,
   test tests/test_merges.py::MergePathsTest::test_a_dropped_change_is_counted,
   test tests/test_merges.py::MergePathsTest::test_an_octopus_merge_that_drops_a_change_is_counted,
-  test tests/test_agent_hook.py::AgentHookTest::test_overrides_are_denied
+  test tests/test_agent_hook.py::AgentHookTest::test_overrides_are_denied,
+  test tests/test_agent_hook.py::AmendTest::test_staging_and_amending_in_one_command_is_denied
 - **Recurrences:**
   - 2026-10-23, review finding on 0.2.0: a push to `refs/for/main` (Gerrit) went unchecked. The plug tested
     branches and tags only, the two ref kinds the fix had in mind.
@@ -59,6 +63,8 @@ each failure class from getting through again. Terms: the skill's
   - 2026-10-24, review finding on 0.4.0: a merge that dropped a change was invisible on git before 2.36 and in
     octopus merges, and wrappers such as `timeout` or `xargs` got `--no-verify` past the agent hook. The plugs ran
     on the newest git and plain commands only; the fallback is now tested directly, and the wrappers by name.
+  - 2026-10-24, final review: `git add -A && git commit --amend` put unreviewed content under a trailer, because
+    the agent hook read the index before the command staged anything. The plug staged the content beforehand.
 
 ## I3. A push is measured across other people's commits
 
@@ -74,25 +80,32 @@ each failure class from getting through again. Terms: the skill's
   test tests/test_pre_push.py::test_status_and_pre_push_agree_after_a_trailer,
   test tests/test_status.py::test_status_counts_unpushed_work_on_main_like_the_hook_does,
   test tests/test_ci.py::test_github_s_synthetic_merge_commit_needs_no_trailer,
-  test tests/test_merges.py::UnitsFollowHistoryTest::test_a_trailer_on_one_branch_never_covers_the_other_with_a_first
+  test tests/test_merges.py::UnitsFollowHistoryTest::test_a_trailer_on_one_branch_never_covers_the_other_with_a_first,
+  test tests/test_status.py::StatusTest::test_an_upstream_that_is_someone_else_s_branch_is_not_trusted
 - **Recurrences:**
   - 2026-10-23, review finding on 0.3.0: `status` measured from the merge-base with local main while the hook
     measured what the remote lacked. The plug compared the two after a trailer, not with unpushed work on main.
   - 2026-10-24, review finding on 0.4.0: review units followed listing order, so a trailer on one merged branch
     covered the other branch's unreviewed commit. The plug merged main into a branch, never two reviewed
     branches into each other; units now follow each trailer's own history.
+  - 2026-10-24, final review: `status` trusted the branch's upstream, which `pre-push` does not, so work branched
+    from a teammate's unreviewed branch looked trivial. The plug's branches had no upstream of someone else's.
 
-## I4. Setup breaks the host repo's hooks
+## I4. Setup breaks the host repo's existing tooling
 
 - **Date / kind / status:** 2026-10-23 · defect · plugged
 - **What happened:** 0.1.0's setup set `core.hooksPath .githooks`, which silently disables every hook in
   `.git/hooks`, including git-lfs's pre-push upload (H16).
 - **Slice that should have caught it:** 2 Review. Why it did not: no reviewer checked setup against repos with
   existing hooks.
-- **Failure class:** setup breaks the host repo's existing hooks
+- **Failure class:** setup breaks the host repo's existing hooks or checks
 - **Fix:** 0.3.0's `setup_tools.py install` never sets `core.hooksPath`: it chains an existing pre-push hook, uses
   pre-commit's `.legacy` hook, or registers a config hook beside a foreign `core.hooksPath`.
 - **Plug:** test tests/test_pre_push.py::test_an_existing_hook_keeps_running_beside_the_guard,
   test tests/test_install.py::test_a_config_hook_runs_beside_a_foreign_hooks_path,
-  test tests/test_install.py::test_install_moves_a_0_1_0_clone_off_hooks_path
-- **Recurrences:** none
+  test tests/test_install.py::test_install_moves_a_0_1_0_clone_off_hooks_path,
+  test tests/test_install.py::InstallTest::test_installed_copies_are_executable
+- **Recurrences:**
+  - 2026-10-24, acceptance trial: adopting turned a repo's `ruff check .` red on the copied scripts (not
+    executable, linted as the repo's own code). The plug covered hooks only; the copies now carry skip headers
+    and are executable, and SKILL.md says how to exclude them from formatters.
