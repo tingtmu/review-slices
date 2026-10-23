@@ -116,50 +116,46 @@ def slice_of(value):
     return UNKNOWN_SLICE
 
 
-def parse_incident(ident, title, fields, problems, notes):
-    """An Incident, or None when its date line cannot be read."""
+def parse_incident(ident, title, fields):
+    """(incident, problems, notes): the Incident, or None when its date line cannot be read, and why."""
     line = fields.get("date / kind / status", "")
     parts = [part.strip().lower() for part in line.split("·")]
     if len(parts) != 3:
-        problems.append("%s: the date / kind / status line is not '<date> · <kind> · <status>': %r"
-                        % (ident, line))
-        return None
+        return None, ["%s: the date / kind / status line is not '<date> · <kind> · <status>': %r"
+                      % (ident, line)], []
     try:
         date = datetime.datetime.strptime(parts[0], "%Y-%m-%d").date()
     except ValueError:
-        problems.append("%s: the date %r is not YYYY-MM-DD" % (ident, parts[0]))
-        return None
+        return None, ["%s: the date %r is not YYYY-MM-DD" % (ident, parts[0])], []
     if parts[2] not in STATUSES:
-        problems.append("%s: the status %r is neither open nor plugged" % (ident, parts[2]))
-        return None
-    if parts[1] not in KINDS:
-        notes.append("%s: the kind %r is neither defect nor process" % (ident, parts[1]))
-    slice_name = slice_of(fields.get("slice that should have caught it", ""))
-    if slice_name == UNKNOWN_SLICE:
-        notes.append("%s: no slice recognised in %r" % (ident, fields.get("slice that should have caught it", "")))
-    return Incident(ident, title, date, parts[1], parts[2], slice_name, fields)
+        return None, ["%s: the status %r is neither open nor plugged" % (ident, parts[2])], []
+    slice_text = fields.get("slice that should have caught it", "")
+    slice_name = slice_of(slice_text)
+    notes = (["%s: the kind %r is neither defect nor process" % (ident, parts[1])] if parts[1] not in KINDS else [])
+    notes += ["%s: no slice recognised in %r" % (ident, slice_text)] if slice_name == UNKNOWN_SLICE else []
+    return Incident(ident, title, date, parts[1], parts[2], slice_name, fields), [], notes
+
+
+def is_template(fields):
+    """Whether an entry's date is still the template's `<...>` placeholder."""
+    return bool(PLACEHOLDER.search(fields.get("date / kind / status", "").split("·")[0]))
 
 
 def parse_log(text):
     """(incidents, problems, notes, skipped): the incidents in TEXT and what could not be read."""
-    incidents, problems, notes, skipped, seen = [], [], [], 0, set()
     entries = split_entries(text)
-    for line in near_headings(text):
-        problems.append("%r looks like an incident heading but is not `## I<n>. <title>`, so it was not read" % line)
-    if not entries:
-        notes.append("no `## I<n>. <title>` heading found, so there are no incidents to report")
-    for ident, title, fields in entries:
-        if PLACEHOLDER.search(fields.get("date / kind / status", "").split("·")[0]):
-            skipped += 1
-            continue
-        incident = parse_incident(ident, title, fields, problems, notes)
-        if incident is None:
-            continue
-        if ident in seen:
-            problems.append("%s appears twice; give each incident its own id" % ident)
-        seen.add(ident)
-        incidents.append(incident)
-    return incidents, problems, notes, skipped
+    real = [entry for entry in entries if not is_template(entry[2])]
+    problems = ["%r looks like an incident heading but is not `## I<n>. <title>`, so it was not read" % line
+                for line in near_headings(text)]
+    notes = [] if entries else ["no `## I<n>. <title>` heading found, so there are no incidents to report"]
+    incidents = []
+    for ident, title, fields in real:
+        incident, entry_problems, entry_notes = parse_incident(ident, title, fields)
+        seen = any(found.id == ident for found in incidents)
+        twice = ["%s appears twice; give each incident its own id" % ident] if incident and seen else []
+        problems, notes = problems + entry_problems + twice, notes + entry_notes
+        incidents = incidents + [incident] if incident else incidents
+    return incidents, problems, notes, len(entries) - len(real)
 
 
 def split_items(value):
@@ -328,23 +324,29 @@ def plug_problem(root, plug):
     return broken_test(path, plug, text) if plug.kind == "test" else None
 
 
-def check_plugs(root, incident, problems, notes):
-    """Add a problem for each plug item of a plugged INCIDENT that is missing or cannot be read."""
+def check_plugs(root, incident):
+    """(problems, notes): a problem for each plug item of a plugged INCIDENT that is missing or cannot be read."""
     plugs, unread = parse_plug(incident.fields.get("plug", ""))
     if incident.status != "plugged":
-        if unread:
-            notes.append("%s: %d plug item(s) not understood, the first %r; they are checked once it is plugged"
-                         % (incident.id, len(unread), unread[0]))
-        return
-    if not plugs and not unread:
-        problems.append("%s is plugged but names no plug; name it or reopen the incident" % incident.id)
-    for item in unread:
-        problems.append("%s: plug item not understood, so it cannot be checked: %r (write `test <path>::<function>`"
-                        ", `guard <path>` or `rule REVIEW.md \"<line>\"`)" % (incident.id, item))
-    for plug in plugs:
-        reason = plug_problem(root, plug)
-        if reason:
-            problems.append("%s: plug `%s` is missing: %s; %s" % (incident.id, plug.text, reason, REOPEN))
+        return [], (["%s: %d plug item(s) not understood, the first %r; they are checked once it is plugged"
+                     % (incident.id, len(unread), unread[0])] if unread else [])
+    problems = ["%s is plugged but names no plug; name it or reopen the incident" % incident.id] if not (
+        plugs or unread) else []
+    problems += ["%s: plug item not understood, so it cannot be checked: %r (write `test <path>::<function>`"
+                 ", `guard <path>` or `rule REVIEW.md \"<line>\"`)" % (incident.id, item) for item in unread]
+    reasons = [(plug, plug_problem(root, plug)) for plug in plugs]
+    problems += ["%s: plug `%s` is missing: %s; %s" % (incident.id, plug.text, reason, REOPEN)
+                 for plug, reason in reasons if reason]
+    return problems, []
+
+
+def age_notes(incident, today):
+    """Notes on INCIDENT's date: in the future, or open for more than OPEN_DAYS."""
+    age = (today - incident.date).days
+    notes = ["%s is dated %s, in the future" % (incident.id, incident.date)] if age < 0 else []
+    if incident.status == "open" and age > OPEN_DAYS:
+        notes += ["%s has been open for %d days (over %d); plug it or say why not" % (incident.id, age, OPEN_DAYS)]
+    return notes
 
 
 def has_recurrences(incident):
@@ -391,13 +393,8 @@ def report(path, root, check, today=None):
     today = today or datetime.date.today()
     incidents, problems, notes, skipped = parse_log(text)
     for incident in incidents:
-        check_plugs(root, incident, problems, notes)
-        age = (today - incident.date).days
-        if age < 0:
-            notes.append("%s is dated %s, in the future" % (incident.id, incident.date))
-        if incident.status == "open" and age > OPEN_DAYS:
-            notes.append("%s has been open for %d days (over %d); plug it or say why not"
-                         % (incident.id, age, OPEN_DAYS))
+        plug_problems, plug_notes = check_plugs(root, incident)
+        problems, notes = problems + plug_problems, notes + plug_notes + age_notes(incident, today)
     print_report(os.path.relpath(path), incidents, skipped, today)
     for message in notes:
         print("note: " + message)

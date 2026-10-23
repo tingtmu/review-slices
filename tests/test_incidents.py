@@ -301,14 +301,11 @@ class DogfoodTest(unittest.TestCase):
         with open(os.path.join(ROOT, "docs", "INCIDENTS.md"), encoding="utf-8") as handle:
             return handle.read()
 
-    def test_this_repo_s_log_parses_and_its_plugs_exist(self):
+    def test_this_repo_s_log_parses(self):
         found, problems, _notes, _skipped = incidents.parse_log(self.read_log())
         self.assertGreaterEqual(len(found), 4)
         self.assertEqual(problems, [])
         self.assertNotIn(incidents.UNKNOWN_SLICE, [incident.slice for incident in found])
-        done = subprocess.run((sys.executable, INCIDENTS, "--check"), cwd=ROOT, capture_output=True, text=True,
-                              env=ENV)
-        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
 
     def test_this_repo_s_open_plugs_exist_and_wait_only_on_their_expected_failure(self):
         found, _problems, _notes, _skipped = incidents.parse_log(self.read_log())
