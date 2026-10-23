@@ -20,6 +20,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -36,13 +37,17 @@ KINDS = (("format", r"format|fmt|black|prettier|isort"),
          ("build", r"build|compile"))
 KIND_PATTERNS = [(kind, re.compile(r"(?<![\w-])(?:%s)(?![\w-])" % words, re.I)) for kind, words in KINDS]
 SECRET = re.compile(r"\$\{\{\s*secrets\.")
-DEPLOY = re.compile(r"(?<![\w-])(deploy\w*|publish\w*|release|upload\w*|push|twine|kubectl|helm|terraform|gcloud|"
-                    r"aws|az|gh|codecov)(?![\w-])", re.I)
-CI_VALUES = re.compile(r"\$\{\{|\$\{?CI_")
+# Words that mark a deploy or a publish, even inside a name such as deploy-prod, gh-pages or semantic-release.
+DEPLOY = re.compile(r"(?<![A-Za-z0-9])(deploy[a-z]*|publish[a-z]*|release[a-z]*|upload[a-z]*|push|ship|twine|kubectl|"
+                    r"helm|terraform|gcloud|aws|az|gh|codecov|rsync|scp|sftp|ssh)(?![A-Za-z0-9])", re.I)
+FLAGS = re.compile(r"(?:^|\s)--?[\w-]+(?:=\S*)?")  # dropped before DEPLOY, so `cargo build --release` stays local
+# A CI expression, or an environment variable a local shell would not have set.
+CI_VALUES = re.compile(r"\$\{\{|\$\{?(?!(?:HOME|PWD|PATH|USER|TMPDIR)\b)[A-Z_][A-Z0-9_]*")
+WORKDIR = re.compile(r"^\s*working-directory:\s*(.+)$", re.M)
 # Lines of a CI script that prepare the machine rather than check the code.
 SETUP = re.compile(r"(sudo|apt(-get)?|brew|choco|pipx|rustup|echo|printf|export|set|source|\.|curl|wget|git|mkdir|"
                    r"cp|mv|rm|chmod|cat|ls|pwd|if|then|else|elif|fi|for|while|do|done|case|esac)(\s|$)|"
-                   r"((python3?|py) -m )?pip3? install|(npm|pnpm|bun|poetry) (ci|install)|yarn( install)?$|"
+                   r"((python3?|py) -m )?pip3? install|(npm|pnpm|bun|poetry) (ci|install)|yarn( install\b.*)?$|"
                    r"uv (sync|pip|venv|tool)|go (install|mod download)|[A-Za-z_][A-Za-z0-9_]*=\S*$")
 NPM_SCRIPTS = {"test": "test", "lint": "lint", "typecheck": "types", "type-check": "types", "check": None,
                "build": "build", "format:check": "format"}
@@ -51,7 +56,7 @@ TARGETS = {"test": "test", "lint": "lint", "check": "other", "typecheck": "types
 MAKEFILES = (("GNUmakefile", "make"), ("makefile", "make"), ("Makefile", "make"),
              ("justfile", "just"), ("Justfile", "just"), (".justfile", "just"))
 MAKE_TARGET = re.compile(r"([^\s:#=][^:#=]*?)\s*::?(?!=)")
-JUST_RECIPE = re.compile(r"@?([A-Za-z_][\w-]*)(?:\s+[^:=]*)?:(?!=)")
+JUST_RECIPE = re.compile(r"@?([A-Za-z_][\w-]*)(?:\s+[^:]*)?:(?!=)")
 PY_TOOLS = (("pytest", "pytest"), ("ruff", "ruff check ."), ("mypy", "mypy ."), ("black", "black --check ."))
 FIXED = (("tox.ini", ("tox",)), ("noxfile.py", ("nox",)), (".pre-commit-config.yaml", ("pre-commit run --all-files",)),
          ("Cargo.toml", ("cargo test", "cargo clippy -- -D warnings")), ("go.mod", ("go test ./...", "go vet ./...")))
@@ -192,7 +197,7 @@ def split_jobs(lines):
                 if steps:
                     steps[-1].append((number, text))
                 continue
-            in_steps, dash = col == fields and stripped == "steps:", None
+            in_steps, dash = col == fields and guard.COMMENT.sub("", stripped).strip() == "steps:", None
             header.append((number, text))
     return top, jobs
 
@@ -202,11 +207,11 @@ def os_of(label):
     return next((name for prefix, name in OS_PREFIXES if label.lower().startswith(prefix)), None)
 
 
-def matrix_labels(header):
-    """The runner labels under a job's `os:` matrix key, inline or as a list."""
+def matrix_labels(header, key):
+    """The runner labels under a job's matrix KEY, inline or as a list."""
     found, col = [], None
     for _number, text in header:
-        match = re.match(r"\s*(?:-\s+)?os:\s*(.*)$", text)
+        match = re.match(r"\s*(?:-\s+)?%s:\s*(.*)$" % re.escape(key), text)
         if match:
             found, col = found + labels(match.group(1)), indent(text)
         elif col is not None and indent(text) > col and text.strip().startswith("-"):
@@ -219,7 +224,8 @@ def matrix_labels(header):
 def job_os(header, fields):
     """(reason, legs): why the job is remote by its runners' OS, and the other OSes it also runs on."""
     runs_on, here = fields.get("runs-on", (0, ""))[1], os_of(sys.platform)
-    found = matrix_labels(header) if not runs_on or "matrix." in runs_on else labels(runs_on)
+    key = re.search(r"matrix\.([\w-]+)", runs_on)
+    found = matrix_labels(header, key.group(1) if key else "os") if key or not runs_on else labels(runs_on)
     oses = {os_of(label) for label in found} - {None}
     if not oses or here is None:
         return "", []
@@ -237,26 +243,33 @@ def run_lines(value, number, following):
     return [(number, " ".join([scalar(value)] + [text.strip() for _number, text in following]))]
 
 
-def step_reason(step, fields, command):
-    text = "\n".join(line for _number, line in step)
-    deploy, shell = DEPLOY.search(field(fields, "name") + "\n" + command), field(fields, "shell")
-    if SECRET.search(text):
-        return "uses secrets"
+def command_reason(command, *names):
+    """Why COMMAND, in the jobs or steps called NAMES, is a remote check; "" when nothing says so."""
+    deploy = DEPLOY.search(FLAGS.sub(" ", " ".join(names + (command,))))
     if deploy:
         return "deploys or publishes (%s)" % deploy.group(1)
-    if CI_VALUES.search(command):
-        return "needs CI values"
+    return "needs CI values or variables" if CI_VALUES.search(command) else ""
+
+
+def step_reason(fields, command, job):
+    shell = field(fields, "shell")
     if shell in ("pwsh", "powershell", "cmd") and os_of(sys.platform) != "windows":
         return "uses the %s shell" % shell
-    return ""
+    return command_reason(command, job, field(fields, "name"))
 
 
 def job_candidates(rel, top, header, steps):
+    """Candidates of one job. Anything that hints at secrets, an environment or services makes the whole job
+    remote: a secret can reach every step (through $GITHUB_ENV, for one), and --run must never deploy."""
     fields = keys(header[1:])
-    shared = "\n".join(text for _number, text in top + header)
+    whole = "\n".join(text for _number, text in top + header + [line for step in steps for line in step])
     os_reason, legs = job_os(header, fields)
-    reason = ("uses secrets" if SECRET.search(shared) else "needs services" if "services" in fields else os_reason)
-    workdir = re.search(r"^\s*working-directory:\s*(.+)$", shared, re.M)
+    reason = ("its job uses secrets" if SECRET.search(whole) else
+              "its job deploys to an environment" if "environment" in fields else
+              "its job needs services" if "services" in fields else os_reason)
+    job = header[0][1].strip().rstrip(":") + " " + field(fields, "name")
+    workdir = (WORKDIR.search("\n".join(text for _number, text in header))
+               or WORKDIR.search("\n".join(text for _number, text in top)))
     found = []
     for step in steps:
         step_fields = keys(step)
@@ -265,8 +278,8 @@ def job_candidates(rel, top, header, steps):
         index, value = step_fields["run"]
         where = field(step_fields, "working-directory") or (scalar(workdir.group(1)) if workdir else "")
         lines = run_lines(value, step[index][0], nested(step, index, key_col(step)))
-        for number, command in shell_commands(lines, "cd %s && " % where if where else ""):
-            why = reason or step_reason(step, step_fields, command)
+        for number, command in shell_commands(lines, "cd %s && " % shlex.quote(where) if where else ""):
+            why = reason or step_reason(step_fields, command, job)
             found.append(Candidate(rel, number, kind_of(command), command, why, [] if why else legs))
     return found
 
@@ -307,19 +320,18 @@ def gitlab_candidates(root):
     found = []
     for name, body in blocks:
         fields = keys(body)
-        if name in GITLAB_KEYWORDS or "script" not in fields:
-            continue
+        if name in GITLAB_KEYWORDS or name.startswith(".") or "script" not in fields:
+            continue  # a keyword, or a hidden job, which GitLab never runs
         index, value = fields["script"]
-        deploy = DEPLOY.search(name + " " + field(fields, "stage"))
-        reason = ("needs services" if shared or "services" in fields else
-                  "deploys or publishes (%s)" % deploy.group(1) if deploy else
-                  "deploys to an environment" if "environment" in fields else "")
+        reason = ("its job needs services" if shared or "services" in fields else
+                  "its job deploys to an environment" if "environment" in fields else "")
+        following = nested(body, index, key_col(body))
         if value.startswith("["):
             lines = [(body[index][0], item) for item in labels(value)]
         else:
-            lines = [(body[index][0], scalar(value))] if value else list_items(nested(body, index, key_col(body)))
+            lines = run_lines(value, body[index][0], following) if value else list_items(following)
         for number, command in shell_commands(lines):
-            why = reason or ("needs CI values" if CI_VALUES.search(command) else "")
+            why = reason or command_reason(command, name, field(fields, "stage"))
             found.append(Candidate(rel, number, kind_of(command), command, why, []))
     return found
 
@@ -437,7 +449,7 @@ def remote_checks(found):
 def status(root):
     """{path: XY} from `git status --porcelain`, read in its -z form so odd names survive."""
     done = subprocess.run(("git",) + guard.GIT_SETTINGS + ("status", "--porcelain", "-z"), cwd=root,
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, errors="replace")
     if done.returncode != 0:
         raise guard.GuardError("git status failed: %s" % done.stderr.strip())
     entries, fields = {}, iter(done.stdout.split("\0"))

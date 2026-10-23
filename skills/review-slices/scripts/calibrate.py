@@ -74,6 +74,17 @@ def first_parent_commits(sha, count):
     return commits
 
 
+def shallow_edge(commits):
+    """The COMMITS at the edge of a shallow clone: git shows them with no parent, but they have one."""
+    path = git("rev-parse", "--path-format=absolute", "--git-path", "shallow")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            grafted = {line.strip() for line in handle if line.strip()}
+    except FileNotFoundError:
+        return []
+    return [commit for commit in commits if commit.parent is None and commit.sha in grafted]
+
+
 def load_rules(root, path):
     """(config, label): the rules in PATH, or in the working copy's REVIEW.md."""
     label = path or "REVIEW.md (working copy)"
@@ -139,9 +150,17 @@ def print_examples(judged):
 
 def report(name, sha, label, config, count):
     commits = first_parent_commits(sha, count)
+    edge = shallow_edge(commits)
+    commits = [commit for commit in commits if commit not in edge]
+    if not commits:
+        raise guard.GuardError("this shallow clone has too little history to judge; `git fetch --deepen=%d` "
+                               "brings more" % count)
     judged, touched = judge(config, commits)
     print("calibrate: %d first-parent commit(s) of %s (%s), judged by %s" % (len(judged), name, sha[:12], label))
-    if len(judged) < count:
+    if edge:
+        print("note: this is a shallow clone, so %d commit(s) at its edge were left out (their parents are not "
+              "here); `git fetch --deepen=%d` brings more history" % (len(edge), count))
+    elif len(judged) < count:
         print("note: the base branch has only %d commit(s), fewer than --count %d" % (len(judged), count))
     print_distribution(judged)
     print_examples(judged)
@@ -175,6 +194,10 @@ def main(argv):
         return report(name, sha, label, config, options.count)
     except guard.GuardError as error:
         print("review-slices: %s" % error, file=sys.stderr)
+        return 2
+    except UnicodeDecodeError:
+        print("review-slices: a path in these commits is not UTF-8, which the guard cannot read yet; rename it, or "
+              "pass --count or --base to leave that commit out", file=sys.stderr)
         return 2
 
 

@@ -123,6 +123,31 @@ class CalibrateTest(unittest.TestCase):
         self.assertShare(out, "critical", 1, 50)
         self.assertIn("of main (", calibrate(repo, "--base", "main").stdout)
 
+    def test_a_shallow_clone_leaves_out_its_edge(self):  # review: the edge commit looked like a root
+        repo = Repo(self)
+        for number in range(3):
+            self.change(repo, "notes/%d.md" % number)
+        repo.git("push", "-q", "origin", "main")
+        clone = os.path.join(repo.tmp, "shallow")
+        Repo.run_git(repo.tmp, "clone", "-q", "--depth", "2", "file://" + repo.remote, clone)
+        done = subprocess.run((sys.executable, CALIBRATE), cwd=clone, capture_output=True, text=True, env=ENV)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("calibrate: 1 first-parent commit(s)", done.stdout)
+        self.assertShare(done.stdout, "trivial", 1, 100)
+        self.assertIn("shallow clone, so 1 commit(s) at its edge were left out", done.stdout)
+        self.assertShare(done.stdout, "critical", 0, 0)
+        self.assertIn("  critical: core/*", done.stdout)  # the edge is not judged as the whole repo
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "needs a file system that allows non-UTF-8 names")
+    def test_a_non_utf8_path_is_no_traceback(self):
+        repo = Repo(self)
+        open(os.path.join(os.fsencode(repo.path), b"f\xff"), "w").close()
+        repo.commit("odd name")
+        done = calibrate(repo, "--base", "main")
+        self.assertEqual(done.returncode, 2)
+        self.assertIn("not UTF-8", done.stderr)
+        self.assertNotIn("Traceback", done.stderr)
+
     def test_a_missing_base_is_named(self):
         repo = Repo(self)
         repo.git("config", "review-slices.base", "origin/gone")

@@ -40,17 +40,19 @@ jobs:
         image: postgres
     steps:
       - run: make integration
-  ship:
+  images:
     runs-on: ubuntu-latest
     steps:
       - name: Build
         run: cargo build --release
       - name: Push the image
         run: docker push example/app
+      - run: pytest --python ${{ matrix.python }}
+  smoke:
+    steps:
       - run: ./scripts/smoke.sh
         env:
           TOKEN: ${{ secrets.TOKEN }}
-      - run: pytest --python ${{ matrix.python }}
 """
 
 
@@ -97,16 +99,42 @@ class ListTest(unittest.TestCase):
         repo = Repo(self)
         repo.write(".github/workflows/ci.yml", WORKFLOW)
         found = self.listing(repo)
-        self.assertEqual(found["make integration"][2], "remote: needs services")
+        self.assertEqual(found["make integration"][2], "remote: its job needs services")
         self.assertEqual(found["docker push example/app"][2], "remote: deploys or publishes (Push)")
-        self.assertEqual(found["./scripts/smoke.sh"][2], "remote: uses secrets")
-        self.assertEqual(found["pytest --python ${{ matrix.python }}"][2], "remote: needs CI values")
+        self.assertEqual(found["./scripts/smoke.sh"][2], "remote: its job uses secrets")
+        self.assertEqual(found["pytest --python ${{ matrix.python }}"][2], "remote: needs CI values or variables")
+
+    def test_deploy_jobs_and_steps_are_never_local(self):  # review: hyphenated names, environment:, $GITHUB_ENV
+        repo = Repo(self)
+        repo.write(".github/workflows/ci.yml",
+                   "jobs:\n  site:\n    environment: production\n    steps:\n      - run: make deploy-prod\n"
+                   "  pages:\n    steps:\n      - run: echo \"KEY=${{ secrets.KEY }}\" >> \"$GITHUB_ENV\"\n"
+                   "      - run: ./scripts/build.sh\n"
+                   "  misc:\n    steps:\n      - run: npx semantic-release\n      - run: npx gh-pages -d dist\n"
+                   "      - run: ./scripts/upload-site.sh\n      - run: rsync -av dist/ me@example.com:/srv\n"
+                   "      - run: cargo build --release\n      - run: pytest $PYTEST_ARGS\n")
+        found = self.listing(repo)
+        self.assertEqual(found["make deploy-prod"][2], "remote: its job deploys to an environment")
+        self.assertEqual(found["./scripts/build.sh"][2], "remote: its job uses secrets")
+        for command, word in (("npx semantic-release", "release"), ("npx gh-pages -d dist", "gh"),
+                              ("./scripts/upload-site.sh", "upload"), ("rsync -av dist/ me@example.com:/srv", "rsync")):
+            self.assertEqual(found[command][2], "remote: deploys or publishes (%s)" % word)
+        self.assertEqual(found["cargo build --release"][2], "local")
+        self.assertEqual(found["pytest $PYTEST_ARGS"][2], "remote: needs CI values or variables")
+
+    def test_comments_setup_flags_and_the_jobs_own_working_directory(self):
+        repo = Repo(self)
+        repo.write(".github/workflows/ci.yml",
+                   "defaults:\n  run:\n    working-directory: top\njobs:\n  a:\n    defaults:\n      run:\n"
+                   "        working-directory: \"my dir\"\n    steps: # build and test\n"
+                   "      - run: yarn install --frozen-lockfile\n      - run: make test\n")
+        self.assertEqual(sorted(self.listing(repo)), ["cd 'my dir' && make test"])
 
     def test_secrets_in_the_job_env_make_every_step_remote(self):
         repo = Repo(self)
         repo.write(".github/workflows/ci.yml", "jobs:\n  t:\n    env:\n      KEY: ${{ secrets.KEY }}\n"
                                                "    steps:\n      - run: pytest\n")
-        self.assertEqual(self.listing(repo)["pytest"][2], "remote: uses secrets")
+        self.assertEqual(self.listing(repo)["pytest"][2], "remote: its job uses secrets")
 
     @unittest.skipIf(sys.platform == "win32", "windows-latest is this OS")
     def test_a_job_only_for_another_os_is_remote(self):
@@ -114,6 +142,14 @@ class ListTest(unittest.TestCase):
         repo.write(".github/workflows/ci.yml", "jobs:\n  win:\n    runs-on: windows-latest\n    steps:\n"
                                                "    - run: cargo test\n")
         self.assertEqual(self.listing(repo)["cargo test"][2], "remote: runs only on windows")
+
+    @unittest.skipIf(sys.platform == "win32", "windows-latest is this OS")
+    def test_the_matrix_key_comes_from_runs_on(self):
+        repo = Repo(self)
+        repo.write(".github/workflows/ci.yml", "jobs:\n  b:\n    runs-on: ${{ matrix.platform }}\n    strategy:\n"
+                                               "      matrix:\n        platform: [windows-latest]\n    steps:\n"
+                                               "      - run: make lint\n")
+        self.assertEqual(self.listing(repo)["make lint"][2], "remote: runs only on windows")
 
     @unittest.skipIf(THIS_OS is None, "needs a Linux or macOS runner label for this OS")
     def test_a_matrix_with_this_os_stays_local_and_names_the_other_legs(self):
@@ -125,14 +161,23 @@ class ListTest(unittest.TestCase):
 
     def test_gitlab_script(self):
         repo = Repo(self)
-        repo.write(".gitlab-ci.yml", "stages: [test, deploy]\nlint:\n  stage: test\n  script:\n    - npm ci\n"
+        repo.write(".gitlab-ci.yml", "stages: [test]\nlint:\n  stage: test\n  script:\n    - npm ci\n"
                                      "    - npm run lint\n    - |\n      echo hi\n      make check\n"
-                                     "release_job:\n  stage: deploy\n  script: ./ship.sh\n")
+                                     "block:\n  script: |\n    make test\n    make typecheck\n"
+                                     ".template:\n  script:\n    - make template-only\n"
+                                     "deploy-prod:\n  stage: test\n  script: ./go.sh\n"
+                                     "pkg:\n  stage: test\n  script:\n    - npm publish\n"
+                                     "    - node tag.js $NPM_TOKEN\n")
         found = self.listing(repo)
         self.assertEqual(found["npm run lint"], (".gitlab-ci.yml:6", "lint", "local"))
         self.assertEqual(found["make check"], (".gitlab-ci.yml:9", "other", "local"))
-        self.assertTrue(found["./ship.sh"][2].startswith("remote: deploys or publishes"))
-        self.assertNotIn("npm ci", found)
+        self.assertEqual(found["make test"], (".gitlab-ci.yml:12", "test", "local"))
+        self.assertEqual(found["make typecheck"], (".gitlab-ci.yml:13", "types", "local"))
+        self.assertEqual(found["./go.sh"][2], "remote: deploys or publishes (deploy)")
+        self.assertEqual(found["npm publish"][2], "remote: deploys or publishes (publish)")
+        self.assertEqual(found["node tag.js $NPM_TOKEN"][2], "remote: needs CI values or variables")
+        for absent in ("npm ci", "|", "make template-only"):
+            self.assertNotIn(absent, found)
 
     def test_package_json_scripts_use_the_lockfiles_runner(self):
         repo = Repo(self)
@@ -159,13 +204,15 @@ class ListTest(unittest.TestCase):
         repo = Repo(self)
         repo.write("Makefile", ".PHONY: test lint\nX := 1\ntest lint: deps\n\tpytest\nbuild:\n\tcc x.c\n"
                                "deploy:\n\t./ship\n")
-        repo.write("justfile", "set shell := [\"bash\"]\n@typecheck:\n    mypy .\ncheck *ARGS:\n    true\n")
+        repo.write("justfile", "set shell := [\"bash\"]\n@typecheck:\n    mypy .\ncheck *ARGS:\n    true\n"
+                               "test filter=\"\":\n    pytest\n")
         found = self.listing(repo)
         self.assertEqual(found["make test"], ("Makefile:3", "test", "local"))
         self.assertEqual(found["make lint"], ("Makefile:3", "lint", "local"))
         self.assertEqual(found["make build"], ("Makefile:5", "build", "local"))
         self.assertEqual(found["just typecheck"], ("justfile:2", "types", "local"))
         self.assertEqual(found["just check"], ("justfile:4", "other", "local"))
+        self.assertEqual(found["just test"], ("justfile:6", "test", "local"))
         self.assertNotIn("make deploy", found)
 
     def test_pyproject_sections_and_marker_files(self):
@@ -235,6 +282,27 @@ class RunTest(unittest.TestCase):
         self.assertEqual(section(out, "Remote checks"),
                          ["- ./deploy.sh (.github/workflows/ci.yml:9): deploys or publishes (deploy)"])
         self.assertIn("left the tree changed", out)
+
+    def test_run_never_runs_a_deploy(self):
+        repo = Repo(self)
+        repo.write(".github/workflows/ci.yml", "jobs:\n  site:\n    environment: production\n    steps:\n"
+                                               "      - run: touch deployed\n  t:\n    steps:\n"
+                                               "      - run: touch deploy-ran\n      - run: true\n")
+        repo.commit("add a workflow")
+        out = discover(repo, "--run").stdout
+        self.assertIn("[1/1] true", out)
+        for marker in ("deployed", "deploy-ran"):
+            self.assertFalse(os.path.exists(os.path.join(repo.path, marker)), marker)
+        self.assertIn("- touch deployed (.github/workflows/ci.yml:5): its job deploys to an environment", out)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "needs a file system that allows non-UTF-8 names")
+    def test_a_non_utf8_name_is_no_traceback(self):
+        repo = Repo(self)
+        open(os.path.join(os.fsencode(repo.path), b"f\xff"), "w").close()
+        done = discover(repo, "--run")
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("needs a clean tree", done.stderr)
+        self.assertNotIn("Traceback", done.stderr)
 
     def test_a_check_that_rewrites_a_tracked_file_is_named(self):
         repo = Repo(self)
