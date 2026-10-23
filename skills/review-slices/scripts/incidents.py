@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# Vendored into repos by the review-slices skill and linted where it is written, so a host repo's tools skip it:
+# ruff: noqa
+# flake8: noqa
+# pylint: skip-file
+# mypy: ignore-errors
+# isort: skip_file
 """review-slices incident log report: open incidents, counts per slice, recurrences, and whether each plug exists.
 
     incidents.py [--path docs/INCIDENTS.md] [--check]   run inside the target repo; --check exits 1 on a problem
@@ -405,6 +411,7 @@ def report(path, root, check, today=None):
 
 
 def main(argv):
+    sys.stdout.reconfigure(errors="backslashreplace")
     parser = argparse.ArgumentParser(prog="incidents.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--path", help="the incident log (default: docs/INCIDENTS.md at the repo root)")
