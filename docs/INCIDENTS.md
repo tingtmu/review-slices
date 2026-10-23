@@ -26,7 +26,7 @@ each failure class from getting through again. Terms: the skill's
 
 - **Date / kind / status:** 2026-10-23 · defect · open
 - **What happened:** In 0.1.0, comma-separated globs matched nothing (H3), a `#` cut a test command (H4), tag
-  pushes went unchecked (H6), a deleted REVIEW.md switched the guard off (H7), `diff.relative` hid paths (H9),
+  pushes went unchecked (H6), a hook chained before the guard could drain its input (H5), a deleted REVIEW.md switched the guard off (H7), `diff.relative` hid paths (H9),
   a duplicate `test:` line won silently (H13) and an ignored submodule update was invisible (H14).
 - **Slice that should have caught it:** 1 Offline suite. Why it did not: the guard had no tests.
 - **Failure class:** the guard fails open on input it did not expect

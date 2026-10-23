@@ -21,7 +21,8 @@ A claim that something works without it is not evidence.
 _Avoid_: self-verification, execution evidence, "done" with no output
 
 **Suite**:
-Every offline check the standing rules list, such as tests, lint, type checks and builds, run together on one tree.
+Every offline check listed in the REVIEW.md of the tree being tested, such as tests, lint, type checks and builds,
+run together on that tree. A change to the suite is reviewed, not blocked.
 _Avoid_: test command, checks (unqualified)
 
 **Remote check**:

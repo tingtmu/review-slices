@@ -20,7 +20,7 @@ important: docs/INCIDENTS.md
 important: .github/*
 important: .claude/*
 important: .codex/*
-simple: tests/*
+important: tests/*
 simple: README.md
 ```
 

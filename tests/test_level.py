@@ -42,8 +42,7 @@ class LevelTest(unittest.TestCase):
         repo = Repo(self)
         self.assertIn("level: trivial", self.level(repo))
 
-    @unittest.expectedFailure  # H9
-    def test_diff_relative_does_not_hide_paths_outside_the_current_directory(self):
+    def test_diff_relative_does_not_hide_paths_outside_the_current_directory(self):  # H9
         repo = Repo(self)
         repo.git("config", "diff.relative", "true")
         repo.write("core/a.py")
@@ -60,16 +59,14 @@ class LevelTest(unittest.TestCase):
         repo.commit("notes")
         self.assertIn("level: trivial", self.level(repo))
 
-    @unittest.expectedFailure  # H1
-    def test_a_changed_test_command_is_reported(self):
+    def test_a_changed_test_command_is_reported(self):  # H1
         repo = Repo(self)
         repo.write("REVIEW.md", review_md(RULES.replace("test: true", "test: echo weaker")))
         repo.commit("change the suite")
         done = repo.guard("level")
         self.assertIn("echo weaker", done.stdout + done.stderr)
 
-    @unittest.expectedFailure  # H14
-    def test_a_submodule_update_counts_even_when_gitmodules_ignores_it(self):
+    def test_a_submodule_update_counts_even_when_gitmodules_ignores_it(self):  # H14
         repo = Repo(self)
         sub = os.path.join(repo.tmp, "sub")
         for args in (("init", "-q", "-b", "main", sub),
@@ -86,8 +83,10 @@ class LevelTest(unittest.TestCase):
         inner = os.path.join(repo.path, "core", "sub")
         repo.git("-c", "protocol.file.allow=always", "fetch", "-q", "origin", cwd=inner)
         repo.git("checkout", "-q", "FETCH_HEAD", cwd=inner)
-        repo.git("add", "core/sub")
+        repo.git("add", "--force", "core/sub")
         repo.commit("bump the submodule", all_files=False)
+        changed = repo.out("diff-tree", "--no-commit-id", "-r", "--name-only", "--ignore-submodules=none", "HEAD")
+        self.assertEqual(changed, "core/sub")
         self.assertIn("level: critical", self.level(repo))
 
 

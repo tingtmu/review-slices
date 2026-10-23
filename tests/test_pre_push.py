@@ -21,7 +21,10 @@ class PrePushTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, "push refused:\n" + done.stderr)
 
     def suite(self):
-        done = self.repo.run_suite()
+        self.suite_in(self.repo)
+
+    def suite_in(self, repo):
+        done = repo.run_suite()
         self.assertEqual(done.returncode, 0, done.stderr)
 
     def test_refuses_an_unreviewed_critical_change(self):
@@ -79,7 +82,7 @@ class PrePushTest(unittest.TestCase):
         repo.write("notes/n.md")
         repo.commit("notes")
         self.suite()
-        self.assertNotEqual(repo.try_push().returncode, 0)
+        self.assert_refused(repo.try_push("--force", "origin", "HEAD"), "does not have")
 
     def test_a_dashed_line_in_the_message_keeps_the_trailer(self):  # H17
         repo = self.repo
@@ -113,6 +116,28 @@ class PrePushTest(unittest.TestCase):
         self.assert_refused(repo.try_push("origin", "feature"), "core/a.py")
 
     @unittest.expectedFailure  # H2
+    def test_a_clean_merge_of_main_needs_no_review(self):
+        repo = self.repo
+        repo.write("core/a.py", "one\n1\n2\n3\n4\ntwo\n")
+        repo.commit("base", trailer=repo.trailer("critical"))
+        self.suite()
+        self.assert_pushed(repo.try_push("origin", "main"))
+        repo.git("switch", "-q", "-c", "feature")
+        repo.write("core/a.py", "one\n1\n2\n3\n4\nTWO\n")
+        repo.commit("feature edit", trailer=repo.trailer("critical"))
+        self.suite()
+        self.assert_pushed(repo.try_push("-u", "origin", "feature"))
+        repo.git("switch", "-q", "main")
+        repo.write("core/a.py", "ONE\n1\n2\n3\n4\ntwo\n")
+        repo.commit("main edit", trailer=repo.trailer("critical"))
+        self.suite()
+        self.assert_pushed(repo.try_push("origin", "main"))
+        repo.git("switch", "-q", "feature")
+        repo.git("merge", "-q", "--no-edit", "main")
+        self.suite()
+        self.assert_pushed(repo.try_push("origin", "feature"))
+
+    @unittest.expectedFailure  # H2
     def test_merging_main_into_a_branch_does_not_ask_to_review_main(self):
         repo = self.repo
         repo.git("switch", "-q", "-c", "feature")
@@ -131,8 +156,7 @@ class PrePushTest(unittest.TestCase):
         self.suite()
         self.assert_pushed(repo.try_push("origin", "feature"))
 
-    @unittest.expectedFailure  # H6
-    def test_a_tag_push_is_checked(self):
+    def test_a_tag_push_is_checked(self):  # H6
         repo = self.repo
         repo.write("core/a.py")
         repo.commit("unreviewed")
@@ -140,8 +164,47 @@ class PrePushTest(unittest.TestCase):
         repo.git("tag", "v1")
         self.assert_refused(repo.try_push("origin", "v1"), "critical")
 
-    @unittest.expectedFailure  # H7
-    def test_a_deleted_review_md_does_not_switch_the_guard_off(self):
+    def test_an_annotated_tag_is_checked(self):
+        repo = self.repo
+        repo.write("core/a.py")
+        repo.commit("unreviewed")
+        self.suite()
+        repo.git("tag", "-a", "-m", "release", "v2")
+        self.assert_refused(repo.try_push("origin", "v2"), "critical")
+
+    def test_a_tag_on_pushed_work_needs_nothing(self):
+        repo = self.repo
+        repo.git("tag", "v0")
+        self.assert_pushed(repo.try_push("origin", "v0"))
+
+    def test_a_push_that_deletes_review_md_is_refused(self):
+        repo = self.repo
+        repo.git("rm", "-q", "REVIEW.md")
+        repo.commit("drop the rules", trailer=repo.trailer("critical"))
+        self.assert_refused(repo.try_push(), "deletes or moves REVIEW.md")
+
+    @unittest.expectedFailure  # 0.3.0: with core.hooksPath=.githooks, a checkout without .githooks runs no hook
+    def test_a_branch_from_before_adoption_is_not_checked(self):
+        repo = self.repo
+        repo.git("switch", "-q", "--orphan", "old")
+        repo.write("legacy.txt")
+        repo.commit("an old line of work, before the rules existed")
+        repo.write("core/b.py")
+        repo.commit("a backport")
+        done = repo.try_push("origin", "old")
+        self.assert_pushed(done)
+        self.assertIn("not checked", done.stderr)
+
+    def test_a_suite_change_is_reported_on_push(self):
+        repo = self.repo
+        repo.write("REVIEW.md", review_md(RULES.replace("test: true", "test: echo weaker")))
+        repo.commit("weaker suite", trailer=repo.trailer("important"))
+        self.suite()
+        done = repo.try_push()
+        self.assert_pushed(done)
+        self.assertIn("echo weaker", done.stderr)
+
+    def test_a_deleted_review_md_does_not_switch_the_guard_off(self):  # H7
         repo = self.repo
         repo.git("rm", "-q", "REVIEW.md")
         repo.commit("drop the rules")
@@ -151,8 +214,7 @@ class PrePushTest(unittest.TestCase):
         repo.run_suite()
         self.assert_refused(repo.try_push(), "REVIEW.md")
 
-    @unittest.expectedFailure  # H8
-    def test_broken_rules_on_main_do_not_block_their_own_fix(self):
+    def test_broken_rules_on_main_do_not_block_their_own_fix(self):  # H8
         repo = self.repo
         repo.write("REVIEW.md", review_md(RULES.replace("critical:", "Critical:")))
         repo.commit("a typo in the rules")
@@ -162,8 +224,7 @@ class PrePushTest(unittest.TestCase):
         self.suite()
         self.assert_pushed(repo.try_push())
 
-    @unittest.expectedFailure  # H9
-    def test_a_signed_commit_keeps_its_trailer_under_log_show_signature(self):
+    def test_a_signed_commit_keeps_its_trailer_under_log_show_signature(self):  # H9
         if not shutil.which("ssh-keygen"):
             self.skipTest("ssh-keygen not installed")
         repo = self.repo
@@ -181,6 +242,24 @@ class PrePushTest(unittest.TestCase):
         repo.git("commit", "-q", "-S", "-m", "signed", "-m", repo.trailer("critical"))
         self.suite()
         self.assert_pushed(repo.try_push())
+
+    @unittest.expectedFailure  # H16
+    def test_an_existing_hook_keeps_running_beside_the_guard(self):
+        repo = Repo(self)
+        marker = os.path.join(repo.tmp, "lfs-ran")
+        hook = repo.out("rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push")
+        with open(hook, "w", encoding="utf-8") as handle:
+            handle.write("#!/bin/sh\ncat > '%s'\n" % marker)
+        os.chmod(hook, 0o755)
+        repo.install()
+        if os.path.exists(marker):
+            os.remove(marker)  # only the push below counts
+        repo.write("core/a.py")
+        repo.commit("unreviewed")
+        self.suite_in(repo)
+        self.assert_refused(repo.try_push(), "critical")
+        with open(marker, encoding="utf-8") as handle:
+            self.assertIn("refs/heads/main", handle.read())
 
     @unittest.expectedFailure  # H10
     def test_an_edited_guard_does_not_judge_its_own_push(self):

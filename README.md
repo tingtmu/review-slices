@@ -13,29 +13,26 @@ are in [GLOSSARY.md](skills/review-slices/GLOSSARY.md).
 npx skills add tingtmu/review-slices -g -a claude-code codex
 ```
 
-Dependencies depend on the review level and whether a review meeting is needed:
+No other skill is required. Reviewers are fresh-context agents briefed from
+[references/reviewer-briefs.md](skills/review-slices/references/reviewer-briefs.md):
 
-- [`code-review`](https://github.com/mattpocock/skills) is required by the current procedure for Important and
-  Critical changes. Without it, Trivial and Simple changes can still follow the procedure, provided Simple
-  changes have an independent reviewer. Important and Critical reviews need the skill installed or an explicit
-  decision from the user about how to proceed; there is no automatic substitute defined for `code-review`.
+- [`code-review`](https://github.com/mattpocock/skills) can stand in for the built-in Standards and Spec reviewers at
+  Important and Critical, if it is installed.
 - Orca's [`orca-cli`](https://github.com/stablyai/orca/blob/main/skills/orca-cli/SKILL.md) and
-  [`orchestration`](https://github.com/stablyai/orca/blob/main/skills/orchestration/SKILL.md) skills are needed
-  only for optional review meetings, along with a running Orca app. Without Orca, ordinary reviews at every
-  level can still run using independent agent reviewers. A disputed Critical finding must go to the user if
-  a review meeting is unavailable.
+  [`orchestration`](https://github.com/stablyai/orca/blob/main/skills/orchestration/SKILL.md) skills, with a running
+  Orca app, are needed only for optional review meetings. Without them, a disputed Critical review finding goes to
+  the user.
 
 If fresh-context agent reviewers are unavailable, the procedure falls back to a read-only CLI reviewer, then
 an Orca terminal if available, then asking the user. The author must not review its own work as Slice 2.
-The Python guard needs neither dependency: it checks pass stamps and review trailers, not whether reviewers
-actually ran or these tools are installed.
+The Python guard checks pass stamps and review trailers, not whether reviewers actually ran.
 
 ## Set up a repo
 
 Ask your agent to "set up review-slices in this repo". It copies the templates and the guard, then:
 
 ```sh
-git config core.hooksPath .githooks   # once per clone: the pre-push guard
+git config core.hooksPath .githooks   # once per clone, only if it has no other hooks (see SKILL.md)
 python3 .githooks/review_slices.py level       # review level of your changes, and the trailer to write
 python3 .githooks/review_slices.py run-suite   # the full suite, once per pushed tree; stamps a pass
 ```
@@ -48,3 +45,9 @@ The guard needs Python 3.8+ and git 2.31+, and nothing else.
 
 `0.1.1`: tests for the guard (with the known 0.1.0 holes as expected failures), this repo reviewed with its
 own skill, and setup that no longer sets `core.hooksPath` over existing hooks.
+
+`0.2.0`: the guard checks tag pushes, refuses a push that deletes REVIEW.md, treats an unreadable REVIEW.md as
+critical instead of deadlocking, ignores user git settings that hid paths or trailers, counts submodule updates,
+reads `a, b` as two globs, runs every `test:` line, reports a changed suite, and lints the rules (`check`). The
+procedure commits before review, asks the go-ahead before pushes and one-way doors, and ships its own Standards and
+Spec reviewer briefs.

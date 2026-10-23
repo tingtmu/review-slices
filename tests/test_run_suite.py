@@ -29,14 +29,12 @@ class RunSuiteTest(unittest.TestCase):
         self.assertIn("changed", done.stderr)
         self.assertFalse(os.path.exists(self.stamp_file(repo)))
 
-    @unittest.expectedFailure  # 0.2.0: the suite is read from the tree it stamps, not from HEAD
     def test_the_suite_comes_from_the_working_copy_tree_it_stamps(self):
         repo = Repo(self)
         repo.write("REVIEW.md", review_md(RULES.replace("test: true", "test: false")))
         self.assertNotEqual(repo.run_suite().returncode, 0)
 
-    @unittest.expectedFailure  # H13
-    def test_every_test_line_is_required(self):
+    def test_every_test_line_is_required(self):  # H13
         repo = Repo(self, rules=RULES.replace("test: true", "test: false\ntest: true"))
         self.assertNotEqual(repo.run_suite().returncode, 0)
 

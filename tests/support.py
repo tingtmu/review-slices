@@ -1,4 +1,5 @@
 """Throwaway git repos for the guard's tests: a bare remote and a clone, isolated from the user's git config."""
+import atexit
 import importlib.util
 import os
 import re
@@ -23,7 +24,11 @@ trivial: notes/*
 
 ENV = {key: value for key, value in os.environ.items()
        if not key.startswith(("GIT_", "REVIEW_SLICES_", "PRE_COMMIT"))}
-ENV.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_PROMPT="0")
+HOME = tempfile.mkdtemp(prefix="review-slices-home-")
+atexit.register(shutil.rmtree, HOME, True)
+# An empty HOME keeps the user's ~/.gitconfig and ~/.config/git/{ignore,attributes} out, on any git version.
+ENV.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_PROMPT="0", HOME=HOME,
+           XDG_CONFIG_HOME=HOME)
 
 
 def load_guard():
