@@ -13,8 +13,22 @@ are in [GLOSSARY.md](skills/review-slices/GLOSSARY.md).
 npx skills add tingtmu/review-slices -g -a claude-code codex
 ```
 
-Optional dependencies: [`code-review`](https://github.com/mattpocock/skills) (Important and Critical levels) and the
-Orca `orca-cli` and `orchestration` skills (review meetings only).
+Dependencies depend on the review level and whether a review meeting is needed:
+
+- [`code-review`](https://github.com/mattpocock/skills) is required by the current procedure for Important and
+  Critical changes. Without it, Trivial and Simple changes can still follow the procedure, provided Simple
+  changes have an independent reviewer. Important and Critical reviews need the skill installed or an explicit
+  decision from the user about how to proceed; there is no automatic substitute defined for `code-review`.
+- Orca's [`orca-cli`](https://github.com/stablyai/orca/blob/main/skills/orca-cli/SKILL.md) and
+  [`orchestration`](https://github.com/stablyai/orca/blob/main/skills/orchestration/SKILL.md) skills are needed
+  only for optional review meetings, along with a running Orca app. Without Orca, ordinary reviews at every
+  level can still run using independent agent reviewers. A disputed Critical finding must go to the user if
+  a review meeting is unavailable.
+
+If fresh-context agent reviewers are unavailable, the procedure falls back to a read-only CLI reviewer, then
+an Orca terminal if available, then asking the user. The author must not review its own work as Slice 2.
+The Python guard needs neither dependency: it checks pass stamps and review trailers, not whether reviewers
+actually ran or these tools are installed.
 
 ## Set up a repo
 
