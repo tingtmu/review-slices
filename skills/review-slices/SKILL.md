@@ -97,7 +97,10 @@ Ask the user before each step; these change how the repo works.
    failure list. Copy [templates/INCIDENTS.md](templates/INCIDENTS.md) to `docs/INCIDENTS.md`.
 2. Copy `scripts/review_slices.py` to `.githooks/review_slices.py`, and write `.githooks/pre-push`:
    `#!/bin/sh` then `exec python3 "$(dirname "$0")/review_slices.py" pre-push "$@"`. Make it executable.
-3. Each clone opts in with `git config core.hooksPath .githooks`.
+3. Each clone opts in with `git config core.hooksPath .githooks`, but only if none of these exist:
+   `core.hooksPath` already set, a hook in `.git/hooks` not ending in `.sample`, `.husky/`,
+   `.pre-commit-config.yaml`, or `filter=lfs` in `.gitattributes`. Setting it silently turns those hooks off,
+   including git-lfs's upload on push. If any exists, stop and tell the user.
 4. Point the repo's agent instructions (AGENTS.md or CLAUDE.md) at REVIEW.md with a plain path, not an import.
 
 ## Report

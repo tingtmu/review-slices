@@ -45,3 +45,6 @@ The guard needs Python 3.8+ and git 2.31+, and nothing else.
 ## Versions
 
 `0.1.0`: first release, 2026-10-23.
+
+`0.1.1`: tests for the guard (with the known 0.1.0 holes as expected failures), this repo reviewed with its
+own skill, and setup that no longer sets `core.hooksPath` over existing hooks.

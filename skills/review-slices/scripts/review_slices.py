@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""review-slices guard (skill version 0.1.0): review levels, pass stamps and the pre-push check.
+"""review-slices guard (skill version 0.1.1): review levels, pass stamps and the pre-push check.
 
     review_slices.py level [BASE]          print the review level of all changes since BASE (commits, edits,
                                            new files) and the trailer to write
