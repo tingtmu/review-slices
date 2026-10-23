@@ -425,7 +425,9 @@ def last_trailer(commits):
 
 def next_step(config, level, start, commits, uncommitted, tips):
     if uncommitted:
-        return "commit this work locally (no trailer yet), then run status again"
+        return ("commit this work locally (no trailer yet), then run status again. Uncommitted: %s%s. If any of "
+                "these are not this work's, ask the user; never commit, stash or revert someone else's edits"
+                % (", ".join(uncommitted[:5]), " and %d more" % (len(uncommitted) - 5) if len(uncommitted) > 5 else ""))
     if level != "trivial":
         return ("review at %s: %s, on `git diff %s..HEAD`; then add the trailer to the last commit with "
                 "`git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer \"Review: %s %s\"`"
