@@ -74,18 +74,27 @@ class CalibrateTest(unittest.TestCase):
         self.assertNotIn("side work", out)
 
     def test_warns_when_most_changes_would_be_critical(self):
-        repo = Repo(self)
-        for number in range(3):
-            self.change(repo, "core/%d.py" % number)
+        repo = Repo(self)  # init + 7 critical + 12 simple = 20 commits
+        for number in range(19):
+            self.change(repo, "core/%d.py" % number if number < 7 else "src/%d.py" % number)
         out = self.run_ok(repo)
-        self.assertIn("warning: 75% are critical", out)
+        self.assertIn("warning: 35% are critical", out)
         self.assertIn("people will route around it", out)
 
     def test_warns_when_most_changes_would_be_trivial(self):
-        repo = Repo(self)
-        for number in range(3):
-            self.change(repo, "notes/%d.md" % number)
+        repo = Repo(self)  # init + 15 trivial + 4 simple = 20 commits
+        for number in range(19):
+            self.change(repo, "notes/%d.md" % number if number < 15 else "src/%d.py" % number)
         self.assertIn("warning: 75% are trivial", self.run_ok(repo))
+
+    def test_a_short_history_is_too_few_to_judge(self):  # acceptance trial: "40% critical" on 5 commits
+        repo = Repo(self)
+        for path in ("core/a.py", "core/b.py", "src/c.py", "src/d.py"):
+            self.change(repo, path)
+        out = self.run_ok(repo)
+        self.assertShare(out, "critical", 2, 40)
+        self.assertIn("note: too few commits to judge the mix (5, under 20); run it again later", out)
+        self.assertNotIn("warning", out)
 
     def test_a_draft_in_the_working_copy_is_used_before_it_is_committed(self):
         repo = Repo(self)

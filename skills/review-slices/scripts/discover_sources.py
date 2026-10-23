@@ -24,8 +24,11 @@ KINDS = (("format", r"format|fmt|black|prettier|isort"),
 KIND_PATTERNS = [(kind, re.compile(r"(?<![\w-])(?:%s)(?![\w-])" % words, re.I)) for kind, words in KINDS]
 SECRET = re.compile(r"\$\{\{[^}]*\bsecrets\b")  # secrets.X, secrets['X'], toJSON(secrets)
 # Words that mark a deploy or a publish, even inside a name such as deploy-prod, gh-pages or semantic-release.
-DEPLOY = re.compile(r"(?<![A-Za-z0-9])(deploy[a-z]*|publish[a-z]*|release[a-z]*|upload[a-z]*|push|ship|twine|kubectl|"
-                    r"helm|terraform|gcloud|aws|az|gh|codecov|rsync|scp|sftp|ssh)(?![A-Za-z0-9])", re.I)
+DEPLOY = re.compile(r"(?<![A-Za-z0-9])(deploy[a-z]*|publish[a-z]*|release[a-z]*|push|ship|twine|kubectl|"
+                    r"helm|terraform|gcloud|aws|az|gh|rsync|scp|sftp|ssh)(?![A-Za-z0-9])", re.I)
+# Coverage and report uploads, which need the network and usually a token.
+UPLOAD = re.compile(r"(?<![A-Za-z0-9])(upload[a-z]*|codecov|coveralls|codacy|codeclimate|cc-test-reporter|deepsource|"
+                    r"sonar[a-z-]*|report-coverage)(?![A-Za-z0-9])", re.I)
 # The one flag dropped before DEPLOY, so `cargo build --release` stays local; --push and --publish still count.
 RELEASE_FLAG = re.compile(r"(?:^|\s)--release(?=\s|$)")
 # A CI expression, or an environment variable a local shell would not have set.
@@ -232,7 +235,10 @@ def run_lines(value, number, following):
 
 def command_reason(command, *names):
     """Why COMMAND, in the jobs or steps called NAMES, is a remote check; "" when nothing says so."""
-    deploy = DEPLOY.search(RELEASE_FLAG.sub(" ", " ".join(names + (command,))))
+    text = RELEASE_FLAG.sub(" ", " ".join(names + (command,)))
+    upload, deploy = UPLOAD.search(text), DEPLOY.search(text)
+    if upload:
+        return "uploads to a service (%s)" % upload.group(1)
     if deploy:
         return "deploys or publishes (%s)" % deploy.group(1)
     return "needs CI values or variables" if CI_VALUES.search(command) else ""
@@ -340,8 +346,11 @@ def package_candidates(root):
         if name in NPM_SCRIPTS and isinstance(body, str):
             pattern = re.compile(r'"%s"\s*:' % re.escape(name))
             number = next((n for n, text in lines if n >= start and pattern.search(text)), start or 1)
+            # `run test` also runs pretest and posttest, so a publish in either makes it remote.
+            hooks = [scripts.get(prefix + name) for prefix in ("pre", "", "post")]
+            reason = command_reason(" && ".join(hook for hook in hooks if isinstance(hook, str)), name)
             found.append(Candidate("package.json", number, NPM_SCRIPTS[name] or kind_of(body),
-                                   "%s run %s" % (runner, name), "", []))
+                                   "%s run %s" % (runner, name), reason, []))
     return found
 
 
@@ -401,7 +410,7 @@ def contributing_candidates(root):
                 fence, lang, lines = match.group(1), match.group(2).lower(), []
             elif fence and text.strip().startswith(fence) and not text.strip().strip(fence[0]):
                 if lang in SHELL_FENCES:
-                    found += [Candidate(rel, n, kind_of(command), command, "", [])
+                    found += [Candidate(rel, n, kind_of(command), command, command_reason(command), [])
                               for n, command in fence_commands(lang, lines)]
                 fence = None
             elif fence:

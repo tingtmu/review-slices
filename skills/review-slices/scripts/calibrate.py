@@ -25,6 +25,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_COUNT = 50
 EXAMPLES = 3
 TOO_STRICT, TOO_LOOSE = 0.30, 0.60
+MIN_COMMITS = 20  # fewer, and one commit moves the shares by 5 points or more
 Commit = collections.namedtuple("Commit", "sha short parent subject")
 Judged = collections.namedtuple("Judged", "commit level row")
 
@@ -128,6 +129,9 @@ def print_distribution(judged):
     print("level distribution:")
     for level in guard.LEVELS:
         print("  %-9s  %3d  %3.0f%%" % (level, counts[level], 100.0 * counts[level] / len(judged)))
+    if len(judged) < MIN_COMMITS:
+        print("note: too few commits to judge the mix (%d, under %d); run it again later" % (len(judged), MIN_COMMITS))
+        return
     share = {level: float(counts[level]) / len(judged) for level in guard.LEVELS}
     if share["critical"] > TOO_STRICT:
         print("warning: %.0f%% are critical: most changes would need three reviewers and the user's go-ahead; people "
