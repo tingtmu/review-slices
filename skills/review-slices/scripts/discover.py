@@ -201,6 +201,8 @@ def positive(text):
 
 
 def main(argv):
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")  # a non-UTF-8 path prints escaped, not as a traceback
     parser = argparse.ArgumentParser(prog="discover.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--run", action="store_true", help="run each local candidate (needs a clean tree)")
@@ -211,8 +213,9 @@ def main(argv):
         root = guard.git("rev-parse", "--show-toplevel")
         dirty = sorted(status(root)) if options.run else []
         if dirty:
-            print("discover: --run needs a clean tree, so that what each check writes shows; commit or stash these "
-                  "first:\n  " + "\n  ".join(dirty[:10]), file=sys.stderr)
+            print("discover: --run needs a clean tree, so that what each check writes shows. These may be the "
+                  "user's edits: ask the user to commit or stash these; never stash or commit someone else's edits."
+                  "\n  " + "\n  ".join(dirty[:10]), file=sys.stderr)
             return 1
         found = [candidate for source in sources.SOURCES for candidate in source(root)]
         if not found:

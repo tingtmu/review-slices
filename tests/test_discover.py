@@ -266,6 +266,17 @@ class ListTest(unittest.TestCase):
         self.assertEqual(found["just test"], ("justfile:6", "test", "local"))
         self.assertNotIn("make deploy", found)
 
+    def test_a_target_whose_recipe_deploys_is_remote(self):  # the Standards finding's class: Make and just too
+        repo = Repo(self)
+        repo.write("Makefile", "build:\n\tdocker build -t x .\n\tdocker push x\n\ntest: upload-coverage\n\tpytest\n"
+                               "lint:\n\t${RUFF} check .\n")
+        repo.write("justfile", "check:\n    cargo test\n    cargo publish\n")
+        found = self.listing(repo)
+        self.assertEqual(found["make build"][2], "remote: deploys or publishes (push)")
+        self.assertEqual(found["make test"][2], "remote: uploads to a service (upload)")
+        self.assertEqual(found["make lint"][2], "local")
+        self.assertEqual(found["just check"][2], "remote: deploys or publishes (publish)")
+
     def test_pyproject_sections_and_marker_files(self):
         repo = Repo(self)
         repo.write("pyproject.toml", "[project]\nname = 'x'\n[tool.pytest.ini_options]\n[tool.ruff.lint]\n"
@@ -334,14 +345,35 @@ class RunTest(unittest.TestCase):
                          ["- ./deploy.sh (.github/workflows/ci.yml:9): deploys or publishes (deploy)"])
         self.assertIn("left the tree changed", out)
 
-    def test_run_never_runs_a_publishing_script_or_contributing_line(self):  # Standards review
+    def test_the_reviews_publishing_commands_are_remote_in_every_non_ci_source(self):  # final adversarial review
+        repo = Repo(self)
+        repo.write("package.json", '{"scripts": {"test": "npm test && npm publish", "build": "tsc && npm run deploy",'
+                                   ' "lint": "eslint .", "postlint": "./scripts/release-check.sh --push"}}')
+        repo.write("Makefile", "test:\n\tpython -m pytest && twine upload dist/*\n")
+        repo.write("justfile", "check:\n    cargo test && cargo publish\n")
+        repo.write("CONTRIBUTING.md", "```sh\nnpm test && npm publish\ncargo test && cargo publish\n"
+                                      "python -m pytest && twine upload dist/*\n"
+                                      "./scripts/release-check.sh --push\n```\n")
+        done = discover(repo)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        found = rows(done)
+        for command in ("npm run test", "npm run build", "npm run lint", "make test", "just check",
+                        "npm test && npm publish", "cargo test && cargo publish",
+                        "python -m pytest && twine upload dist/*", "./scripts/release-check.sh --push"):
+            self.assertTrue(found[command][2].startswith("remote: "), (command, found[command]))
+
+    @unittest.skipIf(sys.platform == "win32", "fake tools are shell scripts")
+    def test_run_never_runs_a_publishing_script_recipe_or_contributing_line(self):  # Standards and final review
         repo = Repo(self)
         repo.write("package.json", '{"scripts": {"test": "touch pkg-ran && npm publish"}}')
-        repo.write("CONTRIBUTING.md", "```sh\ntouch doc-ran-check && npx semantic-release\n```\n")
+        repo.write("Makefile", "test:\n\ttouch make-ran && cargo publish\n")
+        repo.write("justfile", "lint:\n    touch just-ran && twine upload dist/*\n")
+        repo.write("CONTRIBUTING.md", "```sh\ntouch doc-ran-check && npx semantic-release\n"
+                                      "touch doc-ran-test && ./scripts/release-check.sh --push\n```\n")
         self.workflow(repo, "true")
-        out = discover(repo, "--run", env=fake_tools(repo, "npm", "npx")).stdout
+        out = discover(repo, "--run", env=fake_tools(repo, "npm", "npx", "make", "just", "cargo", "twine")).stdout
         self.assertIn("[1/1] true", out)
-        for marker in ("pkg-ran", "doc-ran-check"):
+        for marker in ("pkg-ran", "make-ran", "just-ran", "doc-ran-check", "doc-ran-test"):
             self.assertFalse(os.path.exists(os.path.join(repo.path, marker)), marker)
         self.assertIn("- npm run test (package.json:1): deploys or publishes (publish)", out)
 
@@ -402,6 +434,8 @@ class RunTest(unittest.TestCase):
         done = discover(repo, "--run")
         self.assertEqual(done.returncode, 1)
         self.assertIn("needs a clean tree", done.stderr)
+        self.assertIn("ask the user to commit or stash these; never stash or commit someone else's edits",
+                      done.stderr)
         self.assertIn("stray.txt", done.stderr)
         self.assertFalse(os.path.exists(os.path.join(repo.path, "test-ran")))
 

@@ -233,15 +233,19 @@ def run_lines(value, number, following):
     return [(number, " ".join([scalar(value)] + [text.strip() for _number, text in following]))]
 
 
-def command_reason(command, *names):
-    """Why COMMAND, in the jobs or steps called NAMES, is a remote check; "" when nothing says so."""
-    text = RELEASE_FLAG.sub(" ", " ".join(names + (command,)))
+def deploy_reason(*texts):
+    """Why TEXTS (a command, a script or recipe body, the names around it) upload, deploy or publish; "" if not."""
+    text = RELEASE_FLAG.sub(" ", " ".join(texts))
     upload, deploy = UPLOAD.search(text), DEPLOY.search(text)
     if upload:
         return "uploads to a service (%s)" % upload.group(1)
-    if deploy:
-        return "deploys or publishes (%s)" % deploy.group(1)
-    return "needs CI values or variables" if CI_VALUES.search(command) else ""
+    return "deploys or publishes (%s)" % deploy.group(1) if deploy else ""
+
+
+def command_reason(command, *names):
+    """Why COMMAND, in the jobs or steps called NAMES, is a remote check; "" when nothing says so."""
+    reason = deploy_reason(*(names + (command,)))
+    return reason or ("needs CI values or variables" if CI_VALUES.search(command) else "")
 
 
 def step_reason(fields, command, job):
@@ -354,19 +358,30 @@ def package_candidates(root):
     return found
 
 
+def recipe(lines, index):
+    """The target or recipe on LINES[INDEX]: that line, with its prerequisites, and the indented lines under it."""
+    body = [lines[index][1]]
+    for _number, text in lines[index + 1:]:
+        if text.strip() and not text[:1].isspace():
+            break
+        body.append(text)
+    return "\n".join(body)
+
+
 def target_candidates(root):
     present, tools, found = set(os.listdir(root)), set(), []
     for name, tool in MAKEFILES:
         if name not in present or tool in tools:
             continue
         tools.add(tool)
-        pattern, done = MAKE_TARGET if tool == "make" else JUST_RECIPE, set()
-        for number, text in read_lines(root, name):
+        pattern, done, lines = MAKE_TARGET if tool == "make" else JUST_RECIPE, set(), read_lines(root, name)
+        for index, (number, text) in enumerate(lines):
             match = pattern.match(text)
             for target in match.group(1).split() if match else []:
                 if target in TARGETS and target not in done:
-                    done.add(target)
-                    found.append(Candidate(name, number, TARGETS[target], "%s %s" % (tool, target), "", []))
+                    done.add(target)  # Make's and just's own ${VARIABLES} are not CI values, so only deploys count
+                    found.append(Candidate(name, number, TARGETS[target], "%s %s" % (tool, target),
+                                           deploy_reason(recipe(lines, index)), []))
     return found
 
 

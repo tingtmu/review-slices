@@ -184,6 +184,8 @@ def positive(text):
 
 
 def main(argv):
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")  # a non-UTF-8 path prints escaped, not as a traceback
     parser = argparse.ArgumentParser(prog="calibrate.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--count", type=positive, default=DEFAULT_COUNT, metavar="N",
