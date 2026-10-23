@@ -8,17 +8,19 @@ Run it inside the target repo. It reads the incident log in the format of the sk
 their age and plug, how many incidents each slice should have caught, and the incidents with recurrences (each one
 means a weak plug).
 
-For a `plugged` incident it checks that each plug item, separated by commas, still exists:
+For a `plugged` incident it checks that each plug item (separated by commas, semicolons, "and" or "or") exists:
 
-    test <path>::<function>          the file defines that function, or a method of that name in any class
-    test <path>::<Class>::<method>   (or <path>::<Class>.<method>) the class defines that method
+    test <path>::<function>          the file defines that function, or a method of that name in any class, and
+    test <path>::<Class>::<method>   (or <path>::<Class>.<method>) neither it nor its class is marked
+                                     expectedFailure, skip or xfail
     guard <path>                     the file exists
-    rule REVIEW.md "<line>"          that text appears in REVIEW.md (whitespace is not significant)
+    rule REVIEW.md "<line>"          that text appears in REVIEW.md (backticks and whitespace runs are ignored)
 
-Paths are relative to the repo root. Free text after an item, such as "(expected failures until fixed)", is
-ignored. A missing plug is a problem: the hole is open again. An open incident older than 30 days is a note.
---check exits 1 on any problem, so a repo can put it in its suite; without it the report always exits 0.
-Entries that still hold the template's `<...>` placeholders in their heading or date line are skipped.
+Paths are relative to the repo root and must stay inside it. A parenthetical after an item, such as "(expected
+failures until fixed)", is ignored; any other text makes the item one it does not understand, which is a problem
+for a plugged incident. A missing plug is a problem: the hole is open again. An open incident older than 30 days
+is a note. --check exits 1 on any problem, so a repo can put it in its suite; without it the report exits 0.
+Entries whose date line still holds the template's `<...>` placeholders are skipped.
 Standard library only, Python 3.8+.
 """
 import argparse
@@ -40,14 +42,24 @@ STATUSES = ("open", "plugged")
 KINDS = ("defect", "process")
 REOPEN = "the hole is open again; reopen the incident"
 HEADING = re.compile(r"^##\s+(I\d+)\b\.?\s*(.*?)\s*$")
+NEAR_HEADING = re.compile(r"^#{1,6}\s*I\d+\b", re.I)
 OTHER_HEADING = re.compile(r"^#{1,6}\s")
 BULLET = re.compile(r"^[-*]\s+\*\*([^*]+?)\s*:?\s*\*\*\s*:?\s*(.*)$")
+NESTED_BULLET = re.compile(r"^\s+[-*]\s+")
 PLACEHOLDER = re.compile(r"<[A-Za-z][^<>]*>")
 NAME = r"[A-Za-z_]\w*"
 TEST_ITEM = re.compile(r"test\s+([^\s:,]+)::(%s(?:(?:::|\.)%s)*)(?:\[[^\]]*\])?" % (NAME, NAME))
 GUARD_ITEM = re.compile(r"guard\s+([^\s,()]+)")
-RULE_ITEM = re.compile(r"rule\s+(\S+)\s+[\"“]([^\"”]+)[\"”]")
+RULE_ITEM = re.compile(r"rule\s+(\S+)\s+[\"“]([^\"”]*)[\"”]")
+RULE_FILE = "REVIEW.md"
+# Text allowed after a plug item: nothing, or a parenthetical, then an optional full stop.
+AFTER_ITEM = re.compile(r"^\s*(\([^()]*\))?\s*\.?\s*$")
+# A separator between plug items, outside quotes and parentheses.
+SEPARATOR = re.compile(r",|;|\s+and\s+|\s+or\s+")
 NO_PLUG = re.compile(r"^(none|not yet)\b", re.I)
+NO_RECURRENCE = re.compile(r"^(none|no|n/a)\b|^[-—\s]*$", re.I)
+# Decorators that keep a test from failing while its defect is back (skipIf and skipUnless are conditional).
+NEVER_FAILS = ("expectedFailure", "skip", "xfail")
 Incident = collections.namedtuple("Incident", "id title date kind status slice fields")
 Plug = collections.namedtuple("Plug", "kind path names text")
 
@@ -73,6 +85,8 @@ def split_entries(text):
         if bullet:
             label = bullet.group(1).strip().lower()
             fields[label] = bullet.group(2).strip()
+        elif line.strip() and label and NESTED_BULLET.match(line):
+            fields[label] = (fields[label] + ", " + NESTED_BULLET.sub("", line).strip()).strip(", ")
         elif line.strip() and label and (line[:1].isspace() or not line.lstrip().startswith(("-", "*"))):
             fields[label] = (fields[label] + " " + line.strip()).strip()
         elif not line.strip():
@@ -80,14 +94,19 @@ def split_entries(text):
     return entries
 
 
+def near_headings(text):
+    """Lines that look like an incident heading but are not `## I<n>. <title>`."""
+    return [line.strip() for line in text.splitlines() if NEAR_HEADING.match(line) and not HEADING.match(line)]
+
+
 def slice_of(value):
-    """The canonical slice a "Slice that should have caught it" value names, by number or by name."""
-    head = value.split("Why it did not")[0].strip().lower()
-    number = re.match(r"(?:slice\s*)?([0-4])\b", head)
+    """The canonical slice that the start of a "Slice that should have caught it" value names, by number or name."""
+    head = re.sub(r"^slice\s*", "", value.strip().lower())
+    number = re.match(r"([0-4])\b", head)
     if number:
         return SLICES[int(number.group(1))]
     for index, names in enumerate(SLICE_NAMES):
-        if any(re.search(r"\b%s\b" % re.escape(name), head) for name in names):
+        if any(re.match(r"%s\b" % re.escape(name), head) for name in names):
             return SLICES[index]
     return UNKNOWN_SLICE
 
@@ -120,10 +139,12 @@ def parse_log(text):
     """(incidents, problems, notes, skipped): the incidents in TEXT and what could not be read."""
     incidents, problems, notes, skipped, seen = [], [], [], 0, set()
     entries = split_entries(text)
+    for line in near_headings(text):
+        problems.append("%r looks like an incident heading but is not `## I<n>. <title>`, so it was not read" % line)
     if not entries:
         notes.append("no `## I<n>. <title>` heading found, so there are no incidents to report")
     for ident, title, fields in entries:
-        if PLACEHOLDER.search(title) or PLACEHOLDER.search(fields.get("date / kind / status", "")):
+        if PLACEHOLDER.search(fields.get("date / kind / status", "")):
             skipped += 1
             continue
         incident = parse_incident(ident, title, fields, problems, notes)
@@ -137,18 +158,32 @@ def parse_log(text):
 
 
 def split_items(value):
-    """VALUE split at commas outside double quotes."""
-    items, current, quoted = [], [], False
-    for char in value:
+    """VALUE split at commas, semicolons, "and" and "or" outside double quotes and parentheses."""
+    items, start, depth, quoted, index = [], 0, 0, False, 0
+    while index < len(value):
+        char = value[index]
         if char in "\"“”":
             quoted = not quoted if char == '"' else char == "“"
-        if char == "," and not quoted:
-            items.append("".join(current))
-            current = []
-        else:
-            current.append(char)
-    items.append("".join(current))
+        elif not quoted and char in "()":
+            depth = max(0, depth + (1 if char == "(" else -1))
+        separator = None if quoted or depth else SEPARATOR.match(value, index)
+        if separator:
+            items.append(value[start:index])
+            start = index = separator.end()
+            continue
+        index += 1
+    items.append(value[start:])
     return [item.strip() for item in items if item.strip()]
+
+
+def parse_item(item):
+    """A Plug for ITEM, or None when it is not a test, guard or rule followed by at most a parenthetical."""
+    for kind, pattern in (("test", TEST_ITEM), ("guard", GUARD_ITEM), ("rule", RULE_ITEM)):
+        match = pattern.match(item)
+        if match and AFTER_ITEM.match(item[match.end():]):
+            names = re.split(r"::|\.", match.group(2)) if kind == "test" else [match.group(2)] if kind == "rule" else []
+            return Plug(kind, match.group(1), names, match.group(0))
+    return None
 
 
 def parse_plug(value):
@@ -156,35 +191,53 @@ def parse_plug(value):
     if not value or NO_PLUG.match(value.strip()):
         return [], []
     plugs, unread = [], []
-    for item in split_items(value.replace("`", "")):
-        item = re.sub(r"^(and|or)\s+", "", item)
-        test, guard, rule = TEST_ITEM.match(item), GUARD_ITEM.match(item), RULE_ITEM.match(item)
-        if test:
-            plugs.append(Plug("test", test.group(1), re.split(r"::|\.", test.group(2)), test.group(0)))
-        elif guard:
-            plugs.append(Plug("guard", guard.group(1), [], guard.group(0)))
-        elif rule:
-            plugs.append(Plug("rule", rule.group(1), [rule.group(2)], rule.group(0)))
+    unquoted = re.split(r"(\"[^\"]*\"|“[^”]*”)", value)
+    value = "".join(part if index % 2 else part.replace("`", "") for index, part in enumerate(unquoted))
+    for item in split_items(value):
+        plug = parse_item(item)
+        if plug:
+            plugs.append(plug)
         else:
             unread.append(item)
     return plugs, unread
 
 
-def defines(tree, names):
-    """Whether the module TREE defines NAMES: [function], a function or method; [Class, ..., method] a method."""
+def find_function(tree, names):
+    """(function, classes around it) that NAMES points at in the module TREE: [function] is a function or a method
+    of any class; [Class, ..., method] a method. (None, []) when there is none."""
     functions = (ast.FunctionDef, ast.AsyncFunctionDef)
     if len(names) == 1:
-        if any(isinstance(node, functions) and node.name == names[0] for node in tree.body):
-            return True
-        classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
-        return any(isinstance(node, functions) and node.name == names[0] for cls in classes for node in cls.body)
-    scope = tree.body
+        for node in tree.body:
+            if isinstance(node, functions) and node.name == names[0]:
+                return node, []
+        for cls in (node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)):
+            for node in cls.body:
+                if isinstance(node, functions) and node.name == names[0]:
+                    return node, [cls]
+        return None, []
+    scope, classes = tree.body, []
     for name in names[:-1]:
         found = [node for node in scope if isinstance(node, ast.ClassDef) and node.name == name]
         if not found:
-            return False
+            return None, []
+        classes.append(found[0])
         scope = found[0].body
-    return any(isinstance(node, functions) and node.name == names[-1] for node in scope)
+    found = [node for node in scope if isinstance(node, functions) and node.name == names[-1]]
+    return (found[0], classes) if found else (None, [])
+
+
+def decorator_name(node):
+    node = node.func if isinstance(node, ast.Call) else node
+    return node.attr if isinstance(node, ast.Attribute) else getattr(node, "id", "")
+
+
+def never_fails(function, classes):
+    """The decorator on FUNCTION or its CLASSES that stops it failing (expectedFailure, skip, xfail), or None."""
+    for node in [function] + classes:
+        for decorator in node.decorator_list:
+            if decorator_name(decorator) in NEVER_FAILS:
+                return decorator_name(decorator)
+    return None
 
 
 def read_text(path):
@@ -192,24 +245,48 @@ def read_text(path):
         return handle.read()
 
 
+def flat(text):
+    """TEXT with backticks dropped and whitespace runs made one space, for comparing rule lines."""
+    return " ".join(text.replace("`", "").split())
+
+
+def broken_test(path, plug, text):
+    """Why the test PLUG in the file at PATH, holding TEXT, is not a working test, or None."""
+    if not plug.path.endswith(".py"):
+        found = re.search(r"\b%s\b" % re.escape(plug.names[-1]), text)
+        return None if found else "%s does not mention %s" % (plug.path, plug.names[-1])
+    try:
+        tree = ast.parse(text, path)
+    except (SyntaxError, ValueError) as error:
+        return "%s does not parse as Python (%s)" % (plug.path, error)
+    function, classes = find_function(tree, plug.names)
+    if function is None:
+        return "%s defines no %s" % (plug.path, ".".join(plug.names))
+    marker = never_fails(function, classes)
+    if marker:
+        return "%s is marked %s, so it passes while the defect is back" % (".".join(plug.names), marker)
+    return None
+
+
 def plug_problem(root, plug):
     """Why PLUG does not exist under ROOT, or None when it does."""
+    parts = plug.path.replace("\\", "/").split("/")
+    if os.path.isabs(plug.path) or ".." in parts:
+        return "%s is not a path inside the repo" % plug.path
+    if plug.kind == "rule" and plug.path != RULE_FILE:
+        return "a rule plug must name %s, not %s" % (RULE_FILE, plug.path)
+    if plug.kind == "rule" and not flat(plug.names[0]):
+        return "the rule's quoted line is blank"
     path = os.path.join(root, plug.path)
     if not os.path.isfile(path):
         return "%s does not exist" % plug.path
-    if plug.kind == "rule":
-        if " ".join(plug.names[0].split()) not in " ".join(read_text(path).split()):
-            return "%s does not contain %r" % (plug.path, plug.names[0])
-    elif plug.kind == "test" and plug.path.endswith(".py"):
-        try:
-            tree = ast.parse(read_text(path), plug.path)
-        except SyntaxError as error:
-            return "%s does not parse as Python (line %s)" % (plug.path, error.lineno)
-        if not defines(tree, plug.names):
-            return "%s defines no %s" % (plug.path, ".".join(plug.names))
-    elif plug.kind == "test" and not re.search(r"\b%s\b" % re.escape(plug.names[-1]), read_text(path)):
-        return "%s does not mention %s" % (plug.path, plug.names[-1])
-    return None
+    try:
+        text = read_text(path)
+    except OSError as error:
+        return "%s cannot be read (%s)" % (plug.path, error.strerror or error)
+    if plug.kind == "rule" and flat(plug.names[0]) not in flat(text):
+        return "%s does not contain %r" % (plug.path, plug.names[0])
+    return broken_test(path, plug, text) if plug.kind == "test" else None
 
 
 def check_plugs(root, incident, problems, notes):
@@ -232,8 +309,7 @@ def check_plugs(root, incident, problems, notes):
 
 
 def has_recurrences(incident):
-    value = incident.fields.get("recurrences", "").strip()
-    return bool(value) and not NO_PLUG.match(value)
+    return not NO_RECURRENCE.match(incident.fields.get("recurrences", "").strip())
 
 
 def print_report(where, incidents, skipped, today):
@@ -267,16 +343,22 @@ def repo_root():
 def report(path, root, check, today=None):
     """Print the report for the log at PATH; return the exit code."""
     try:
-        text = read_text(path)
+        with open(path, encoding="utf-8-sig") as handle:
+            text = handle.read()
     except OSError as error:
         raise IncidentError("cannot read %s: %s" % (path, error.strerror or error))
+    except UnicodeDecodeError:
+        raise IncidentError("%s is not UTF-8 text" % path)
     today = today or datetime.date.today()
     incidents, problems, notes, skipped = parse_log(text)
     for incident in incidents:
         check_plugs(root, incident, problems, notes)
         age = (today - incident.date).days
+        if age < 0:
+            notes.append("%s is dated %s, in the future" % (incident.id, incident.date))
         if incident.status == "open" and age > OPEN_DAYS:
-            notes.append("%s has been open for %d days (over %d); plug it or say why not" % (incident.id, age, OPEN_DAYS))
+            notes.append("%s has been open for %d days (over %d); plug it or say why not"
+                         % (incident.id, age, OPEN_DAYS))
     print_report(os.path.relpath(path), incidents, skipped, today)
     for message in notes:
         print("note: " + message)

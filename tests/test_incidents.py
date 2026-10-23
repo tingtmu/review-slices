@@ -74,14 +74,46 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(len(plugs), 1)
         self.assertEqual(unread, ["tests in tests/b.py marked H3"])
 
+    def test_items_joined_by_and_are_each_read(self):
+        plugs, unread = incidents.parse_plug("test a.py::f and test b.py::g; guard c (x, and y), `test d.py::h`.")
+        self.assertEqual(unread, [])
+        self.assertEqual([plug.path for plug in plugs], ["a.py", "b.py", "c", "d.py"])
+
+    def test_text_after_an_item_that_is_not_a_parenthetical_is_not_understood(self):
+        self.assertEqual(incidents.parse_plug("test a.py::f plus test b.py::g")[1], ["test a.py::f plus test b.py::g"])
+
+    def test_backticks_inside_a_rule_line_are_kept(self):
+        plugs, _unread = incidents.parse_plug('rule REVIEW.md "a `#` cut a test command"')
+        self.assertEqual(plugs[0].names, ["a `#` cut a test command"])
+
+    def test_nested_plug_bullets_are_items(self):
+        (_ident, _title, fields), = incidents.split_entries(
+            "## I1. T\n\n- **Plug:**\n  - test a.py::f\n  - guard b\n- **Recurrences:** none\n")
+        self.assertEqual(len(incidents.parse_plug(fields["plug"])[0]), 2)
+
     def test_none_yet_is_no_plug(self):
         self.assertEqual(incidents.parse_plug("none yet (a test arrives with the installer)"), ([], []))
 
     def test_a_slice_is_found_by_number_or_by_name(self):
         for text, expected in (("2 Review. Why it did not: x", "2 Review"), ("Offline tests. Why it did not: x",
                                "1 Offline suite"), ("Slice 4. Why it did not: x", "4 Acceptance"),
-                               ("Go-ahead", "3 Go-ahead"), ("shown output", "0 Shown output"), ("CI", "unknown")):
+                               ("Go-ahead", "3 Go-ahead"), ("shown output", "0 Shown output"), ("CI", "unknown"),
+                               ("Acceptance. Why it didn't: the review missed it", "4 Acceptance"),
+                               ("Acceptance. why it did not: no review", "4 Acceptance")):
             self.assertEqual(incidents.slice_of(text), expected, text)
+
+    def test_a_code_title_with_angle_brackets_is_not_skipped(self):
+        found, _problems, _notes, skipped = incidents.parse_log(entry(1, "`Option<T>` unwrap panics"))
+        self.assertEqual((len(found), skipped), (1, 0))
+
+    def test_a_heading_that_is_almost_an_incident_is_a_problem(self):
+        for heading in ("### I1.", "## i1."):
+            _found, problems, _notes, _skipped = incidents.parse_log(entry(1).replace("## I1.", heading))
+            self.assertIn("looks like an incident heading", problems[0], heading)
+
+    def test_no_or_a_dash_is_no_recurrence(self):
+        for text in ("none", "No", "n/a", "-", ""):
+            self.assertFalse(incidents.has_recurrences(incidents.parse_log(entry(1, recurrences=text))[0][0]), text)
 
     def test_wrapped_bullets_are_joined(self):
         (_ident, _title, fields), = incidents.split_entries(
@@ -140,6 +172,63 @@ class ReportTest(unittest.TestCase):
             self.assertIn("the hole is open again; reopen the incident", checked.stdout)
             self.assertEqual(reported.returncode, 0, plug)
 
+    def test_a_second_item_joined_by_and_is_checked(self):
+        plug = "test tests/test_a.py::test_top and test tests/test_a.py::test_gone"
+        done = LogRepo(self, entry(1, status="plugged", plug=plug)).run("--check")
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertIn("test_gone", done.stdout)
+
+    def test_a_plugged_code_title_is_still_checked(self):
+        plug = "test tests/test_a.py::test_gone"
+        done = LogRepo(self, entry(1, "`Option<T>` unwrap panics", status="plugged", plug=plug)).run("--check")
+        self.assertEqual(done.returncode, 1, done.stdout)
+
+    def test_a_plug_outside_review_md_or_the_repo_does_not_count(self):
+        for plug in ('rule docs/INCIDENTS.md "Intro text"', 'rule REVIEW.md " "', "guard /etc/passwd",
+                     "guard ../outside"):
+            done = LogRepo(self, entry(1, status="plugged", plug=plug)).run("--check")
+            self.assertEqual(done.returncode, 1, plug)
+            self.assertIn("the hole is open again", done.stdout, plug)
+
+    def test_a_test_that_cannot_fail_is_no_plug(self):
+        repo = LogRepo(self)
+        repo.write("tests/test_b.py", "import unittest\nimport pytest\n\n\nclass BTest(unittest.TestCase):\n"
+                                      "    @unittest.expectedFailure\n    def test_x(self):\n        pass\n\n"
+                                      "    @unittest.skipIf(False, 'no')\n    def test_live(self):\n        pass\n\n\n"
+                                      "@unittest.skip('later')\nclass CTest(unittest.TestCase):\n"
+                                      "    def test_y(self):\n        pass\n\n\n@pytest.mark.xfail\ndef test_z():\n"
+                                      "    pass\n")
+        for name, code in (("test_x", 1), ("CTest::test_y", 1), ("test_z", 1), ("test_live", 0)):
+            repo.write("docs/INCIDENTS.md", entry(1, status="plugged", plug="test tests/test_b.py::" + name))
+            done = repo.run("--check")
+            self.assertEqual(done.returncode, code, name + "\n" + done.stdout)
+
+    def test_a_rule_line_with_backticks_is_found(self):
+        repo = LogRepo(self, entry(1, status="plugged", plug='rule REVIEW.md "a `#` cut a test command"'))
+        repo.write("REVIEW.md", "- a `#` cut a test\n  command\n")
+        done = repo.run("--check")
+        self.assertEqual(done.returncode, 0, done.stdout)
+
+    def test_unreadable_plug_files_are_problems_not_tracebacks(self):
+        repo = LogRepo(self, entry(1, status="plugged", plug="test tests/test_nul.py::test_top"))
+        with open(os.path.join(repo.path, "tests", "test_nul.py"), "wb") as handle:
+            handle.write(b"def test_top():\n    pass\n\0\n")
+        done = repo.run("--check")
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertNotIn("Traceback", done.stderr)
+
+    def test_a_log_that_is_not_utf8_is_a_friendly_error(self):
+        repo = LogRepo(self)
+        with open(os.path.join(repo.path, "docs", "INCIDENTS.md"), "wb") as handle:
+            handle.write(entry(1).encode("utf-16"))
+        done = repo.run("--check")
+        self.assertEqual(done.returncode, 2)
+        self.assertIn("is not UTF-8 text", done.stderr)
+        self.assertNotIn("Traceback", done.stderr)
+
+    def test_a_future_date_is_a_note(self):
+        self.assertIn("in the future", LogRepo(self, entry(1, days=-3)).run().stdout)
+
     def test_open_incidents_plugs_are_not_checked(self):
         done = LogRepo(self, entry(1, plug="test tests/test_a.py::test_gone, tests marked H3")).run("--check")
         self.assertEqual(done.returncode, 0, done.stdout)
@@ -183,12 +272,14 @@ class DogfoodTest(unittest.TestCase):
                               env=ENV)
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
 
-    def test_this_repo_s_test_plugs_would_pass_once_plugged(self):
+    def test_this_repo_s_open_plugs_exist_and_wait_only_on_their_expected_failure(self):
         found, _problems, _notes, _skipped = incidents.parse_log(self.read_log())
-        tests = [plug for incident in found for plug in incidents.parse_plug(incident.fields.get("plug", ""))[0]]
-        self.assertTrue(tests)
-        for plug in tests:
-            self.assertIsNone(incidents.plug_problem(ROOT, plug), plug.text)
+        plugs = [plug for incident in found for plug in incidents.parse_plug(incident.fields.get("plug", ""))[0]]
+        self.assertTrue(plugs)
+        for plug in plugs:
+            reason = incidents.plug_problem(ROOT, plug)
+            self.assertTrue(reason is None or reason.endswith("is marked expectedFailure, so it passes while the "
+                                                              "defect is back"), "%s: %s" % (plug.text, reason))
 
 
 if __name__ == "__main__":
