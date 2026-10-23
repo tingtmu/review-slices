@@ -28,10 +28,12 @@ SKILL_AGENT_HOOK = os.path.join(HERE, "agent_hook.py")
 AGENT_HOOK_PATH = ".githooks/agent_hook.py"
 # Scripts a repo keeps copies of in .githooks/; upgrade refreshes the ones it has.
 COPIED = (SKILL_GUARD, SKILL_AGENT_HOOK, os.path.join(HERE, "incidents.py"))
-# Runs the checkout's agent hook; a clone without one, or any error, allows the action.
-AGENT_COMMAND = ("sh -c 'top=$(git -C \"${CLAUDE_PROJECT_DIR:-.}\" rev-parse --show-toplevel 2>/dev/null) && "
-                 "[ -f \"$top/%s\" ] && exec python3 \"$top/%s\"' 2>/dev/null || true" % (AGENT_HOOK_PATH,
-                                                                                            AGENT_HOOK_PATH))
+# Runs the agent hook committed on the base branch (the checkout's copy only before it is there), so an edited
+# copy never decides; a clone that never ran install has no review-slices.base, and any error allows the action.
+AGENT_COMMAND = ("sh -c 'top=$(git -C \"${CLAUDE_PROJECT_DIR:-.}\" rev-parse --show-toplevel) && "
+                 "base=$(git -C \"$top\" config --get review-slices.base) || exit 0; "
+                 "code=$(git -C \"$top\" show \"refs/remotes/$base:%s\") || code=$(cat \"$top/%s\") || exit 0; "
+                 "exec python3 -c \"$code\"' 2>/dev/null || true" % (AGENT_HOOK_PATH, AGENT_HOOK_PATH))
 AGENT_SETTINGS = ((".claude/settings.json", "Bash|Write|Edit|MultiEdit|NotebookEdit"), (".codex/hooks.json", "Bash"))
 CHAINED = "pre-push.review-slices-chained"
 WRAPPER_MARK = "# review-slices wrapper:"
@@ -179,7 +181,8 @@ def hook_file_steps(hooks, bootstrap):
         if current == wrapper:
             return [], []
         if current is not None and WRAPPER_MARK not in current:
-            return [], ["pre-commit manages %s and its .legacy hook is taken; ask the user how to chain them" % pre_push]
+            return [], ["pre-commit manages %s and its .legacy hook is taken; ask the user how to chain them"
+                        % pre_push]
         return [("write %s, which pre-commit runs first with the full push input" % legacy,
                  lambda: write(legacy, wrapper, 0o755))], []
     chained = os.path.join(hooks, CHAINED)
@@ -203,6 +206,14 @@ def has_agent_hook(entries):
     return any(hook.get("command") == AGENT_COMMAND for entry in entries for hook in entry.get("hooks", []))
 
 
+def without_old_agent_hooks(entries):
+    """ENTRIES without earlier versions of the review-slices agent hook, so install replaces rather than adds."""
+    kept = [dict(entry, hooks=[hook for hook in entry.get("hooks", [])
+                               if AGENT_HOOK_PATH not in hook.get("command", "")])
+            for entry in entries]
+    return [entry for entry in kept if entry["hooks"]]
+
+
 def agent_hook_steps(root):
     """Steps that add the agent hook to Claude Code's and Codex's committed hook settings, keeping what is there."""
     steps, problems = [], []
@@ -219,7 +230,7 @@ def agent_hook_steps(root):
         if has_agent_hook(entries):
             continue
         entry = {"matcher": matcher, "hooks": [{"type": "command", "command": AGENT_COMMAND, "timeout": 10}]}
-        merged = dict(data, hooks=dict(data.get("hooks", {}), PreToolUse=entries + [entry]))
+        merged = dict(data, hooks=dict(data.get("hooks", {}), PreToolUse=without_old_agent_hooks(entries) + [entry]))
         steps.append(("add the review-slices agent hook to %s; commit it (it does nothing in a clone that never "
                       "ran install)" % relative,
                       lambda path=path, merged=merged: write(path, json.dumps(merged, indent=2) + "\n")))

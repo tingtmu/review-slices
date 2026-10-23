@@ -122,8 +122,9 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    there after the guard (pre-commit's through its `.legacy` hook). Where another tool owns `core.hooksPath`
    (Husky), it registers a git config hook instead, which only git 2.54+ runs. It never sets `core.hooksPath`,
    so git-lfs, Husky and pre-commit keep running. `--agent-hooks` adds the agent hook to `.claude/settings.json`
-   and `.codex/hooks.json`, keeping what is there; Codex runs it once its hooks feature is on and the user trusts
-   the hook. If install reports a problem, tell the user.
+   and `.codex/hooks.json`, keeping what is there. Codex runs it once its hooks feature is on and the user trusts
+   the hook; its payload and deny response follow Codex's hook documentation but have not yet been checked against
+   a live Codex session, so tell the user it is unverified there. If install reports a problem, tell the user.
 5. Run `python3 .githooks/review_slices.py check` until it reports no error, and `setup_tools.py doctor` until
    it reports ok.
 6. Commit REVIEW.md, `docs/INCIDENTS.md`, `.githooks/` and the agent hook settings together; REVIEW.md puts them

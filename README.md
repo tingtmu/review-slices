@@ -49,7 +49,8 @@ level table would have judged the base branch's last 50 commits. `incidents.py [
 docs/INCIDENTS.md and checks that every plug still exists. All three stay in the skill's `scripts/`.
 
 `install --agent-hooks` also adds a PreToolUse hook for Claude Code (`.claude/settings.json`) and Codex
-(`.codex/hooks.json`, once its hooks feature is on) that refuses an agent's overrides: `--no-verify`, rewiring the
+(`.codex/hooks.json`, once its hooks feature is on; unverified against a live Codex session) that refuses an
+agent's overrides: `--no-verify`, rewiring the
 hook, writing pass stamps, amending content into reviewed work. For checks no clone can skip, copy
 `templates/review-slices-ci.yml` to `.github/workflows/`: it runs `review_slices.py ci` on every pull request.
 

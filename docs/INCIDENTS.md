@@ -21,8 +21,11 @@ each failure class from getting through again. Terms: the skill's
   on the base branch through a per-clone bootstrap; 0.4.0 does the same for `ci`.
 - **Plug:** test tests/test_level.py::test_a_changed_test_command_is_reported,
   test tests/test_pre_push.py::test_an_edited_guard_does_not_judge_its_own_push,
-  test tests/test_ci.py::test_ci_runs_the_guard_committed_at_base
-- **Recurrences:** none
+  test tests/test_ci.py::test_ci_runs_the_guard_committed_at_base,
+  test tests/test_agent_hook.py::test_the_settings_command_runs_the_base_branch_copy_not_an_edited_one
+- **Recurrences:**
+  - 2026-10-24, review finding on 0.4.0: the agent hook ran the checkout's copy, which the agent can edit. The plug
+    covered the guard and `ci`, not the agent hook added after it.
 
 ## I2. The guard fails open on unexpected input
 
@@ -44,12 +47,18 @@ each failure class from getting through again. Terms: the skill's
   test tests/test_run_suite.py::test_every_test_line_is_required,
   test tests/test_level.py::test_a_submodule_update_counts_even_when_gitmodules_ignores_it,
   test tests/test_pre_push.py::test_a_push_to_a_review_ref_is_checked,
-  test tests/test_pre_push.py::test_broken_standing_rules_fail_closed
+  test tests/test_pre_push.py::test_broken_standing_rules_fail_closed,
+  test tests/test_merges.py::MergePathsTest::test_a_dropped_change_is_counted,
+  test tests/test_merges.py::MergePathsTest::test_an_octopus_merge_that_drops_a_change_is_counted,
+  test tests/test_agent_hook.py::AgentHookTest::test_overrides_are_denied
 - **Recurrences:**
   - 2026-10-23, review finding on 0.2.0: a push to `refs/for/main` (Gerrit) went unchecked. The plug tested
     branches and tags only, the two ref kinds the fix had in mind.
   - 2026-10-23, review finding on 0.3.0: a config hook is invisible to a git older than 2.54 pushing from the same
     clone. The plug tested one git version; install now writes a hook file by default.
+  - 2026-10-24, review finding on 0.4.0: a merge that dropped a change was invisible on git before 2.36 and in
+    octopus merges, and wrappers such as `timeout` or `xargs` got `--no-verify` past the agent hook. The plugs ran
+    on the newest git and plain commands only; the fallback is now tested directly, and the wrappers by name.
 
 ## I3. A push is measured across other people's commits
 
@@ -64,10 +73,14 @@ each failure class from getting through again. Terms: the skill's
   test tests/test_pre_push.py::test_a_clean_merge_of_main_needs_no_review,
   test tests/test_pre_push.py::test_status_and_pre_push_agree_after_a_trailer,
   test tests/test_status.py::test_status_counts_unpushed_work_on_main_like_the_hook_does,
-  test tests/test_ci.py::test_github_s_synthetic_merge_commit_needs_no_trailer
+  test tests/test_ci.py::test_github_s_synthetic_merge_commit_needs_no_trailer,
+  test tests/test_merges.py::UnitsFollowHistoryTest::test_a_trailer_on_one_branch_never_covers_the_other_with_a_first
 - **Recurrences:**
   - 2026-10-23, review finding on 0.3.0: `status` measured from the merge-base with local main while the hook
     measured what the remote lacked. The plug compared the two after a trailer, not with unpushed work on main.
+  - 2026-10-24, review finding on 0.4.0: review units followed listing order, so a trailer on one merged branch
+    covered the other branch's unreviewed commit. The plug merged main into a branch, never two reviewed
+    branches into each other; units now follow each trailer's own history.
 
 ## I4. Setup breaks the host repo's hooks
 

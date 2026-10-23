@@ -54,7 +54,14 @@ class AgentHookTest(unittest.TestCase):
                         "git config --local review-slices.base origin/other",
                         "echo x >> .git/review-slices/suite-pass",
                         "rm -rf .git/review-slices",
-                        "printf 'abc' | tee .git/hooks/pre-push"):
+                        "printf 'abc' | tee .git/hooks/pre-push",
+                        "timeout 120 git push --no-verify origin main",
+                        "nice git push --no-verify",
+                        "env -u GIT_TRACE git push --no-verify",
+                        "echo main | xargs -n 1 git push --no-verify origin",
+                        "git -c alias.p='push --no-verify' p",
+                        "git config alias.p 'push --no-verify'",
+                        "sed -i 's/a/b/' .git/review-slices/suite-pass"):
             with self.subTest(command=command):
                 self.assert_denied(command)
 
@@ -70,7 +77,12 @@ class AgentHookTest(unittest.TestCase):
                         "cat .git/review-slices/suite-pass",
                         "python3 .githooks/review_slices.py run-suite",
                         "git log --grep=--no-verify",
-                        "echo 'git push --no-verify'"):
+                        "echo 'git push --no-verify'",
+                        "echo git push --no-verify",
+                        "git config core.hooksPath",
+                        "git config alias.st status",
+                        "sed -n 1p .git/review-slices/suite-pass",
+                        "timeout 60 git push origin main"):
             with self.subTest(command=command):
                 self.assert_allowed(command)
 
@@ -142,6 +154,29 @@ class SettingsTest(unittest.TestCase):
             capture_output=True, text=True, cwd=repo.path, env=dict(ENV, CLAUDE_PROJECT_DIR=repo.path))
         self.assertEqual(decided.returncode, 0)
         self.assertIn('"deny"', decided.stdout)
+
+    def test_the_settings_command_runs_the_base_branch_copy_not_an_edited_one(self):
+        repo = Repo(self)
+        self.assertEqual(repo.setup("install", "--apply", "--agent-hooks").returncode, 0)
+        repo.commit("add the agent hook")
+        repo.git("push", "-q", "--no-verify", "origin", "main")
+        repo.git("fetch", "-q")
+        repo.write(".githooks/agent_hook.py", "import sys\nsys.exit(0)\n")
+        command = load_script("setup_tools", SETUP).AGENT_COMMAND
+        decided = subprocess.run(("sh", "-c", command), input=json.dumps(
+            {"tool_name": "Bash", "tool_input": {"command": "git push --no-verify"}, "cwd": repo.path}),
+            capture_output=True, text=True, cwd=repo.path, env=dict(ENV, CLAUDE_PROJECT_DIR=repo.path))
+        self.assertIn('"deny"', decided.stdout)
+
+    def test_install_replaces_an_older_agent_hook_entry(self):
+        repo = Repo(self)
+        old = {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [
+            {"type": "command", "command": "python3 .githooks/agent_hook.py || true"}]}]}}
+        repo.write(".claude/settings.json", json.dumps(old))
+        self.assertEqual(repo.setup("install", "--apply", "--agent-hooks").returncode, 0)
+        with open(os.path.join(repo.path, ".claude", "settings.json"), encoding="utf-8") as handle:
+            entries = json.load(handle)["hooks"]["PreToolUse"]
+        self.assertEqual(len(entries), 1)
 
     def test_the_settings_command_allows_everything_where_the_hook_is_missing(self):
         repo = Repo(self)

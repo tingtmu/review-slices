@@ -21,7 +21,15 @@ SEPARATORS = {";", "&&", "||", "|", "&", "|&", "(", ")", ";;"}
 REDIRECTS = {">", ">>", ">|", "&>", "&>>"}
 WRITERS = {"tee", "cp", "mv", "rm", "sed", "perl", "truncate", "touch", "ln", "dd", "install", "chmod", "python",
            "python3"}
-PREFIXES = {"command", "exec", "env", "sudo", "nohup", "time", "builtin", "xargs"}
+# Commands that run another command, with their options that take a value, and how many plain arguments come
+# before the command they run (timeout's duration).
+WRAPPERS = {"command": (set(), 0), "exec": (set(), 0), "builtin": (set(), 0), "nohup": (set(), 0),
+            "time": (set(), 0), "chronic": (set(), 0), "env": ({"-u", "--unset", "-C", "--chdir", "-S"}, 0),
+            "sudo": ({"-u", "-g", "-C", "-D", "-h", "-p", "-U", "-r", "-t"}, 0),
+            "nice": ({"-n", "--adjustment"}, 0), "ionice": ({"-c", "-n", "-p"}, 0),
+            "stdbuf": ({"-i", "-o", "-e"}, 0), "timeout": ({"-s", "--signal", "-k", "--kill-after"}, 1),
+            "xargs": ({"-n", "-I", "-L", "-P", "-d", "-s", "-E", "-e", "-a", "--max-args", "--replace",
+                       "--max-lines", "--max-procs", "--delimiter", "--arg-file"}, 0)}
 SHELLS = {"sh", "bash", "zsh", "dash"}
 GIT_VALUE_OPTIONS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"}
 COMMIT_VALUE_OPTIONS = {"-m", "-F", "-C", "-c", "-t", "--message", "--file", "--reuse-message", "--reedit-message",
@@ -29,6 +37,9 @@ COMMIT_VALUE_OPTIONS = {"-m", "-F", "-C", "-c", "-t", "--message", "--file", "--
                         "--pathspec-from-file"}
 COMMIT_VALUE_SHORTS = "mFCct"
 CONFIG_READS = {"--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list", "-l", "get", "list"}
+CONFIG_WRITES = {"--unset", "--unset-all", "--add", "--replace-all", "--remove-section", "--rename-section", "-e",
+                 "--edit", "set", "unset", "rename-section", "remove-section", "edit"}
+SKIPS_HOOKS = re.compile(r"(^|\s)(--no-verify|-n)(\s|$)")
 FALLBACK = (re.compile(r"\bgit\b[^\n;&|]*\b(push|commit)\b[^\n;&|]*--no-verify"),
             re.compile(r"(>|\btee\b|\brm\b|\bmv\b|\bcp\b)[^\n;&|]*review-slices/(suite-pass|bootstrap\.py)"))
 
@@ -86,27 +97,38 @@ def segments(command):
 
 
 def command_words(tokens):
-    """TOKENS without leading variable assignments and wrappers such as env or sudo."""
+    """TOKENS without leading variable assignments and the wrappers that run the real command (env, sudo, timeout,
+    xargs and the like), with their options."""
     index = 0
-    while index < len(tokens) and (tokens[index] in PREFIXES or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[index])
-                                   or (index and tokens[index - 1] in PREFIXES and tokens[index].startswith("-"))):
+    while index < len(tokens):
+        name = os.path.basename(tokens[index])
+        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[index]):
+            index += 1
+            continue
+        if name not in WRAPPERS:
+            break
+        valued, positional = WRAPPERS[name]
         index += 1
+        while index < len(tokens) and tokens[index].startswith("-") and tokens[index] != "-":
+            index += 2 if tokens[index] in valued else 1
+        index += positional
     return tokens[index:]
 
 
 def git_parts(words):
-    """(config keys, -C directory, subcommand, args) of a git command line."""
-    keys, where, index = [], None, 1
+    """(config settings as (key, value), -C directory, subcommand, args) of a git command line."""
+    settings, where, index = [], None, 1
     while index < len(words) and words[index].startswith("-"):
         word = words[index]
         if word == "-c" and index + 1 < len(words):
-            keys.append(words[index + 1].split("=", 1)[0])
+            key, _sep, value = words[index + 1].partition("=")
+            settings.append((key, value))
         elif word.startswith("--config-env="):
-            keys.append(word.split("=", 2)[1])
+            settings.append((word.split("=", 2)[1], ""))
         elif word == "-C" and index + 1 < len(words):
             where = words[index + 1]
         index += 2 if word in GIT_VALUE_OPTIONS else 1
-    return keys, where, (words[index] if index < len(words) else ""), words[index + 1:]
+    return settings, where, (words[index] if index < len(words) else ""), words[index + 1:]
 
 
 def commit_parts(args):
@@ -143,10 +165,33 @@ def amend_reason(flags, paths, cwd):
     return None
 
 
+def setting_reason(key, value):
+    """Why setting KEY to VALUE takes an override, or None: it rewires the hook, or makes an alias that skips hooks."""
+    if PROTECTED_KEY.match(key):
+        return "`%s` rewires the review-slices push hook" % key
+    if key.lower().startswith("alias.") and SKIPS_HOOKS.search(value):
+        return "the alias `%s` skips hooks" % key
+    return None
+
+
+def config_reason(args):
+    """Why `git config ARGS` takes an override, or None for a read."""
+    if set(args) & CONFIG_READS:
+        return None
+    plain = [arg for arg in args if not arg.startswith("-")]
+    if plain and plain[0] in CONFIG_WRITES:
+        plain = plain[1:]
+    elif not set(args) & CONFIG_WRITES and len(plain) < 2:
+        return None  # `git config <key>` prints the value
+    key, value = (plain + ["", ""])[:2]
+    return setting_reason(key, " ".join(plain[1:])) if key else None
+
+
 def git_reason(words, cwd):
-    keys, where, sub, args = git_parts(words)
-    if any(PROTECTED_KEY.match(key) for key in keys):
-        return "`-c %s` rewires the review-slices push hook" % next(key for key in keys if PROTECTED_KEY.match(key))
+    settings, where, sub, args = git_parts(words)
+    reasons = [setting_reason(key, value) for key, value in settings]
+    if any(reasons):
+        return next(reason for reason in reasons if reason)
     cwd = os.path.join(cwd, where) if where else cwd
     if sub == "push" and "--no-verify" in args:
         return "`git push --no-verify` skips the review-slices guard"
@@ -155,10 +200,8 @@ def git_reason(words, cwd):
         if flags & {"--no-verify", "-n"}:
             return "`git commit --no-verify` skips the repo's commit hooks"
         return amend_reason(flags, paths, cwd)
-    if sub == "config" and not set(args) & CONFIG_READS:
-        touched = [arg for arg in args if PROTECTED_KEY.match(arg)]
-        if touched:
-            return "`git config %s` rewires the review-slices push hook" % touched[0]
+    if sub == "config":
+        return config_reason(args)
     return None
 
 
@@ -178,8 +221,9 @@ def words_reason(words, guarded, cwd):
         return command_reason(words[2], guarded, cwd)
     if name == "git":
         return git_reason(words, cwd)
+    writes = name in WRITERS and (name != "sed" or any(word.startswith(("-i", "--in-place")) for word in words))
     targets = [words[index + 1] for index in range(len(words) - 1) if words[index] in REDIRECTS]
-    targets += words[1:] if name in WRITERS else []
+    targets += words[1:] if writes else []
     if any(protected(target, guarded, cwd) for target in targets):
         return "this writes the review-slices pass stamps, bootstrap or push hook"
     return None

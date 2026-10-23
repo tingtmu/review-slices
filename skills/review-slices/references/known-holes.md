@@ -20,6 +20,8 @@ are known; reviewers and the user cover them.
   unchecked until then.
 - A config hook (used only where another tool owns `core.hooksPath`) runs for git 2.54+ only; an older git pushing
   from that clone runs nothing. `status` and `doctor` say when the hook is a config hook.
-- The agent hook reads commands the way a shell splits them, and checks what it cannot read against a few plain
-  patterns. A command built at run time (`eval`, a script file, an alias) gets past it; so does any agent tool it
-  does not see, and Codex until its hooks feature is on.
+- The agent hook reads commands the way a shell splits them, sees through common wrappers (`env`, `timeout`,
+  `xargs`, `sudo`) and aliases set on the command line, and checks what it cannot read against a few plain
+  patterns. A command built at run time (`eval`, a script file, an alias already in git config) gets past it; so
+  does any agent tool it does not see, and Codex until its hooks feature is on. It runs the copy committed on the
+  base branch, so editing the checkout's copy changes nothing.

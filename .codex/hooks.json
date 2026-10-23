@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'top=$(git -C \"${CLAUDE_PROJECT_DIR:-.}\" rev-parse --show-toplevel 2>/dev/null) && [ -f \"$top/.githooks/agent_hook.py\" ] && exec python3 \"$top/.githooks/agent_hook.py\"' 2>/dev/null || true",
+            "command": "sh -c 'top=$(git -C \"${CLAUDE_PROJECT_DIR:-.}\" rev-parse --show-toplevel) && base=$(git -C \"$top\" config --get review-slices.base) || exit 0; code=$(git -C \"$top\" show \"refs/remotes/$base:.githooks/agent_hook.py\") || code=$(cat \"$top/.githooks/agent_hook.py\") || exit 0; exec python3 -c \"$code\"' 2>/dev/null || true",
             "timeout": 10
           }
         ]

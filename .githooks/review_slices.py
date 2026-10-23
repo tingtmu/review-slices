@@ -19,11 +19,12 @@ Configuration is the first ```review-slices fenced block in REVIEW.md at the rep
 
 A path takes the highest level whose glob matches it, and REVIEW.md and .githooks/* are always at least important.
 A push is judged by its new commits only (those neither the target ref nor the base branch has), each by its own
-paths; a merge counts only where it differs from git's own merge of its parents. Each review trailer must cover
-the highest level of the new commits since the previous trailer. The standing rules judge a change: REVIEW.md as committed where its
-branch left the base branch, so a change cannot lower the levels it is judged by. A change to the suite is reported
-and reviewed (REVIEW.md is at least important), not blocked. `status` and `pre-push` hand off to the guard committed
-on the base branch when this copy differs from it, so an edited copy does not judge its own push.
+paths; a merge counts only where it differs from git's own merge of its parents. A review trailer covers the new
+commits in its own history that no earlier trailer reaches, and must be at least their highest level. The
+standing rules judge a change: REVIEW.md as committed where its branch left the base branch, so a change cannot
+lower the levels it is judged by. A change to the suite is reported and reviewed (REVIEW.md is at least
+important), not blocked. `status`, `pre-push` and `ci` hand off to the guard committed on the base branch when
+this copy differs from it, so an edited copy does not judge its own push.
 Standard library only, Python 3.8+, git 2.32+.
 """
 import collections
@@ -210,22 +211,37 @@ def new_commits(head, trusted):
     return git("rev-list", "--reverse", "--topo-order", head, *(("--not",) + tuple(trusted) if trusted else ())).split()
 
 
+@functools.lru_cache(maxsize=None)
 def commit_paths(commit):
     """The paths COMMIT itself changed: against its parent, or for a merge, only where it differs from git's own
     merge of its parents (a conflict resolution, a dropped change, an edit made in the merge)."""
     parents = git("rev-list", "--parents", "-n", "1", commit).split()[1:]
     if not parents:
-        return split_nul(git("diff-tree", "--root", "-r", "--no-commit-id", *DIFF_PATHS, commit))
+        return tuple(split_nul(git("diff-tree", "--root", "-r", "--no-commit-id", *DIFF_PATHS, commit)))
     if len(parents) == 1:
-        return changed_paths(parents[0], commit)
+        return tuple(changed_paths(parents[0], commit))
     if len(parents) == 2 and git_version() >= (2, 36):
-        return split_nul(git("show", "--remerge-diff", "--format=", *DIFF_PATHS, commit))
-    combined = set(split_nul(git("diff-tree", "--cc", "--no-commit-id", *DIFF_PATHS, commit)))
+        return tuple(split_nul(git("show", "--remerge-diff", "--format=", *DIFF_PATHS, commit)))
+    return tuple(merge_paths_by_side(commit, parents))
+
+
+def merge_paths_by_side(commit, parents):
+    """Merge paths without --remerge-diff (git before 2.36, octopus merges). A path only one parent changed must
+    match that parent; a path several parents changed counts (its resolution needs a look); so does any path the
+    merge differs from every parent on."""
     base = git("merge-base", "--octopus", *parents, check=False)
-    sides = [set(changed_paths(base, parent)) for parent in parents] if base else []
-    both = {path for index, side in enumerate(sides) for path in side
-            if any(path in other for other in sides[index + 1:])}
-    return sorted(combined | both)
+    if not base:
+        return changed_paths(parents[0], commit)  # unrelated histories: all the merge brought in
+    sides = [set(changed_paths(base, parent)) for parent in parents]
+    counted = set(split_nul(git("diff-tree", "--cc", "--no-commit-id", *DIFF_PATHS, commit)))
+    for index, (parent, side) in enumerate(zip(parents, sides)):
+        others = set().union(*(other for position, other in enumerate(sides) if position != index))
+        alone = sorted(side - others)
+        if alone:
+            counted = counted | set(split_nul(git("--literal-pathspecs", "diff", *DIFF_PATHS, parent, commit, "--",
+                                                  *alone)))
+        counted = counted | (side & others)
+    return sorted(counted)
 
 
 def base_tip():
@@ -247,6 +263,7 @@ def standing_commit(local_sha, tips):
     return None
 
 
+@functools.lru_cache(maxsize=None)
 def trailer_level(commit):
     """The level of COMMIT's last `Review:` trailer (in the message's last paragraph), or None."""
     value = git("log", "-1", "--no-show-signature", "--format=%(trailers:key=Review,valueonly,unfold)", commit)
@@ -406,14 +423,14 @@ def last_trailer(commits):
     return next((commit for commit in reversed(commits) if trailer_level(commit)), None)
 
 
-def next_step(config, level, start, commits, uncommitted):
+def next_step(config, level, start, commits, uncommitted, tips):
     if uncommitted:
         return "commit this work locally (no trailer yet), then run status again"
     if level != "trivial":
         return ("review at %s: %s, on `git diff %s..HEAD`; then add the trailer to the last commit with "
                 "`git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer \"Review: %s %s\"`"
                 % (level, SLICE2[level], start[:12], level, start[:12]))
-    problems = review_problems(config, commits)
+    problems = review_problems(config, commits, tips)
     if problems:
         return "fix the trailers: " + problems[0]
     if config["tests"] and commits and git("rev-parse", "HEAD^{tree}") not in stamps():
@@ -431,13 +448,12 @@ def status_tips(args):
     return tuple(tip for tip in [base_tip()[1]] + found if tip)
 
 
-def open_unit(commits):
-    """(start, paths): where the open review unit starts, and every path it and the working tree change."""
+def open_unit(commits, tips):
+    """(start, paths): where the open review unit starts, and every path it and the working tree change: the new
+    commits no trailer reaches, plus edits and new files."""
+    _units, uncovered = review_units(commits, tips)
     last = last_trailer(commits)
-    tail = commits[commits.index(last) + 1:] if last else commits
-    paths = set(changed_paths("HEAD")) | set(untracked_paths())
-    for commit in tail:
-        paths = paths | set(commit_paths(commit))
+    paths = set(changed_paths("HEAD")) | set(untracked_paths()) | set(paths_of(uncovered))
     first = git("rev-parse", "--verify", "--quiet", commits[0] + "^", check=False) if commits else None
     return last or first or git("rev-parse", "HEAD"), sorted(paths)
 
@@ -453,7 +469,7 @@ def cmd_status(args):
     if config is None:
         raise GuardError("no REVIEW.md here or where this branch left %s" % tip_name)
     commits = new_commits("HEAD", tips)
-    start, paths = open_unit(commits)
+    start, paths = open_unit(commits, tips)
     level, rows = range_level(config, paths)
     print("level: %s" % level)
     for row in rows[:20]:
@@ -477,7 +493,7 @@ def cmd_status(args):
         print("note: " + note)
     print_rule_messages(config, working, (standing or start)[:12])
     uncommitted = sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
-    print("next: " + next_step(config, level, start, commits, uncommitted))
+    print("next: " + next_step(config, level, start, commits, uncommitted, tips))
     return 0
 
 
@@ -534,29 +550,49 @@ def cmd_run_suite(_args):
     return 0
 
 
-def review_problems(config, commits):
-    """Each trailer must cover the highest level of the new commits since the previous trailer; only trivial work
-    may follow the last one."""
-    problems, pending, last = [], set(), None
-    for commit in commits:
-        pending = pending | set(commit_paths(commit))
+def review_units(commits, trusted):
+    """(units, uncovered): for each new commit that carries a trailer, the new commits in its own history that no
+    earlier trailered commit reaches; and the new commits no trailered commit reaches. Units follow history, not
+    listing order, so a trailer on one branch never covers work on another."""
+    trailered = [commit for commit in commits if trailer_level(commit)]
+    covered, units = set(), []
+    for commit in trailered:
+        history = rev_list(commit, trusted)
+        earlier = [other for other in history if other != commit and trailer_level(other)]
+        units.append((commit, rev_list(commit, tuple(trusted) + tuple(earlier))))
+        covered = covered | set(history)
+    return units, [commit for commit in commits if commit not in covered]
+
+
+def rev_list(head, excluded):
+    return git("rev-list", head, *(("--not",) + tuple(excluded) if excluded else ())).split()
+
+
+def paths_of(commits):
+    return sorted(set(path for commit in commits for path in commit_paths(commit)))
+
+
+def review_problems(config, commits, trusted):
+    """Each trailer must cover the highest level of its review unit; new commits no trailer reaches must be
+    trivial."""
+    problems = []
+    units, uncovered = review_units(commits, trusted)
+    for commit, unit in units:
         declared = trailer_level(commit)
-        if not declared:
-            continue
-        level, rows = range_level(config, sorted(pending))
+        level, rows = range_level(config, paths_of(unit))
         if rank(declared) < rank(level):
             problems.append("the trailer on %s says %s, but the commits it covers change %s-level paths, for "
                             "example %s (%s)" % (commit[:12], declared, level, rows[0].path, rows[0].pattern))
-        pending, last = set(), commit
-    level, rows = range_level(config, sorted(pending))
+    level, rows = range_level(config, paths_of(uncovered))
     if level == "trivial":
         return problems
-    if last is None:
+    if not units:
         problems.append("the new commits need a review at level %s (for example %s matches %s), and none carries "
                         "`Review: %s ...` or higher" % (level, rows[0].path, rows[0].pattern, level))
     else:
-        problems.append("commits after the last review trailer (%s) change %s-level paths, for example %s; "
-                        "review them and add a new trailer" % (last[:12], level, rows[0].path))
+        problems.append("commits no review trailer covers (%s) change %s-level paths, for example %s; review them "
+                        "and add a new trailer" % (", ".join(commit[:12] for commit in uncovered[:3]), level,
+                                                  rows[0].path))
     return problems
 
 
@@ -600,7 +636,7 @@ def check_ref(local_sha, remote_sha, stamped):
     if config["tests"] and git("rev-parse", local_sha + "^{tree}") not in stamped:
         problems.append("no pass stamp for %s: run `python3 %s run-suite` on this commit (the full suite, once), "
                         "then push" % (local_sha[:12], GUARD_PATH))
-    return problems + review_problems(config, commits), notes
+    return problems + review_problems(config, commits, tips), notes
 
 
 def cmd_pre_push(args, data=""):
@@ -640,7 +676,7 @@ def cmd_ci(args):
     config, problem, notes = standing_rules(head, (base,))
     if config is not None:
         notes = notes + [note for note in (config.get("unreadable"), suite_change(config, rules_at(head))) if note]
-    problems = [problem] if problem else (review_problems(config, commits) if config else [])
+    problems = [problem] if problem else (review_problems(config, commits, (base,)) if config else [])
     for note in notes:
         print("note: " + note)
     if problems:

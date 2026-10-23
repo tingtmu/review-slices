@@ -319,7 +319,8 @@ class PrePushTest(unittest.TestCase):
         path = os.path.join(repo.path, ".githooks", "review_slices.py")
         with open(path, encoding="utf-8") as handle:
             source = handle.read()
-        repo.write(".githooks/review_slices.py", source.replace("def main(argv):\n", "def main(argv):\n    return 0\n", 1))
+        friendlier = source.replace("def main(argv):\n", "def main(argv):\n    return 0\n", 1)
+        repo.write(".githooks/review_slices.py", friendlier)
         repo.write("core/a.py")
         repo.commit("unreviewed, with a friendlier guard")
         self.suite()
