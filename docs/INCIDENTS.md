@@ -109,3 +109,19 @@ each failure class from getting through again. Terms: the skill's
   - 2026-10-24, acceptance trial: adopting turned a repo's `ruff check .` red on the copied scripts (not
     executable, linted as the repo's own code). The plug covered hooks only; the copies now carry skip headers
     and are executable, and SKILL.md says how to exclude them from formatters.
+
+## I5. A setup tool runs a one-way door it should only list
+
+- **Date / kind / status:** 2026-10-24 · defect · plugged
+- **What happened:** `discover.py --run`, which tries a repo's checks on a clean tree, counted deploy steps,
+  `--push`/`--publish` flags, and publishing commands in package.json, Makefile, justfile and CONTRIBUTING as local
+  checks, so it would have run them with the user's stored credentials.
+- **Slice that should have caught it:** 2 Review. Why it did not: the first review round saw CI workflows only; the
+  later rounds and the final review found the same shape in every other source.
+- **Failure class:** a tool runs a one-way door it should only list
+- **Fix:** every candidate, from every source, goes through the deploy and publish check; anything remote is
+  listed, never run.
+- **Plug:** test tests/test_discover.py::ListTest::test_deploy_jobs_and_steps_are_never_local,
+  test tests/test_discover.py::RunTest::test_run_never_runs_a_publishing_script_recipe_or_contributing_line,
+  test tests/test_discover.py::RunTest::test_run_never_runs_a_deploy
+- **Recurrences:** none
