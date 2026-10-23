@@ -176,7 +176,8 @@ class BootstrapTest(unittest.TestCase):
     def test_an_edited_checkout_guard_does_not_judge_after_the_base_lost_its_own(self):
         repo = self.repo
         source = self.lose_the_guard_on_main()
-        repo.write(".githooks/review_slices.py", source.replace("def main(argv):\n", "def main(argv):\n    return 0\n", 1))
+        friendlier = source.replace("def main(argv):\n", "def main(argv):\n    return 0\n", 1)
+        repo.write(".githooks/review_slices.py", friendlier)
         repo.write("core/a.py")
         repo.commit("a friendlier guard and an unreviewed change")
         self.assertEqual(repo.run_suite().returncode, 0)
@@ -191,6 +192,44 @@ class BootstrapTest(unittest.TestCase):
         done = repo.try_push()
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("restore it there", done.stderr)
+
+    def test_a_downstream_fork_whose_upstream_has_no_rules_keeps_its_own_base(self):
+        repo = self.repo
+        upstream = os.path.join(repo.tmp, "upstream.git")
+        repo.run_git(repo.tmp, "init", "-q", "--bare", "-b", "main", upstream)
+        repo.git("switch", "-q", "--orphan", "project")
+        repo.write("project.txt")
+        repo.commit("the open-source project, without review rules")
+        repo.git("push", "-q", upstream, "project:refs/heads/main")
+        repo.git("switch", "-q", "main")
+        repo.git("remote", "add", "upstream", upstream)
+        repo.git("fetch", "-q", "upstream")
+        done = repo.setup("install", "--apply")
+        self.assertEqual(done.returncode, 0, done.stdout)
+        self.assertEqual(repo.out("config", "--get", "review-slices.base"), "origin/main")
+
+    def test_a_fork_prefers_a_canonical_upstream_with_rules(self):
+        repo = self.repo
+        upstream = os.path.join(repo.tmp, "upstream.git")
+        repo.run_git(repo.tmp, "init", "-q", "--bare", "-b", "main", upstream)
+        repo.git("push", "-q", upstream, "main:refs/heads/main")
+        repo.git("remote", "add", "upstream", upstream)
+        repo.git("fetch", "-q", "upstream")
+        self.assertEqual(repo.setup("install", "--apply").returncode, 0)
+        self.assertEqual(repo.out("config", "--get", "review-slices.base"), "upstream/main")
+
+    def test_doctor_notes_another_remote_whose_base_branch_is_ahead(self):
+        repo = self.repo
+        upstream = os.path.join(repo.tmp, "upstream.git")
+        repo.run_git(repo.tmp, "init", "-q", "--bare", "-b", "main", upstream)
+        repo.write("notes/ahead.md")
+        repo.commit("ahead")
+        repo.git("push", "-q", "--no-verify", upstream, "HEAD:refs/heads/main")
+        repo.git("reset", "-q", "--hard", "origin/main")
+        repo.git("remote", "add", "other", upstream)
+        repo.git("fetch", "-q", "other")
+        self.assertEqual(repo.setup("install", "--apply").returncode, 0)
+        self.assertIn("other/main is ahead of origin/main", repo.setup("doctor").stdout)
 
     def test_a_repo_on_master_needs_no_base_line(self):
         repo = Repo(self, rules=None, guard=False)

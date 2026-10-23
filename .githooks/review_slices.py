@@ -385,11 +385,14 @@ def stamps():
 
 
 def carried_stamp(config, tree, stamped, tries=10):
-    """A stamped tree that TREE differs from only in trivial paths, or None. Trivial paths are ones no check reads,
-    so the suite's pass on that tree still holds; only the newest TRIES stamps are compared."""
+    """A stamped tree that TREE differs from only in paths an explicit `trivial:` glob matches, or None. Those are
+    paths no check reads, so the suite's pass on that tree still holds; the default level says nothing about what
+    checks read, so a path it covers never carries a stamp. Only the newest TRIES stamps are compared."""
+    explicit = [(level, pattern) for level, pattern in config["globs"] if level == "trivial"]
     for other in list(stamped)[::-1][:tries]:
         differ = split_nul(git("diff-tree", "-r", *DIFF_PATHS, other, tree, check=False))
-        if differ and range_level(config, differ)[0] == "trivial":
+        rows = [Row(path, *path_level(config, path)) for path in differ]
+        if rows and all(row.level == "trivial" and (row.level, row.pattern) in explicit for row in rows):
             return other
     return None
 

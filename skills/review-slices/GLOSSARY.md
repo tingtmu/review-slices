@@ -32,7 +32,8 @@ A check that runs only on a remote service such as CI, outside the suite.
 _Avoid_: CI-only check
 
 **Pass stamp**:
-A record, made by the suite wrapper, that the suite passed on one exact tree, the tree a pushed commit must have.
+A record, made by the suite wrapper, that the suite passed on one exact tree, the tree a pushed commit must have;
+it also covers a tree that differs from it only in paths an explicit trivial glob names.
 _Avoid_: test cache, green flag
 
 **Review trailer**:

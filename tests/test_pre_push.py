@@ -211,6 +211,16 @@ class PrePushTest(unittest.TestCase):
         repo.commit("code, reviewed", trailer=repo.trailer("simple"))
         self.assert_refused(repo.try_push(), "run-suite")
 
+    def test_a_stamp_never_carries_over_to_a_path_only_the_default_level_calls_trivial(self):
+        repo = Repo(self, rules=RULES.replace("default: simple", "default: trivial"))
+        repo.install()
+        repo.write("src/app.py", "print(1)\n")
+        repo.commit("app")
+        self.suite_in(repo)
+        repo.write("src/app.py", "raise SystemExit(1)\n")
+        repo.commit("an untested change the default calls trivial")
+        self.assert_refused(repo.try_push(), "run-suite")
+
     def test_a_path_that_is_not_utf8_gives_no_traceback(self):
         repo = self.repo
         os.makedirs(os.path.join(repo.path, "core"), exist_ok=True)

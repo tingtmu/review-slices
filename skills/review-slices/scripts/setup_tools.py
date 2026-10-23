@@ -159,17 +159,28 @@ def paths():
 
 
 def resolve_base(root):
-    """The base branch's remote-tracking name (e.g. origin/main): REVIEW.md's base on the `upstream` remote (a
-    fork's canonical repo) if there is one, else on its tracking remote, else origin's default branch; None if
-    none is fetched."""
+    """The base branch's remote-tracking name (e.g. origin/main): REVIEW.md's base on the `upstream` remote when it
+    is a fork's canonical repo with review rules, else on its tracking remote, else origin's default branch; None
+    if none is fetched."""
     config = guard.working_config(root)
     default = git("symbolic-ref", "--short", "--quiet", "refs/remotes/origin/HEAD", check=False)
     branch = (config or {}).get("base") or (default.split("/", 1)[-1] if default else "main")
     remote = git("config", "--get", "branch.%s.remote" % branch, check=False) or "origin"
-    for name in ("upstream/%s" % branch, "%s/%s" % (remote, branch), default):
+    for name in (canonical_upstream(branch, remote), "%s/%s" % (remote, branch), default):
         if name and git("rev-parse", "--verify", "--quiet", "refs/remotes/%s^{commit}" % name, check=False):
             return name
     return None
+
+
+def canonical_upstream(branch, remote):
+    """`upstream/BRANCH` when a fork's canonical repo has adopted review-slices and already contains the fork's own
+    base branch; None otherwise, so a canonical repo without rules never becomes the judge."""
+    name, own = "upstream/" + branch, "refs/remotes/%s/%s" % (remote, branch)
+    rules = guard.git_raw("show", "refs/remotes/%s:REVIEW.md" % name) or ""
+    if "```review-slices" not in rules:
+        return None
+    contained = git("merge-base", "--is-ancestor", own, "refs/remotes/" + name, check=False) is not None
+    return name if contained else None
 
 
 def hook_file_steps(hooks, bootstrap):
@@ -264,7 +275,10 @@ def install_steps(config_hook=False, agent_hooks=False):
     if base is None:
         problems.append("no remote-tracking base branch: fetch, then run install again (a first push is fine)")
     elif git("config", "--get", "review-slices.base", check=False) != base:
-        steps.append(("set review-slices.base to %s" % base, lambda: git("config", "review-slices.base", base)))
+        why = ("the canonical repo, which has review rules" if base.startswith("upstream/")
+               else "the base branch on its tracking remote")
+        steps.append(("set review-slices.base to %s (%s)" % (base, why),
+                      lambda: git("config", "review-slices.base", base)))
     hooks_path = git("config", "--get", "core.hooksPath", check=False)
     if git("config", "--local", "--get", "core.hooksPath", check=False) == ".githooks":
         steps.append(("unset core.hooksPath=.githooks (0.1.0's install), so the hooks in .git/hooks run again",
@@ -433,7 +447,7 @@ def main(argv):
         return 2
     try:
         return COMMANDS[argv[1]](argv[2:])
-    except guard.GuardError as error:
+    except (guard.GuardError, OSError, UnicodeError) as error:
         print("review-slices: %s" % error, file=sys.stderr)
         return 2
 

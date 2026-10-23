@@ -35,6 +35,7 @@ Ask your agent to "set up review-slices in this repo". It fills in the templates
 ```sh
 python3 .githooks/review_slices.py status      # the review level, the trailer to write, and the next step
 python3 .githooks/review_slices.py run-suite   # every check in the suite, once per pushed tree; stamps a pass
+                                               # (it carries over to changes of explicitly trivial paths only)
 python3 <skill>/scripts/setup_tools.py doctor  # is this clone's hook wired, and is the setup sound
 ```
 
@@ -86,4 +87,6 @@ trailer counts, and the printed amend command replaces an earlier one.
 level table would have judged recent history.
 
 `0.6.0`: `incidents.py` reports the incident log and checks that every plug still exists; the procedure reads CI
-after the push; `upgrade` refreshes every script a repo keeps in `.githooks/`.
+after the push; `upgrade` refreshes every script a repo keeps in `.githooks/`. A pass stamp carries over to a tree that differs
+only in paths an explicit `trivial:` glob names, and the stamp line records each check's time. A fork prefers its
+`upstream` base branch when that repo has review rules.

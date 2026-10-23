@@ -226,7 +226,7 @@ def main(argv):
             return cmd_run(root, found, options.timeout)
         print("\nNothing was run. Read the list, then `discover.py --run` on a clean tree tries each local one.")
         return 0
-    except guard.GuardError as error:
+    except (guard.GuardError, OSError, UnicodeError) as error:
         print("review-slices: %s" % error, file=sys.stderr)
         return 2
     except KeyboardInterrupt:
