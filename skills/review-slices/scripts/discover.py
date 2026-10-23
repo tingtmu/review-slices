@@ -1,0 +1,568 @@
+#!/usr/bin/env python3
+"""review-slices discover: list the offline checks a repo already has, as candidates for REVIEW.md's `test:` lines.
+
+Run it from inside the target repo. It stays in the skill and is never copied into a repo.
+
+    discover.py                        list each candidate: where it was found, its kind, the command, and whether
+                                       it runs locally or is a remote check (and why); runs nothing
+    discover.py --run [--timeout S]    on a clean tree, run each local candidate from the repo root (S seconds each,
+                                       default 600), then print the `test:` lines to add, the checks already red,
+                                       the checks that write files, and the remote checks for REVIEW.md
+
+Sources: .github/workflows/*.yml (`run:`), .gitlab-ci.yml (`script:`), package.json scripts, Makefile and justfile
+targets, pyproject.toml tool sections, tox.ini, noxfile.py, .pre-commit-config.yaml, Cargo.toml, go.mod and the
+fenced shell lines of CONTRIBUTING.md. Read the list before --run: it runs every local candidate.
+Standard library only, Python 3.8+, git 2.31+.
+"""
+import argparse
+import collections
+import importlib.util
+import json
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_TIMEOUT = 600
+# remote: "" for a local candidate, else why it is a remote check; legs: other OSes a local CI step also runs on.
+Candidate = collections.namedtuple("Candidate", "source line kind command remote legs")
+KINDS = (("format", r"format|fmt|black|prettier|isort"),
+         ("types", r"mypy|pyright|tsc|typecheck|type-check|types"),
+         ("lint", r"lint|ruff|flake8|pylint|eslint|clippy|vet|pre-commit|golangci-lint|shellcheck"),
+         ("test", r"test|tests|pytest|unittest|jest|vitest|mocha|tox|nox|ctest|rspec"),
+         ("build", r"build|compile"))
+KIND_PATTERNS = [(kind, re.compile(r"(?<![\w-])(?:%s)(?![\w-])" % words, re.I)) for kind, words in KINDS]
+SECRET = re.compile(r"\$\{\{\s*secrets\.")
+DEPLOY = re.compile(r"(?<![\w-])(deploy\w*|publish\w*|release|upload\w*|push|twine|kubectl|helm|terraform|gcloud|"
+                    r"aws|az|gh|codecov)(?![\w-])", re.I)
+CI_VALUES = re.compile(r"\$\{\{|\$\{?CI_")
+# Lines of a CI script that prepare the machine rather than check the code.
+SETUP = re.compile(r"(sudo|apt(-get)?|brew|choco|pipx|rustup|echo|printf|export|set|source|\.|curl|wget|git|mkdir|"
+                   r"cp|mv|rm|chmod|cat|ls|pwd|if|then|else|elif|fi|for|while|do|done|case|esac)(\s|$)|"
+                   r"((python3?|py) -m )?pip3? install|(npm|pnpm|bun|poetry) (ci|install)|yarn( install)?$|"
+                   r"uv (sync|pip|venv|tool)|go (install|mod download)|[A-Za-z_][A-Za-z0-9_]*=\S*$")
+NPM_SCRIPTS = {"test": "test", "lint": "lint", "typecheck": "types", "type-check": "types", "check": None,
+               "build": "build", "format:check": "format"}
+LOCKFILES = (("pnpm-lock.yaml", "pnpm"), ("yarn.lock", "yarn"), ("bun.lockb", "bun"), ("bun.lock", "bun"))
+TARGETS = {"test": "test", "lint": "lint", "check": "other", "typecheck": "types", "build": "build"}
+MAKEFILES = (("GNUmakefile", "make"), ("makefile", "make"), ("Makefile", "make"),
+             ("justfile", "just"), ("Justfile", "just"), (".justfile", "just"))
+MAKE_TARGET = re.compile(r"([^\s:#=][^:#=]*?)\s*::?(?!=)")
+JUST_RECIPE = re.compile(r"@?([A-Za-z_][\w-]*)(?:\s+[^:=]*)?:(?!=)")
+PY_TOOLS = (("pytest", "pytest"), ("ruff", "ruff check ."), ("mypy", "mypy ."), ("black", "black --check ."))
+FIXED = (("tox.ini", ("tox",)), ("noxfile.py", ("nox",)), (".pre-commit-config.yaml", ("pre-commit run --all-files",)),
+         ("Cargo.toml", ("cargo test", "cargo clippy -- -D warnings")), ("go.mod", ("go test ./...", "go vet ./...")))
+CONTRIBUTING = ("CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/CONTRIBUTING.md")
+SHELL_FENCES = ("", "sh", "bash", "shell", "zsh", "console", "shell-session")
+OS_PREFIXES = (("ubuntu", "linux"), ("linux", "linux"), ("macos", "macos"), ("darwin", "macos"), ("win", "windows"),
+               ("cygwin", "windows"))
+GITLAB_KEYWORDS = {"stages", "variables", "default", "include", "workflow", "image", "services", "before_script",
+                   "after_script", "cache"}
+
+
+def load_guard():
+    spec = importlib.util.spec_from_file_location("review_slices", os.path.join(HERE, "review_slices.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+guard = load_guard()
+
+
+def note(message):
+    print("note: " + message, file=sys.stderr)
+
+
+def read_lines(root, rel):
+    """[(number, text)] of REL in ROOT; [] when it does not exist."""
+    try:
+        with open(os.path.join(root, rel), encoding="utf-8", errors="replace") as handle:
+            return list(enumerate(handle.read().splitlines(), 1))
+    except FileNotFoundError:
+        return []
+    except OSError as error:
+        note("could not read %s, so it was skipped: %s" % (rel, error))
+        return []
+
+
+def kind_of(command):
+    return next((kind for kind, pattern in KIND_PATTERNS if pattern.search(command)), "other")
+
+
+def indent(text):
+    return len(text) - len(text.lstrip())
+
+
+def scalar(value):
+    """A YAML scalar's text: quotes removed, or a plain scalar's trailing comment."""
+    value = value.strip()
+    if value[:1] in ("'", '"') and value.rfind(value[0]) > 0:
+        return value[1:value.rfind(value[0])].replace("''", "'" if value[0] == "'" else "''")
+    return guard.COMMENT.sub("", value).strip()
+
+
+def field(fields, key):
+    """The scalar value of KEY in FIELDS, from keys(); "" when absent."""
+    return scalar(fields.get(key, (0, ""))[1])
+
+
+def labels(value):
+    """The items of a YAML flow list or a scalar, such as `[ubuntu-latest, macos-latest]`."""
+    return [scalar(item) for item in value.strip().strip("[]").split(",") if item.strip()]
+
+
+def key_col(block):
+    first = block[0][1]
+    if first.strip() == "-" and len(block) > 1:
+        return indent(block[1][1])
+    return re.match(r"\s*(?:-\s+)?", first).end()
+
+
+def keys(block):
+    """{key: (index, value)} for the keys of the YAML mapping BLOCK, whose first line may start with '- '."""
+    found = {}
+    if not block:
+        return found
+    col = key_col(block)
+    for index, (_number, text) in enumerate(block):
+        match = re.match(r"\s*(?:-\s+)?([\w.-]+):(?:\s+(.*))?$", text)
+        if match and (index == 0 or indent(text) == col) and match.group(1) not in found:
+            found[match.group(1)] = (index, (match.group(2) or "").strip())
+    return found
+
+
+def nested(block, index, col):
+    """The lines after BLOCK[INDEX] that are indented deeper than COL."""
+    lines = []
+    for number, text in block[index + 1:]:
+        if indent(text) <= col:
+            break
+        lines.append((number, text))
+    return lines
+
+
+def shell_commands(lines, prefix=""):
+    """[(number, command)] of the shell LINES worth checking: `\\` continuations joined, setup lines dropped, and
+    each lone `cd DIR` carried into the commands after it."""
+    commands, held = [], None
+    for number, text in lines:
+        text = text.strip()
+        if held:
+            number, text = held[0], held[1] + " " + text
+        held = (number, text[:-1].rstrip()) if text.endswith("\\") else None
+        if held or not text or text.startswith("#"):
+            continue
+        cd = re.match(r"cd\s+(\S+)\s*$", text)
+        if cd:
+            prefix += "cd %s && " % cd.group(1)
+        elif not SETUP.match(text):
+            commands.append((number, prefix + text))
+    return commands
+
+
+def yaml_lines(root, rel):
+    return [(number, text.rstrip()) for number, text in read_lines(root, rel)
+            if text.strip() and not text.strip().startswith("#")]
+
+
+def split_jobs(lines):
+    """A GitHub workflow's LINES as (top, jobs): the lines outside `jobs:`, and per job (header, steps), where
+    header holds the job's lines outside `steps:` and each step is a list of lines."""
+    top, jobs, in_jobs, job_col = [], [], False, None
+    for number, text in lines:
+        col, stripped = indent(text), text.strip()
+        if col == 0:
+            in_jobs, job_col = stripped.startswith("jobs:"), None
+        if not in_jobs:
+            top.append((number, text))
+        elif col > 0 and (job_col is None or col <= job_col):
+            job_col, fields, in_steps, dash = col, None, False, None
+            jobs.append(([(number, text)], []))
+        elif col > 0:
+            header, steps = jobs[-1]
+            fields = col if fields is None else fields
+            if in_steps and (col > fields or (col == fields and stripped.startswith("-"))):
+                if stripped.startswith("-") and dash in (None, col):
+                    dash = col
+                    steps.append([])
+                if steps:
+                    steps[-1].append((number, text))
+                continue
+            in_steps, dash = col == fields and stripped == "steps:", None
+            header.append((number, text))
+    return top, jobs
+
+
+def os_of(label):
+    """The OS of a runner label such as ubuntu-latest, or of a sys.platform value; None when unknown."""
+    return next((name for prefix, name in OS_PREFIXES if label.lower().startswith(prefix)), None)
+
+
+def matrix_labels(header):
+    """The runner labels under a job's `os:` matrix key, inline or as a list."""
+    found, col = [], None
+    for _number, text in header:
+        match = re.match(r"\s*(?:-\s+)?os:\s*(.*)$", text)
+        if match:
+            found, col = found + labels(match.group(1)), indent(text)
+        elif col is not None and indent(text) > col and text.strip().startswith("-"):
+            found.append(scalar(text.strip()[1:]))
+        else:
+            col = None
+    return found
+
+
+def job_os(header, fields):
+    """(reason, legs): why the job is remote by its runners' OS, and the other OSes it also runs on."""
+    runs_on, here = fields.get("runs-on", (0, ""))[1], os_of(sys.platform)
+    found = matrix_labels(header) if not runs_on or "matrix." in runs_on else labels(runs_on)
+    oses = {os_of(label) for label in found} - {None}
+    if not oses or here is None:
+        return "", []
+    if here not in oses:
+        return "runs only on %s" % ", ".join(sorted(oses)), []
+    return "", sorted(oses - {here})
+
+
+def run_lines(value, number, following):
+    """[(number, line)] of a `run:` VALUE on line NUMBER, whose nested lines are FOLLOWING."""
+    if value[:1] == "|":
+        return following
+    if value[:1] == ">":
+        return [(following[0][0], " ".join(text.strip() for _number, text in following))] if following else []
+    return [(number, " ".join([scalar(value)] + [text.strip() for _number, text in following]))]
+
+
+def step_reason(step, fields, command):
+    text = "\n".join(line for _number, line in step)
+    deploy, shell = DEPLOY.search(field(fields, "name") + "\n" + command), field(fields, "shell")
+    if SECRET.search(text):
+        return "uses secrets"
+    if deploy:
+        return "deploys or publishes (%s)" % deploy.group(1)
+    if CI_VALUES.search(command):
+        return "needs CI values"
+    if shell in ("pwsh", "powershell", "cmd") and os_of(sys.platform) != "windows":
+        return "uses the %s shell" % shell
+    return ""
+
+
+def job_candidates(rel, top, header, steps):
+    fields = keys(header[1:])
+    shared = "\n".join(text for _number, text in top + header)
+    os_reason, legs = job_os(header, fields)
+    reason = ("uses secrets" if SECRET.search(shared) else "needs services" if "services" in fields else os_reason)
+    workdir = re.search(r"^\s*working-directory:\s*(.+)$", shared, re.M)
+    found = []
+    for step in steps:
+        step_fields = keys(step)
+        if "run" not in step_fields:
+            continue
+        index, value = step_fields["run"]
+        where = field(step_fields, "working-directory") or (scalar(workdir.group(1)) if workdir else "")
+        lines = run_lines(value, step[index][0], nested(step, index, key_col(step)))
+        for number, command in shell_commands(lines, "cd %s && " % where if where else ""):
+            why = reason or step_reason(step, step_fields, command)
+            found.append(Candidate(rel, number, kind_of(command), command, why, [] if why else legs))
+    return found
+
+
+def workflow_candidates(root):
+    folder, found = os.path.join(root, ".github", "workflows"), []
+    for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+        if name.endswith((".yml", ".yaml")):
+            rel = ".github/workflows/" + name
+            top, jobs = split_jobs(yaml_lines(root, rel))
+            for header, steps in jobs:
+                found += job_candidates(rel, top, header, steps)
+    return found
+
+
+def list_items(lines):
+    """[(number, text)] of a YAML block list, with `- |` items expanded line by line."""
+    items, col = [], None
+    for number, text in lines:
+        stripped = text.strip()
+        if stripped.startswith("-") and (col is None or indent(text) <= col):
+            col, value = indent(text), stripped[1:].strip()
+            if value and value[0] not in "|>":
+                items.append((number, scalar(value)))
+        else:
+            items.append((number, stripped))
+    return items
+
+
+def gitlab_candidates(root):
+    rel, blocks = ".gitlab-ci.yml", []
+    for number, text in yaml_lines(root, rel):
+        if indent(text) == 0:
+            blocks.append((text.split(":", 1)[0].strip(), []))
+        elif blocks:
+            blocks[-1][1].append((number, text))
+    shared = "services" in [name for name, _body in blocks]
+    found = []
+    for name, body in blocks:
+        fields = keys(body)
+        if name in GITLAB_KEYWORDS or "script" not in fields:
+            continue
+        index, value = fields["script"]
+        deploy = DEPLOY.search(name + " " + field(fields, "stage"))
+        reason = ("needs services" if shared or "services" in fields else
+                  "deploys or publishes (%s)" % deploy.group(1) if deploy else
+                  "deploys to an environment" if "environment" in fields else "")
+        if value.startswith("["):
+            lines = [(body[index][0], item) for item in labels(value)]
+        else:
+            lines = [(body[index][0], scalar(value))] if value else list_items(nested(body, index, key_col(body)))
+        for number, command in shell_commands(lines):
+            why = reason or ("needs CI values" if CI_VALUES.search(command) else "")
+            found.append(Candidate(rel, number, kind_of(command), command, why, []))
+    return found
+
+
+def package_candidates(root):
+    lines = read_lines(root, "package.json")
+    try:
+        data = json.loads("\n".join(text for _number, text in lines)) if lines else {}
+    except ValueError as error:
+        note("package.json is not valid JSON, so it was skipped: %s" % error)
+        return []
+    scripts = data.get("scripts") if isinstance(data, dict) else None
+    if not isinstance(scripts, dict):
+        return []
+    runner = next((tool for lock, tool in LOCKFILES if os.path.exists(os.path.join(root, lock))), "npm")
+    start = next((number for number, text in lines if '"scripts"' in text), 0)
+    found = []
+    for name, body in scripts.items():
+        if name in NPM_SCRIPTS and isinstance(body, str):
+            pattern = re.compile(r'"%s"\s*:' % re.escape(name))
+            number = next((n for n, text in lines if n >= start and pattern.search(text)), start or 1)
+            found.append(Candidate("package.json", number, NPM_SCRIPTS[name] or kind_of(body),
+                                   "%s run %s" % (runner, name), "", []))
+    return found
+
+
+def target_candidates(root):
+    present, tools, found = set(os.listdir(root)), set(), []
+    for name, tool in MAKEFILES:
+        if name not in present or tool in tools:
+            continue
+        tools.add(tool)
+        pattern, done = MAKE_TARGET if tool == "make" else JUST_RECIPE, set()
+        for number, text in read_lines(root, name):
+            match = pattern.match(text)
+            for target in match.group(1).split() if match else []:
+                if target in TARGETS and target not in done:
+                    done.add(target)
+                    found.append(Candidate(name, number, TARGETS[target], "%s %s" % (tool, target), "", []))
+    return found
+
+
+def pyproject_candidates(root):
+    runner = next((prefix for lock, prefix in (("uv.lock", "uv run "), ("poetry.lock", "poetry run "))
+                   if os.path.exists(os.path.join(root, lock))), "")
+    found, done = [], set()
+    for number, text in read_lines(root, "pyproject.toml"):
+        match = re.match(r"\s*\[tool\.([\w-]+)[\].]", text)
+        for tool, command in PY_TOOLS:
+            if match and match.group(1) == tool and tool not in done:
+                done.add(tool)
+                found.append(Candidate("pyproject.toml", number, kind_of(command), runner + command, "", []))
+    return found
+
+
+def fixed_candidates(root):
+    return [Candidate(name, 1, kind_of(command), command, "", [])
+            for name, commands in FIXED if os.path.isfile(os.path.join(root, name)) for command in commands]
+
+
+def fence_commands(fence, lines):
+    """The commands of one fenced block: every line, or only the `$ ` lines of a console session."""
+    console = fence in ("console", "shell-session")
+    picked = []
+    for number, text in lines:
+        prompt = re.match(r"\s*[$%] (.*)$", text)
+        if prompt or not console:
+            picked.append((number, prompt.group(1) if prompt else text))
+    return [(number, command) for number, command in shell_commands(picked)
+            if re.search(r"test|lint|check", command, re.I)]
+
+
+def contributing_candidates(root):
+    found = []
+    for rel in CONTRIBUTING:
+        fence, lang, lines = None, "", []
+        for number, text in read_lines(root, rel):
+            match = re.match(r"\s*(`{3,}|~{3,})\s*([\w-]*)", text)
+            if fence is None and match:
+                fence, lang, lines = match.group(1), match.group(2).lower(), []
+            elif fence and text.strip().startswith(fence) and not text.strip().strip(fence[0]):
+                if lang in SHELL_FENCES:
+                    found += [Candidate(rel, n, kind_of(command), command, "", [])
+                              for n, command in fence_commands(lang, lines)]
+                fence = None
+            elif fence:
+                lines.append((number, text))
+    return found
+
+
+SOURCES = (workflow_candidates, gitlab_candidates, package_candidates, target_candidates, pyproject_candidates,
+           fixed_candidates, contributing_candidates)
+
+
+def where(candidate):
+    if candidate.remote:
+        return "remote: " + candidate.remote
+    return "local" + ("; the CI matrix also runs it on %s" % ", ".join(candidate.legs) if candidate.legs else "")
+
+
+def print_candidates(found):
+    places = ["%s:%d" % (candidate.source, candidate.line) for candidate in found]
+    width = max(len(place) for place in places)
+    print("discover: %d candidate(s)" % len(found))
+    for place, candidate in zip(places, found):
+        print("  %-*s  %-6s  %s  [%s]" % (width, place, candidate.kind, candidate.command, where(candidate)))
+
+
+def remote_checks(found):
+    lines = ["- %s (%s:%d): %s" % (c.command, c.source, c.line, c.remote) for c in found if c.remote]
+    return lines + ["- %s on %s (%s:%d): the CI matrix runs it there" % (c.command, ", ".join(c.legs), c.source, c.line)
+                    for c in found if c.legs]
+
+
+def status(root):
+    """{path: XY} from `git status --porcelain`, read in its -z form so odd names survive."""
+    done = subprocess.run(("git",) + guard.GIT_SETTINGS + ("status", "--porcelain", "-z"), cwd=root,
+                          capture_output=True, text=True)
+    if done.returncode != 0:
+        raise guard.GuardError("git status failed: %s" % done.stderr.strip())
+    entries, fields = {}, iter(done.stdout.split("\0"))
+    for field in fields:
+        if len(field) > 3:
+            entries[field[3:]] = field[:2]
+            if field[0] in "RC":
+                next(fields, None)  # a rename's old path
+    return entries
+
+
+def run_one(command, root, timeout):
+    """(exit code, or None on a timeout; seconds) of COMMAND run by the shell from ROOT, as run-suite runs it."""
+    began = time.monotonic()
+    process = subprocess.Popen(command, shell=True, cwd=root, stdin=subprocess.DEVNULL, start_new_session=True)
+    try:
+        return process.wait(timeout=timeout), time.monotonic() - began
+    except (subprocess.TimeoutExpired, KeyboardInterrupt) as error:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)  # the shell and everything it started
+        except (AttributeError, OSError):
+            process.kill()
+        process.wait()
+        if isinstance(error, KeyboardInterrupt):
+            raise
+        return None, time.monotonic() - began
+
+
+def run_all(root, found, timeout):
+    """Run each local command once; [(candidate, code, seconds, changed)], CHANGED the status lines it added."""
+    local, seen, results, before = [], set(), [], {}
+    for candidate in found:
+        if not candidate.remote and candidate.command not in seen:
+            seen.add(candidate.command)
+            local.append(candidate)
+    for number, candidate in enumerate(local, 1):
+        print("discover: [%d/%d] %s" % (number, len(local), candidate.command), flush=True)
+        code, seconds = run_one(candidate.command, root, timeout)
+        after = status(root)
+        changed = sorted("%s %s" % (xy, path) for path, xy in after.items() if before.get(path) != xy)
+        before = after
+        print("discover: %s after %.0fs%s" % ("timed out" if code is None else "exit %d" % code, seconds,
+                                              "; it changed the tree" if changed else ""), flush=True)
+        results.append((candidate, code, seconds, changed))
+    return results
+
+
+def verdicts(results, timeout):
+    """{heading: [line]} for the results of run_all, in the order to print them."""
+    groups = collections.OrderedDict((heading, []) for heading in (
+        "Suggested `test:` lines (they passed on a clean tree and left it clean):",
+        "Passed, but changed the tree, so run-suite would refuse to stamp it: ignore what it writes (see the "
+        ".gitignore entries below), or use its check-only mode, then run again:",
+        "Already red on a clean tree: record as an incident or a roadmap item, and leave it out of the suite:",
+        "Could not start (exit 126 or 127, a missing tool or a bad command): install the tool or fix the command:",
+        "Timed out after %ds: raise --timeout, or leave it out of the suite:" % timeout,
+        "Suggested .gitignore entries, for files the checks wrote:"))
+    pass_, wrote, red, missing, slow, ignore = groups.values()
+    for candidate, code, seconds, changed in results:
+        also = "; it changed %s" % ", ".join(changed) if changed else ""
+        if code is None:
+            slow.append("%s%s" % (candidate.command, also))
+        elif code in (126, 127):
+            missing.append("%s (exit %d)" % (candidate.command, code))
+        elif code:
+            red.append("%s (exit %d after %.0fs%s)" % (candidate.command, code, seconds, also))
+        elif changed:
+            wrote.append("%s (%s)" % (candidate.command, ", ".join(changed)))
+        else:
+            pass_.append("test: %s    # %s, %.0fs" % (candidate.command, candidate.kind, seconds))
+        ignore += [line[3:] for line in changed if line.startswith("?? ") and line[3:] not in ignore]
+    if any(not line.startswith("?? ") for _c, _code, _s, changed in results for line in changed):
+        ignore.append("(a check rewrote tracked files, which .gitignore cannot help: use its check-only mode)")
+    return groups
+
+
+def cmd_run(root, found, timeout):
+    results = run_all(root, found, timeout)
+    for heading, lines in list(verdicts(results, timeout).items()) + [
+            ("Remote checks, for REVIEW.md's \"Remote checks\" list:", remote_checks(found))]:
+        if lines:
+            print("\n%s\n  %s" % (heading, "\n  ".join(lines)))
+    if not results:
+        print("\ndiscover: no local candidate to run")
+    if status(root):
+        print("\nnote: the checks left the tree changed; `git status` shows what, and nothing was cleaned up")
+    return 0
+
+
+def positive(text):
+    if not text.isdigit() or int(text) < 1:
+        raise argparse.ArgumentTypeError("expected a whole number of seconds above 0, not %r" % text)
+    return int(text)
+
+
+def main(argv):
+    parser = argparse.ArgumentParser(prog="discover.py", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--run", action="store_true", help="run each local candidate (needs a clean tree)")
+    parser.add_argument("--timeout", type=positive, default=DEFAULT_TIMEOUT, metavar="SECONDS",
+                        help="stop a check after this long (default %d)" % DEFAULT_TIMEOUT)
+    options = parser.parse_args(argv[1:])
+    try:
+        root = guard.git("rev-parse", "--show-toplevel")
+        dirty = sorted(status(root)) if options.run else []
+        if dirty:
+            print("discover: --run needs a clean tree, so that what each check writes shows; commit or stash these "
+                  "first:\n  " + "\n  ".join(dirty[:10]), file=sys.stderr)
+            return 1
+        found = [candidate for source in SOURCES for candidate in source(root)]
+        if not found:
+            print("discover: no candidate checks found; write the suite's `test:` lines by hand")
+            return 0
+        print_candidates(found)
+        if options.run:
+            return cmd_run(root, found, options.timeout)
+        print("\nNothing was run. Read the list, then `discover.py --run` on a clean tree tries each local one.")
+        return 0
+    except guard.GuardError as error:
+        print("review-slices: %s" % error, file=sys.stderr)
+        return 2
+    except KeyboardInterrupt:
+        print("discover: interrupted", file=sys.stderr)
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
