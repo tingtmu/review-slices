@@ -50,7 +50,7 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    reviewer in a read-only sandbox (`claude -p`, `codex exec`), an Orca terminal, or ask the user. Never act as
    Slice 2 for your own work.
 5. **Handle review findings.** Check each one yourself before acting on it.
-   - Blocker (any security finding is one): fix it before the trailer.
+   - Blocker (any security problem is one): fix it before the trailer.
    - Fix: fix it, or reject it with a written reason in your report.
    - Nit: at most three are worth raising; fix them only if cheap.
    - Pre-existing: record it as an incident or a roadmap item, never just a label.

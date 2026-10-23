@@ -9,9 +9,9 @@ Never start one on your own. Propose it to the user first:
 
 ```
 Review meeting proposal
-Disputed finding(s): <ID, one line each, with both positions>
+Disputed review findings: <ID, one line each, with both positions>
 Why it is critical:   <the one-way door at stake>
-Members and lenses:   <for example 2 Claude + 3 Codex; correctness, security, devil's advocate>
+Members and lenses:   <for example 2 Claude + 3 Codex; correctness, security, adversarial>
 Rounds:               2 (a third only for a split or a blocking objection)
 Cost:                 about <N> agent sessions, <minutes>
 Folder:               .agents/review-meetings/<topic>-<date>/

@@ -30,8 +30,8 @@ the transcript lines, and never mark the output confirmed.
 
 Lenses, in order:
 1. Correctness: inputs, edges and failure paths the change gets wrong; a reply that says ok for a non-success.
-2. Security and secrets: injection, unsafe quoting through a shell, secrets reaching output or logs, guards
-   bypassed.
+2. Security and secrets: injection, unsafe quoting through a shell, secrets reaching output or logs, checks
+   the change skips or switches off.
 3. Holes in the tests: tests that cannot fail, fakes kinder than the real service, data shapes assumed rather
    than observed from a real reply.
 4. Instructions an agent would follow wrongly: placeholders it cannot fill, commands nobody ran.
