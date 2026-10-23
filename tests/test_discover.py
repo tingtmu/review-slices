@@ -112,12 +112,19 @@ class ListTest(unittest.TestCase):
                    "      - run: ./scripts/build.sh\n"
                    "  misc:\n    steps:\n      - run: npx semantic-release\n      - run: npx gh-pages -d dist\n"
                    "      - run: ./scripts/upload-site.sh\n      - run: rsync -av dist/ me@example.com:/srv\n"
-                   "      - run: cargo build --release\n      - run: pytest $PYTEST_ARGS\n")
+                   "      - run: cargo build --release\n      - run: pytest $PYTEST_ARGS\n"
+                   "      - run: docker buildx build --push -t ghcr.io/acme/app .\n"
+                   "      - run: npx electron-builder --publish always\n"
+                   "  sync:\n    steps:\n      - run: python manage.py migrate\n"
+                   "        env:\n          DB_URL: ${{ secrets['PROD_DB_URL'] }}\n")
         found = self.listing(repo)
         self.assertEqual(found["make deploy-prod"][2], "remote: its job deploys to an environment")
         self.assertEqual(found["./scripts/build.sh"][2], "remote: its job uses secrets")
+        self.assertEqual(found["python manage.py migrate"][2], "remote: its job uses secrets")  # round 2
         for command, word in (("npx semantic-release", "release"), ("npx gh-pages -d dist", "gh"),
-                              ("./scripts/upload-site.sh", "upload"), ("rsync -av dist/ me@example.com:/srv", "rsync")):
+                              ("./scripts/upload-site.sh", "upload"), ("rsync -av dist/ me@example.com:/srv", "rsync"),
+                              ("docker buildx build --push -t ghcr.io/acme/app .", "push"),
+                              ("npx electron-builder --publish always", "publish")):
             self.assertEqual(found[command][2], "remote: deploys or publishes (%s)" % word)
         self.assertEqual(found["cargo build --release"][2], "local")
         self.assertEqual(found["pytest $PYTEST_ARGS"][2], "remote: needs CI values or variables")

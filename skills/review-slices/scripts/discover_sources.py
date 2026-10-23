@@ -22,11 +22,12 @@ KINDS = (("format", r"format|fmt|black|prettier|isort"),
          ("test", r"test|tests|pytest|unittest|jest|vitest|mocha|tox|nox|ctest|rspec"),
          ("build", r"build|compile"))
 KIND_PATTERNS = [(kind, re.compile(r"(?<![\w-])(?:%s)(?![\w-])" % words, re.I)) for kind, words in KINDS]
-SECRET = re.compile(r"\$\{\{\s*secrets\.")
+SECRET = re.compile(r"\$\{\{[^}]*\bsecrets\b")  # secrets.X, secrets['X'], toJSON(secrets)
 # Words that mark a deploy or a publish, even inside a name such as deploy-prod, gh-pages or semantic-release.
 DEPLOY = re.compile(r"(?<![A-Za-z0-9])(deploy[a-z]*|publish[a-z]*|release[a-z]*|upload[a-z]*|push|ship|twine|kubectl|"
                     r"helm|terraform|gcloud|aws|az|gh|codecov|rsync|scp|sftp|ssh)(?![A-Za-z0-9])", re.I)
-FLAGS = re.compile(r"(?:^|\s)--?[\w-]+(?:=\S*)?")  # dropped before DEPLOY, so `cargo build --release` stays local
+# The one flag dropped before DEPLOY, so `cargo build --release` stays local; --push and --publish still count.
+RELEASE_FLAG = re.compile(r"(?:^|\s)--release(?=\s|$)")
 # A CI expression, or an environment variable a local shell would not have set.
 CI_VALUES = re.compile(r"\$\{\{|\$\{?(?!(?:HOME|PWD|PATH|USER|TMPDIR)\b)[A-Z_][A-Z0-9_]*")
 WORKDIR = re.compile(r"^\s*working-directory:\s*(.+)$", re.M)
@@ -231,7 +232,7 @@ def run_lines(value, number, following):
 
 def command_reason(command, *names):
     """Why COMMAND, in the jobs or steps called NAMES, is a remote check; "" when nothing says so."""
-    deploy = DEPLOY.search(FLAGS.sub(" ", " ".join(names + (command,))))
+    deploy = DEPLOY.search(RELEASE_FLAG.sub(" ", " ".join(names + (command,))))
     if deploy:
         return "deploys or publishes (%s)" % deploy.group(1)
     return "needs CI values or variables" if CI_VALUES.search(command) else ""
