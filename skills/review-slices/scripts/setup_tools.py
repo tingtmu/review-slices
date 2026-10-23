@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""review-slices setup tools (skill version 0.4.0): install the guard in a clone, upgrade it, check the setup.
+"""review-slices setup tools (skill version 0.6.0): install the guard in a clone, upgrade it, check the setup.
 
 Run it from inside the target repo. It stays in the skill and is never copied into a repo.
 
@@ -30,10 +30,12 @@ AGENT_HOOK_PATH = ".githooks/agent_hook.py"
 COPIED = (SKILL_GUARD, SKILL_AGENT_HOOK, os.path.join(HERE, "incidents.py"))
 # Runs the agent hook committed on the base branch (the checkout's copy only before it is there), so an edited
 # copy never decides; a clone that never ran install has no review-slices.base, and any error allows the action.
-AGENT_COMMAND = ("sh -c 'top=$(git -C \"${CLAUDE_PROJECT_DIR:-.}\" rev-parse --show-toplevel) && "
+AGENT_COMMAND = ("sh -c 'top=$(git -C \"${CLAUDE_PROJECT_DIR:-.}\" rev-parse --show-toplevel 2>/dev/null) && "
                  "base=$(git -C \"$top\" config --get review-slices.base) || exit 0; "
-                 "code=$(git -C \"$top\" show \"refs/remotes/$base:%s\") || code=$(cat \"$top/%s\") || exit 0; "
-                 "exec python3 -c \"$code\"' 2>/dev/null || true" % (AGENT_HOOK_PATH, AGENT_HOOK_PATH))
+                 "code=$(git -C \"$top\" show \"refs/remotes/$base:%s\" 2>/dev/null) || "
+                 "code=$(cat \"$top/%s\" 2>/dev/null) || exit 0; "
+                 "export REVIEW_SLICES_TOP=\"$top\"; exec python3 -c \"$code\"' || true"
+                 % (AGENT_HOOK_PATH, AGENT_HOOK_PATH))
 AGENT_SETTINGS = ((".claude/settings.json", "Bash|Write|Edit|MultiEdit|NotebookEdit"), (".codex/hooks.json", "Bash"))
 CHAINED = "pre-push.review-slices-chained"
 WRAPPER_MARK = "# review-slices wrapper:"
@@ -65,10 +67,13 @@ def find_guard():
         adopted = "```review-slices" in (git("show", "refs/remotes/%s:REVIEW.md" % base) or "")
         if source:
             return source, None, adopted
-        if adopted:
-            print("review-slices: the base branch %s has review rules but no %s, so this checkout's guard runs; "
-                  "restore the guard there" % (base, GUARD), file=sys.stderr)
-        return None, None, adopted  # adoption, or the push that restores the guard
+        removed = (git("log", "-1", "--format=%H", "--diff-filter=D", "refs/remotes/" + base, "--", GUARD)
+                   or "").strip()
+        if removed:
+            print("review-slices: the base branch %s lost %s in %s, so the last guard it had runs; restore it there"
+                  % (base, GUARD, removed[:12]), file=sys.stderr)
+            return git("show", "%s^:%s" % (removed, GUARD)), None, adopted
+        return None, None, adopted  # adoption: the guard was never on the base branch
     remote = base.split("/", 1)[0] if base else "origin"
     if (git("for-each-ref", "--count=1", "refs/remotes/%s/" % remote) or "").strip():
         return None, ("the base branch %s is not in this clone: fetch it, or fix `git config review-slices.base`"
@@ -154,13 +159,14 @@ def paths():
 
 
 def resolve_base(root):
-    """The base branch's remote-tracking name (e.g. origin/main), from REVIEW.md's base and its tracking remote,
-    else origin's default branch; None if neither is fetched."""
+    """The base branch's remote-tracking name (e.g. origin/main): REVIEW.md's base on the `upstream` remote (a
+    fork's canonical repo) if there is one, else on its tracking remote, else origin's default branch; None if
+    none is fetched."""
     config = guard.working_config(root)
-    branch = config["base"] if config else "main"
+    default = git("symbolic-ref", "--short", "--quiet", "refs/remotes/origin/HEAD", check=False)
+    branch = (config or {}).get("base") or (default.split("/", 1)[-1] if default else "main")
     remote = git("config", "--get", "branch.%s.remote" % branch, check=False) or "origin"
-    for name in ("%s/%s" % (remote, branch),
-                 git("symbolic-ref", "--short", "--quiet", "refs/remotes/origin/HEAD", check=False)):
+    for name in ("upstream/%s" % branch, "%s/%s" % (remote, branch), default):
         if name and git("rev-parse", "--verify", "--quiet", "refs/remotes/%s^{commit}" % name, check=False):
             return name
     return None
@@ -197,9 +203,16 @@ def hook_file_steps(hooks, bootstrap):
 
 
 def agent_hook_entries(text):
-    """(settings, PreToolUse entries) of a hook settings file's TEXT; ValueError if it is not JSON."""
+    """(settings, PreToolUse entries) of a hook settings file's TEXT; ValueError if it is not JSON of the shape
+    Claude Code and Codex read: an object whose "hooks" maps events to lists of {"hooks": [...]} objects."""
     data = json.loads(text) if text else {}
-    return data, data.get("hooks", {}).get("PreToolUse", [])
+    hooks = data.get("hooks", {}) if isinstance(data, dict) else None
+    entries = hooks.get("PreToolUse", []) if isinstance(hooks, dict) else None
+    if not isinstance(entries, list) or not all(isinstance(entry, dict) and isinstance(entry.get("hooks", []), list)
+                                                and all(isinstance(hook, dict) for hook in entry.get("hooks", []))
+                                                for entry in entries):
+        raise ValueError("not a hook settings object")
+    return data, entries
 
 
 def has_agent_hook(entries):
@@ -219,7 +232,7 @@ def agent_hook_steps(root):
     steps, problems = [], []
     if read(os.path.join(root, AGENT_HOOK_PATH)) is None:
         steps.append(("copy the skill's agent hook to %s; commit it" % AGENT_HOOK_PATH,
-                      lambda: write(os.path.join(root, AGENT_HOOK_PATH), read(SKILL_AGENT_HOOK))))
+                      lambda: write(os.path.join(root, AGENT_HOOK_PATH), read(SKILL_AGENT_HOOK), 0o755)))
     for relative, matcher in AGENT_SETTINGS:
         path = os.path.join(root, relative)
         try:
@@ -243,7 +256,7 @@ def install_steps(config_hook=False, agent_hooks=False):
     steps, problems = [], []
     if not os.path.exists(os.path.join(root, guard.GUARD_PATH)):
         steps.append(("copy the skill's guard %s to %s; commit it as a reviewed change" % (guard.VERSION,
-                      guard.GUARD_PATH), lambda: write(os.path.join(root, guard.GUARD_PATH), read(SKILL_GUARD))))
+                      guard.GUARD_PATH), lambda: write(os.path.join(root, guard.GUARD_PATH), read(SKILL_GUARD), 0o755)))
     if read(bootstrap) != BOOTSTRAP:
         steps.append(("write %s, which runs the guard committed on the base branch" % bootstrap,
                       lambda: write(bootstrap, BOOTSTRAP, 0o755)))
@@ -320,7 +333,7 @@ def cmd_upgrade(args):
                                                        os.path.relpath(copy, root),
                                                        "" if "--apply" in args else "; add --apply to do it"))
         if "--apply" in args:
-            shutil.copy(source, copy)
+            write(copy, read(source), 0o755)
     print("then commit them as a reviewed change (REVIEW.md puts .githooks/ at important or higher); the guard "
           "judges pushes once it is on the base branch")
     if os.path.exists(os.path.join(root, ".githooks", "pre-push")):
@@ -328,15 +341,32 @@ def cmd_upgrade(args):
     return 0
 
 
-def tree_lines(root, common, bootstrap):
-    entries = (("REVIEW.md", os.path.join(root, "REVIEW.md"), "the rules (committed)"),
-               ("docs/INCIDENTS.md", os.path.join(root, "docs", "INCIDENTS.md"), "incidents and plugs (committed)"),
-               (guard.GUARD_PATH, os.path.join(root, guard.GUARD_PATH), "the guard (committed; the base branch's "
-                                                                          "copy judges pushes)"),
-               (os.path.relpath(bootstrap, root), bootstrap, "per clone: runs the base branch's guard"),
-               (os.path.relpath(guard.stamp_path(), root), guard.stamp_path(), "per clone: pass stamps"))
-    return ["  %-8s %-44s %s" % ("ok" if os.path.exists(full) else "missing", shown, what)
-            for shown, full, what in entries]
+def tree_lines(root, bootstrap, base_has_guard):
+    committed = (("REVIEW.md", "the rules"), ("docs/INCIDENTS.md", "incidents and their plugs"),
+                 (guard.GUARD_PATH, "the guard; " + ("the base branch's copy judges pushes" if base_has_guard
+                                                     else "the base branch has none yet, so this checkout's runs")))
+    lines = []
+    for path, what in committed:
+        tracked = git("ls-files", "--error-unmatch", "--", path, check=False) is not None
+        state = "missing" if not os.path.exists(os.path.join(root, path)) else "ok" if tracked else "uncommitted"
+        lines.append("  %-11s %-44s %s" % (state, path, what))
+    for full, what in ((bootstrap, "per clone: runs the base branch's guard"),
+                       (guard.stamp_path(), "per clone: pass stamps")):
+        lines.append("  %-11s %-44s %s" % ("ok" if os.path.exists(full) else "missing", os.path.relpath(full, root),
+                                           what))
+    return lines
+
+
+def ahead_elsewhere(name, tip):
+    """Notes for remotes whose copy of the base branch is ahead of the configured one, as in a fork whose origin is
+    stale: pushes there are measured against old history."""
+    branch, notes = name.split("/", 1)[-1], []
+    for other in (git("remote", check=False) or "").split():
+        sha = git("rev-parse", "--verify", "--quiet", "refs/remotes/%s/%s^{commit}" % (other, branch), check=False)
+        if sha and sha != tip and git("merge-base", "--is-ancestor", tip, sha, check=False) is not None:
+            notes.append("%s/%s is ahead of %s; if %s is the canonical repo, run `git config review-slices.base "
+                         "%s/%s`" % (other, branch, name, other, other, branch))
+    return notes
 
 
 def cmd_doctor(_args):
@@ -359,8 +389,10 @@ def cmd_doctor(_args):
     name, tip = guard.base_tip()
     if not tip:
         problems.append("the base branch %s is not fetched in this clone" % name)
-    elif config and name.split("/", 1)[-1] != config["base"]:
+    elif config and config["base"] and name.split("/", 1)[-1] != config["base"]:
         notes.append("review-slices.base is %s but REVIEW.md's base is %s" % (name, config["base"]))
+    else:
+        notes = notes + ahead_elsewhere(name, tip)
     if read(bootstrap) != BOOTSTRAP:
         problems.append("the bootstrap is missing or out of date: run install --apply")
     wiring = guard.hook_wiring()
@@ -381,7 +413,8 @@ def cmd_doctor(_args):
     print("base: %s%s" % (name, "" if tip else " (not fetched)"))
     print("agent hook: %s" % (", ".join(agent) if agent else "not set up (install --agent-hooks adds it)"))
     print("installed:")
-    print("\n".join(tree_lines(root, common, bootstrap)))
+    base_has_guard = bool(tip) and guard.git_raw("show", "%s:%s" % (tip, guard.GUARD_PATH)) is not None
+    print("\n".join(tree_lines(root, bootstrap, base_has_guard)))
     for note in notes:
         print("note: " + note)
     for problem in problems:
@@ -394,6 +427,7 @@ COMMANDS = {"install": cmd_install, "upgrade": cmd_upgrade, "doctor": cmd_doctor
 
 
 def main(argv):
+    sys.stdout.reconfigure(errors="backslashreplace")  # paths that are not UTF-8 print escaped, never crash
     if len(argv) < 2 or argv[1] not in COMMANDS:
         print(__doc__, file=sys.stderr)
         return 2

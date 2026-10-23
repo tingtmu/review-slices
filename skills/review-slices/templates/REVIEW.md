@@ -1,14 +1,16 @@
 # Review and verification rules
 
 How work in this repo is checked before it counts as done. The procedure is the review-slices skill
-(<skill source URL or path>, version <x.y.z>); its GLOSSARY.md defines every term used here. This file holds what
+(https://github.com/tingtmu/review-slices, version <the version `review_slices.py --version` prints>); its
+GLOSSARY.md defines every term used here. This file holds what
 is specific to this repo. Incidents and their plugs: [docs/INCIDENTS.md](docs/INCIDENTS.md).
 
 ## Review levels
 
 The guard computes a change's level from this block: the highest level any changed path matches. REVIEW.md and
 `.githooks/*` are always at least Important, whatever the block says. Write one glob per line; `*` also matches
-`/`. Raise the level for the planned actions listed below. Lowering any line needs the user's go-ahead.
+`/`. Raise the level for the planned actions listed below. Lowering any line needs the user's go-ahead. Delete a
+level's line if no path belongs there yet.
 
 ```review-slices
 test: <one offline check, run from the repo root; repeat the line for each check, all are required>
@@ -40,7 +42,8 @@ Checks that run only in CI or another remote service, outside the suite. Read th
 
 What has gone wrong here before. Reviewers check every change against this list. Each line links its incident.
 
-- <one line per failure class> ([I1](docs/INCIDENTS.md#i1-...))
+- <one line per failure class, linked to its incident, e.g. ([I1](docs/INCIDENTS.md#i1-...)); delete this line
+  until the first incident>
 
 ## Repo rules for reviewers
 

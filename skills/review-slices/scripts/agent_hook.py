@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""review-slices agent hook (skill version 0.4.0): a PreToolUse hook for Claude Code and Codex that stops an agent
+# Vendored into repos by the review-slices skill and linted where it is written, so a host repo's tools skip it:
+# ruff: noqa
+# flake8: noqa
+# pylint: skip-file
+# mypy: ignore-errors
+# isort: skip_file
+"""review-slices agent hook (skill version 0.6.0): a PreToolUse hook for Claude Code and Codex that stops an agent
 from taking the user's overrides: skipping hooks with --no-verify, rewiring the push hook, writing pass stamps or
 the bootstrap, or amending new content into a commit that carries a review trailer.
 
@@ -155,13 +161,15 @@ def commit_parts(args):
 
 
 def amend_reason(flags, paths, cwd):
+    """On a commit that carries a review trailer, only a message amend (`--only` with no paths) is allowed: the same
+    command line may stage new content first (`git add -A && git commit --amend`), so the index proves nothing."""
     if "--amend" not in flags:
         return None
-    staged = subprocess.run(("git", "diff", "--cached", "--quiet"), cwd=cwd, capture_output=True).returncode == 1
-    content = flags & {"-a", "--all", "-i", "--include"} or paths or (staged and not flags & {"-o", "--only"})
+    message_only = flags & {"-o", "--only"} and not paths and not flags & {"-a", "--all", "-i", "--include"}
     trailer = git(cwd, "log", "-1", "--no-show-signature", "--format=%(trailers:key=Review,valueonly)", "HEAD")
-    if content and trailer:
-        return "this amends new content into a commit whose review trailer covers other content; add a new commit"
+    if trailer and not message_only:
+        return ("this amend could put new content under a review trailer that covers other content; add a new "
+                "commit, or amend only the message with `git commit --amend --only`")
     return None
 
 
@@ -243,11 +251,14 @@ def guarded_paths(common, cwd):
 
 
 def reason_for(payload):
+    """Why the tool call in PAYLOAD takes an override, or None. The repo is the one the settings command found
+    (REVIEW_SLICES_TOP), not the agent's current directory, which may be anywhere."""
     cwd = payload.get("cwd") or os.getcwd()
-    common = git(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    top = os.environ.get("REVIEW_SLICES_TOP") or cwd
+    common = git(top, "rev-parse", "--path-format=absolute", "--git-common-dir")
     if not common or not os.path.exists(os.path.join(common, "review-slices", "bootstrap.py")):
         return None  # this clone never opted in
-    guarded = guarded_paths(common, cwd)
+    guarded = guarded_paths(common, top)
     data = payload.get("tool_input") or {}
     path = data.get("file_path") or data.get("notebook_path")
     if path:
@@ -263,7 +274,9 @@ def reason_for(payload):
 def main():
     try:
         reason = reason_for(json.load(sys.stdin))
-    except Exception:  # never block an agent because this hook broke
+    except Exception as error:  # never block an agent because this hook broke, but say so
+        print("review-slices agent hook: %s: %s; the action is allowed" % (type(error).__name__, error),
+              file=sys.stderr)
         return 0
     if reason:
         print(json.dumps({"hookSpecificOutput": {

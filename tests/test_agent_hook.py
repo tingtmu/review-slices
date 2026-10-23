@@ -123,6 +123,11 @@ class AmendTest(unittest.TestCase):
         self.assertIsNotNone(self.decide("git commit --amend --no-edit"))
         self.assertIsNotNone(self.decide("git commit -a --amend --no-edit"))
 
+    def test_staging_and_amending_in_one_command_is_denied(self):
+        self.repo.write("core/b.py")
+        self.assertIsNotNone(self.decide("git add -A && git commit --amend --no-edit"))
+        self.assertIsNotNone(self.decide("git commit --amend -m 'reworded'"))
+
     def test_amending_only_the_message_is_allowed(self):
         self.repo.write("core/b.py")
         self.repo.git("add", "core/b.py")
@@ -177,6 +182,29 @@ class SettingsTest(unittest.TestCase):
         with open(os.path.join(repo.path, ".claude", "settings.json"), encoding="utf-8") as handle:
             entries = json.load(handle)["hooks"]["PreToolUse"]
         self.assertEqual(len(entries), 1)
+
+    def test_the_settings_command_judges_the_project_even_when_the_agent_is_elsewhere(self):
+        repo = Repo(self)
+        self.assertEqual(repo.setup("install", "--apply", "--agent-hooks").returncode, 0)
+        command = load_script("setup_tools", SETUP).AGENT_COMMAND
+        for agent_command in ("git -C %s push --no-verify" % repo.path, "cd %s && git push --no-verify" % repo.path):
+            decided = subprocess.run(("sh", "-c", command), input=json.dumps(
+                {"tool_name": "Bash", "tool_input": {"command": agent_command}, "cwd": "/"}),
+                capture_output=True, text=True, cwd=repo.path, env=dict(ENV, CLAUDE_PROJECT_DIR=repo.path))
+            self.assertIn('"deny"', decided.stdout, agent_command)
+
+    def test_settings_of_the_wrong_shape_are_reported_not_crashed_on(self):
+        repo = Repo(self)
+        repo.write(".claude/settings.json", '{"hooks": []}')
+        done = repo.setup("install", "--agent-hooks")
+        self.assertNotIn("Traceback", done.stderr)
+        self.assertIn("not valid JSON", done.stdout)
+
+    def test_a_broken_hook_allows_and_says_why(self):
+        done = subprocess.run((sys.executable, AGENT_HOOK), input="[]", capture_output=True, text=True,
+                              env=ENV)
+        self.assertEqual((done.returncode, done.stdout), (0, ""))
+        self.assertIn("review-slices agent hook", done.stderr)
 
     def test_the_settings_command_allows_everything_where_the_hook_is_missing(self):
         repo = Repo(self)

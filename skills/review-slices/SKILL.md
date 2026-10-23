@@ -11,7 +11,7 @@ use them exactly.
 
 Start by reading the repo's `REVIEW.md` (its rules, level table and "failure looks like" list) and running
 `python3 .githooks/review_slices.py status`, which says where the work stands and what to do next. If the repo has
-no REVIEW.md, go to [Set up a repo](#set-up-a-repo). If `python3 .githooks/review_slices.py --version` is older than
+no REVIEW.md with a ```` ```review-slices ```` block, go to [Set up a repo](#set-up-a-repo). If `python3 .githooks/review_slices.py --version` is older than
 this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py upgrade` can update it.
 
 ## The slices
@@ -59,8 +59,9 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    (`git diff <old head>..HEAD`), resuming the same reviewers. Never re-raise a review finding already settled.
    Still split after that: escalate to the user.
 7. **Add the trailer** `status` printed to the last commit the review covered, with exactly
-   `git commit --amend --only --no-edit --trailer "Review: <level> <base-sha>"`: it keeps the message and leaves
-   anything staged out. Each trailer must cover the level of the commits since the previous one; a later commit
+   `git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer "Review: <level> <base-sha>"`
+   (`status` prints it filled in): it keeps the message, leaves anything staged out, and replaces an earlier
+   `Review:` trailer instead of adding a second. Each trailer must cover the level of the commits since the previous one; a later commit
    above Trivial needs its own review and trailer. The hook refuses both otherwise. Never amend new content into
    a commit that carries a trailer: add a commit.
 8. **Run the suite once:** `python3 .githooks/review_slices.py run-suite`. It runs every `test:` line and stamps
@@ -68,7 +69,7 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    HEAD's, commit what is yours and ask the user about the rest; never stash, revert or commit someone else's
    edits. The suite can be slow: use a long tool timeout or run it in the background. If it fails, the fix is a
    new commit and goes through step 6's second round.
-9. **Push** only with the user's go-ahead. The pre-push hook checks the stamp and the trailers in about a second.
+9. **Push** only when `status` says `next: ask the user's go-ahead, then push`, and only with that go-ahead. The pre-push hook checks the stamp and the trailers in about a second.
    If it refuses, fix what it names. `git push --no-verify`, changing the hook's git config, an edited guard or
    bootstrap and a hand-written stamp are the user's override, never yours; using one is an incident. Where the
    repo has the agent hook, it refuses these for you.
@@ -76,7 +77,8 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
     `gh run list --commit <sha>`, then `gh run watch <run-id> --exit-status`; elsewhere the repo's own command.
     Red: rerun it once (`gh run rerun <run-id> --failed`). Still red: the work is not done. Fix it from step 1, and
     record an incident of failure class "the local suite differs from CI"; its plug is the missing check, added to
-    the suite as a `test:` line or listed under REVIEW.md's "Remote checks".
+    the suite as a `test:` line or listed under REVIEW.md's "Remote checks". If you cannot read CI (no `gh`, another
+    host), say so in your report and ask the user to check it; never report done over a result nobody read.
 
 ## Record an incident
 
@@ -107,11 +109,12 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    already red (record each as an incident or a roadmap item and leave it out of the suite), the checks that
    write files (with `.gitignore` entries), and the remote checks for REVIEW.md.
 2. Copy [templates/REVIEW.md](templates/REVIEW.md) to the repo root and fill in its level table (one glob per
-   line), its `test:` lines and remote checks from step 1, and its failure list. Copy
-   [templates/INCIDENTS.md](templates/INCIDENTS.md) to `docs/INCIDENTS.md`. If the repo already has review rules
-   (CONTRIBUTING, a PR template, CODEOWNERS, AGENTS.md or CLAUDE.md), list where they agree with REVIEW.md and
-   where they conflict, for the user to decide; link to them rather than copy them. CODEOWNERS paths are good
-   candidates for important or critical globs.
+   line), its `test:` lines and remote checks from step 1, and its failure list. If a REVIEW.md is already there,
+   keep its text and add the template's sections to it. Copy [templates/INCIDENTS.md](templates/INCIDENTS.md) to
+   `docs/INCIDENTS.md`. If the repo already has review rules (an existing REVIEW.md, CONTRIBUTING, a pull request
+   template, CODEOWNERS, AGENTS.md or CLAUDE.md), list where they agree with the new rules and where they
+   conflict, for the user to decide; link to them rather than copy them. CODEOWNERS paths are good candidates for
+   important or critical globs.
 3. **Calibrate the table** before committing it: `python3 <skill>/scripts/calibrate.py` shows how it would have
    judged the base branch's last 50 first-parent commits. Over 30% critical means people will route around it;
    over 60% trivial means most changes get no review. Tune the globs and run it again (`--rules PATH` tries a
@@ -126,7 +129,9 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    the hook; its payload and deny response follow Codex's hook documentation but have not yet been checked against
    a live Codex session, so tell the user it is unverified there. If install reports a problem, tell the user.
 5. Run `python3 .githooks/review_slices.py check` until it reports no error, and `setup_tools.py doctor` until
-   it reports ok.
+   it reports ok. The scripts in `.githooks/` are vendored: they tell ruff, flake8, pylint, isort and mypy to skip
+   them. If another check in the suite (a formatter such as black or prettier) still reads `.githooks/`, exclude it
+   there in this same setup commit and say so to the user; it is not a weakened check.
 6. Commit REVIEW.md, `docs/INCIDENTS.md`, `.githooks/` and the agent hook settings together; REVIEW.md puts them
    at Important or higher, so they are reviewed like any change. Every other clone that wants the guard runs
    `install --apply` once; teammates who do not are never blocked by it, and the agent hook does nothing for them.

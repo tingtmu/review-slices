@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""review-slices guard (skill version 0.4.0): review levels, pass stamps and the pre-push check.
+# Vendored into repos by the review-slices skill and linted where it is written, so a host repo's tools skip it:
+# ruff: noqa
+# flake8: noqa
+# pylint: skip-file
+# mypy: ignore-errors
+# isort: skip_file
+"""review-slices guard (skill version 0.6.0): review levels, pass stamps and the pre-push check.
 
     review_slices.py status [BASE]         where this work stands: its review level and the trailer to write, the
                                            rules it is judged by, the pass stamp, the hook, and the next step
@@ -13,7 +19,7 @@
 Configuration is the first ```review-slices fenced block in REVIEW.md at the repo root:
 
     test: cd engine && uv run pytest     # one check of the suite; repeat the key per check, all are required
-    base: main                           # the base branch (default: main)
+    base: main                           # the base branch (default: origin's default branch)
     default: simple                      # level of a path no glob matches (default: simple)
     critical: engine/src/*/approval.py   # "<level>: <glob>", one per line; "*" also matches "/"
 
@@ -39,7 +45,7 @@ import sys
 import tempfile
 import time
 
-VERSION = "0.4.0"
+VERSION = "0.6.0"
 LEVELS = ("trivial", "simple", "important", "critical")
 FLOOR = (("REVIEW.md", "important"), (".githooks/*", "important"))
 GUARD_PATH = ".githooks/review_slices.py"
@@ -68,12 +74,14 @@ class GuardError(Exception):
 
 def git_raw(*args):
     """git's stdout, unstripped, or None if git failed."""
-    done = subprocess.run(("git",) + GIT_SETTINGS + args, capture_output=True, text=True)
+    done = subprocess.run(("git",) + GIT_SETTINGS + args, capture_output=True, text=True, errors="surrogateescape")
     return done.stdout if done.returncode == 0 else None
 
 
 def git(*args, check=True):
-    done = subprocess.run(("git",) + GIT_SETTINGS + args, capture_output=True, text=True)
+    """git's stripped stdout, or None if git failed (GuardError instead when CHECK). Paths that are not UTF-8 pass
+    through as surrogate escapes, so they never crash a decode and go back to git unchanged."""
+    done = subprocess.run(("git",) + GIT_SETTINGS + args, capture_output=True, text=True, errors="surrogateescape")
     if check and done.returncode != 0:
         raise GuardError("git %s failed: %s" % (" ".join(args), done.stderr.strip()))
     return done.stdout.strip() if done.returncode == 0 else None
@@ -105,7 +113,7 @@ def parse_config(text):
     match = re.search(r"^```review-slices[ \t]*\r?\n(.*?)^```", text, re.S | re.M)
     if not match:
         raise GuardError("REVIEW.md has no ```review-slices block")
-    config = {"tests": [], "base": "main", "default": "simple", "globs": [], "errors": [], "warnings": []}
+    config = {"tests": [], "base": None, "default": "simple", "globs": [], "errors": [], "warnings": []}
     seen = set()
     for number, raw in enumerate(match.group(1).splitlines(), 1):
         line = COMMENT.sub("", raw).strip()
@@ -136,7 +144,7 @@ def parse_config(text):
 def unreadable_rules(reason):
     """Rules for a REVIEW.md that does not parse: every path is critical and a stamp is required, but nothing is
     refused outright, so the push that fixes the file can still go after a critical review."""
-    return {"tests": ["?"], "base": "main", "default": "critical", "globs": [("critical", "*")], "errors": [reason],
+    return {"tests": ["?"], "base": None, "default": "critical", "globs": [("critical", "*")], "errors": [reason],
             "warnings": [], "unreadable": reason}
 
 
@@ -145,14 +153,14 @@ def read_config(root):
     path = os.path.join(root, "REVIEW.md")
     if not os.path.exists(path):
         raise GuardError("REVIEW.md not found at the repo root")
-    with open(path, encoding="utf-8") as handle:
+    with open(path, encoding="utf-8", errors="replace") as handle:
         return parse_config(handle.read())
 
 
 def working_config(root):
     """The working copy's rules, or None if it has no REVIEW.md with a review-slices block."""
     path = os.path.join(root, "REVIEW.md")
-    with open(path, encoding="utf-8") if os.path.exists(path) else open(os.devnull) as handle:
+    with open(path, encoding="utf-8", errors="replace") if os.path.exists(path) else open(os.devnull) as handle:
         text = handle.read()
     return parse_config(text) if re.search(r"^```review-slices", text, re.M) else None
 
@@ -233,15 +241,32 @@ def merge_paths_by_side(commit, parents):
     if not base:
         return changed_paths(parents[0], commit)  # unrelated histories: all the merge brought in
     sides = [set(changed_paths(base, parent)) for parent in parents]
-    counted = set(split_nul(git("diff-tree", "--cc", "--no-commit-id", *DIFF_PATHS, commit)))
+    counted, suspects = set(), set(split_nul(git("diff-tree", "--cc", "--no-commit-id", *DIFF_PATHS, commit)))
     for index, (parent, side) in enumerate(zip(parents, sides)):
         others = set().union(*(other for position, other in enumerate(sides) if position != index))
         alone = sorted(side - others)
         if alone:
             counted = counted | set(split_nul(git("--literal-pathspecs", "diff", *DIFF_PATHS, parent, commit, "--",
                                                   *alone)))
-        counted = counted | (side & others)
-    return sorted(counted)
+        suspects = suspects | (side & others)
+    if len(parents) == 2:  # differing from every parent is what a clean merge of both sides' edits looks like too
+        suspects = {path for path in suspects if not auto_merges_to(commit, base, parents, path)}
+    return sorted(counted | suspects)
+
+
+def auto_merges_to(commit, base, parents, path):
+    """True if git's own three-way merge of PATH from BASE and the two PARENTS, clean, gives what COMMIT has."""
+    blobs = [git_raw("show", "%s:%s" % (rev, path)) for rev in (parents[0], base, parents[1], commit)]
+    if None in blobs:
+        return False  # added or deleted on a side: look at it
+    with tempfile.TemporaryDirectory() as tmp:
+        names = [os.path.join(tmp, name) for name in ("ours", "base", "theirs")]
+        for name, blob in zip(names, blobs):
+            with open(name, "w", encoding="utf-8", errors="surrogateescape") as handle:
+                handle.write(blob)
+        done = subprocess.run(("git", "merge-file", "-p", "-q") + tuple(names), capture_output=True, text=True,
+                              errors="surrogateescape")
+    return done.returncode == 0 and done.stdout == blobs[3]
 
 
 def base_tip():
@@ -293,7 +318,7 @@ def lint(config):
         matcher = re.compile(fnmatch.translate(pattern))
         if not any(matcher.match(path) for path in tracked):
             warnings.append("%s: %s matches no tracked file" % (level, pattern))
-    if not base_resolves(config["base"]):
+    if config["base"] and not base_resolves(config["base"]):
         errors.append("base: %s is neither a local branch nor a remote-tracking branch" % config["base"])
     if not config["tests"]:
         warnings.append("no test line, so pushes need no pass stamp")
@@ -303,14 +328,17 @@ def lint(config):
 def hook_wiring():
     """How this clone's pre-push reaches the guard, or None if it does not. A config hook runs only for git 2.54+,
     so it is named as such: an older git pushing from this clone runs nothing."""
-    if git_version() >= (2, 54) and "review-slices" in (git("hook", "list", "pre-push", check=False) or "").split():
+    bootstrap = os.path.join(git("rev-parse", "--path-format=absolute", "--git-common-dir"), "review-slices",
+                             "bootstrap.py")
+    if (git_version() >= (2, 54) and "review-slices" in (git("hook", "list", "pre-push", check=False) or "").split()
+            and bootstrap in (git("config", "--get", "hook.review-slices.command", check=False) or "")):
         return "config hook review-slices (only git 2.54+ runs it)"
     hook = git("rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push")
     for path in (hook, hook + ".legacy"):
         if os.access(path, os.X_OK):
             with open(path, encoding="utf-8", errors="replace") as handle:
                 text = handle.read()
-            if "review-slices/bootstrap.py" in text:
+            if bootstrap in text:
                 return "hook file " + path
             if "review_slices.py" in text:
                 return "hook file %s (0.1.0's: it runs the checkout's guard; run setup_tools.py install)" % path
@@ -319,7 +347,7 @@ def hook_wiring():
 
 def base_mismatch(config, tip_name):
     """A warning when the base branch the hook uses is not the one REVIEW.md names, or None."""
-    if config is None or tip_name.split("/", 1)[-1] == config["base"]:
+    if config is None or not config["base"] or tip_name.split("/", 1)[-1] == config["base"]:
         return None
     return ("the hook measures from %s, but REVIEW.md's base is %s; run setup_tools.py install, or fix REVIEW.md"
             % (tip_name, config["base"]))
@@ -356,7 +384,17 @@ def stamps():
     return {pair[0]: (pair[1].strip() if len(pair) > 1 else "") for pair in pairs}
 
 
-def write_stamp(tree, seconds):
+def carried_stamp(config, tree, stamped, tries=10):
+    """A stamped tree that TREE differs from only in trivial paths, or None. Trivial paths are ones no check reads,
+    so the suite's pass on that tree still holds; only the newest TRIES stamps are compared."""
+    for other in list(stamped)[::-1][:tries]:
+        differ = split_nul(git("diff-tree", "-r", *DIFF_PATHS, other, tree, check=False))
+        if differ and range_level(config, differ)[0] == "trivial":
+            return other
+    return None
+
+
+def write_stamp(tree, seconds, times=()):
     path = stamp_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
     try:
@@ -366,7 +404,8 @@ def write_stamp(tree, seconds):
         lines = []
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     with open(path, "w", encoding="utf-8") as handle:
-        handle.write("\n".join((lines + ["%s %s %.0fs" % (tree, now, seconds)])[-STAMP_KEEP:]) + "\n")
+        line = "%s %s %.0fs %s" % (tree, now, seconds, ",".join("%.0fs" % taken for taken in times))
+        handle.write("\n".join((lines + [line.rstrip()])[-STAMP_KEEP:]) + "\n")
 
 
 def handoff(command, args, data=None, judge=None):
@@ -423,11 +462,18 @@ def last_trailer(commits):
     return next((commit for commit in reversed(commits) if trailer_level(commit)), None)
 
 
+def listed(paths, limit=5):
+    return ", ".join(paths[:limit]) + (" and %d more" % (len(paths) - limit) if len(paths) > limit else "")
+
+
 def next_step(config, level, start, commits, uncommitted, tips):
     if uncommitted:
-        return ("commit this work locally (no trailer yet), then run status again. Uncommitted: %s%s. If any of "
-                "these are not this work's, ask the user; never commit, stash or revert someone else's edits"
-                % (", ".join(uncommitted[:5]), " and %d more" % (len(uncommitted) - 5) if len(uncommitted) > 5 else ""))
+        edited = sorted(set(changed_paths("HEAD")))
+        new = [path for path in uncommitted if path not in edited]
+        return ("commit this work locally (no trailer yet), then run status again. %s%s Commit only what this work "
+                "changed; if a file is not this work's, ask the user, and never commit, stash or revert someone "
+                "else's edits. Files a tool wrote (build output, caches) belong in .gitignore: ask the user"
+                % ("Edited: %s. " % listed(edited) if edited else "", "New: %s." % listed(new) if new else ""))
     if level != "trivial":
         return ("review at %s: %s, on `git diff %s..HEAD`; then add the trailer to the last commit with "
                 "`git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer \"Review: %s %s\"`"
@@ -435,19 +481,19 @@ def next_step(config, level, start, commits, uncommitted, tips):
     problems = review_problems(config, commits, tips)
     if problems:
         return "fix the trailers: " + problems[0]
-    if config["tests"] and commits and git("rev-parse", "HEAD^{tree}") not in stamps():
+    tree, stamped = git("rev-parse", "HEAD^{tree}"), stamps()
+    if config["tests"] and commits and tree not in stamped and not carried_stamp(config, tree, stamped):
         return "run the suite: python3 %s run-suite" % GUARD_PATH
     return "ask the user's go-ahead, then push" if commits else "nothing to push"
 
 
 def status_tips(args):
-    """The commits a push from here would be measured against: BASE if given, else the base branch and this
-    branch's push or upstream target."""
+    """The commits a push from here would be measured against, as pre-push measures them: BASE if given, else the
+    base branch and this branch's push target. An upstream that is someone else's branch is not trusted."""
     if args:
         return (git("rev-parse", "--verify", args[0] + "^{commit}"),)
-    found = [git("rev-parse", "--verify", "--quiet", ref + "^{commit}", check=False)
-             for ref in ("@{push}", "@{upstream}")]
-    return tuple(tip for tip in [base_tip()[1]] + found if tip)
+    push = git("rev-parse", "--verify", "--quiet", "@{push}^{commit}", check=False)
+    return tuple(tip for tip in (base_tip()[1], push) if tip)
 
 
 def open_unit(commits, tips):
@@ -469,7 +515,8 @@ def cmd_status(args):
     standing = standing_commit("HEAD", tips)
     config = (standing and rules_at(standing)) or working
     if config is None:
-        raise GuardError("no REVIEW.md here or where this branch left %s" % tip_name)
+        raise GuardError("no REVIEW.md with a review-slices block here or where this branch left %s; to set one "
+                         "up, follow the skill's \"Set up a repo\"" % tip_name)
     commits = new_commits("HEAD", tips)
     start, paths = open_unit(commits, tips)
     level, rows = range_level(config, paths)
@@ -523,14 +570,15 @@ def cmd_run_suite(_args):
     if untracked:
         print("note: the stamp includes these untracked files; commit them all, or run again without them:\n  "
               + "\n  ".join(untracked[:10]), file=sys.stderr)
-    before, started = worktree_tree(root), time.monotonic()
+    before, started, times = worktree_tree(root), time.monotonic(), []
     for number, command in enumerate(config["tests"], 1):
         print("run-suite: [%d/%d] %s" % (number, len(config["tests"]), command), flush=True)
         began = time.monotonic()
         code = subprocess.run(command, shell=True, cwd=root).returncode
+        times = times + [time.monotonic() - began]
+        print("run-suite: [%d/%d] exit %d after %.0fs" % (number, len(config["tests"]), code, times[-1]), flush=True)
         if code != 0:
-            print("run-suite: check %d failed (exit %d after %.0fs); no stamp written"
-                  % (number, code, time.monotonic() - began), file=sys.stderr)
+            print("run-suite: check %d failed; no stamp written" % number, file=sys.stderr)
             return code
     after = worktree_tree(root)
     if before != after:
@@ -539,7 +587,7 @@ def cmd_run_suite(_args):
               "again:\n  " + "\n  ".join(moved[:10]), file=sys.stderr)
         return 1
     seconds = time.monotonic() - started
-    write_stamp(before, seconds)
+    write_stamp(before, seconds, times)
     head = git("rev-parse", "--verify", "--quiet", "HEAD^{tree}", check=False)
     if head and head != before:
         differ = split_nul(git("diff-tree", "-r", "-z", "--name-only", head, before))
@@ -610,7 +658,7 @@ def standing_rules(local_sha, tips):
         return config, None, []
     config = rules_at(local_sha)
     if config is not None:
-        return config, None, ["REVIEW.md is new in this push, so its own rules judge it"]
+        return config, None, ["the review rules are new in this push, so they judge it"]
     deleted = git("log", "-1", "--format=%h", "--no-renames", "--diff-filter=D", local_sha, "--", "REVIEW.md",
                   check=False)
     if deleted:
@@ -634,8 +682,11 @@ def check_ref(local_sha, remote_sha, stamped):
     if problem or config is None:
         return [problem] if problem else [], notes
     notes = notes + [note for note in (config.get("unreadable"), suite_change(config, rules_at(local_sha))) if note]
-    problems = []
-    if config["tests"] and git("rev-parse", local_sha + "^{tree}") not in stamped:
+    problems, tree = [], git("rev-parse", local_sha + "^{tree}")
+    carried = config["tests"] and tree not in stamped and carried_stamp(config, tree, stamped)
+    if carried:
+        notes = notes + ["the pass stamp of %s carries over: only trivial paths differ" % carried[:12]]
+    elif config["tests"] and tree not in stamped:
         problems.append("no pass stamp for %s: run `python3 %s run-suite` on this commit (the full suite, once), "
                         "then push" % (local_sha[:12], GUARD_PATH))
     return problems + review_problems(config, commits, tips), notes
@@ -693,6 +744,7 @@ COMMANDS = {"status": cmd_status, "level": cmd_status, "check": cmd_check, "run-
 
 
 def main(argv):
+    sys.stdout.reconfigure(errors="backslashreplace")  # paths that are not UTF-8 print escaped, never crash
     if argv[1:] == ["--version"]:
         print(VERSION)
         return 0
@@ -712,7 +764,7 @@ def main(argv):
             if code is not None:
                 return code
         return COMMANDS[command](args)
-    except GuardError as error:
+    except (GuardError, OSError, UnicodeError) as error:
         print("review-slices: %s" % error, file=sys.stderr)
         if command == "pre-push":
             print(OVERRIDE, file=sys.stderr)

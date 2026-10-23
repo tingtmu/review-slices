@@ -7,6 +7,8 @@ are known; reviewers and the user cover them.
 - The trailer's base SHA is informational; rebases change it and the guard does not check it.
 - The pass stamp covers the tree `git add -A` would commit; committing only some of the files means running the
   suite again.
+- A pass stamp carries over to a tree that differs from a stamped one only in trivial paths, since trivial
+  means no check reads them. A trivial glob that covers a file some check does read is a hole.
 - The pass stamp is a plain file under `.git/review-slices/`; writing to it by hand forges a pass. The bootstrap
   beside it and the hook's git config are per clone too; editing them takes the guard out of that clone.
 - Planned actions are not visible to the guard; raising the level for them is the author's and the reviewers' job.

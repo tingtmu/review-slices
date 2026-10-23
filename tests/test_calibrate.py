@@ -144,8 +144,7 @@ class CalibrateTest(unittest.TestCase):
         open(os.path.join(os.fsencode(repo.path), b"f\xff"), "w").close()
         repo.commit("odd name")
         done = calibrate(repo, "--base", "main")
-        self.assertEqual(done.returncode, 2)
-        self.assertIn("not UTF-8", done.stderr)
+        self.assertIn(done.returncode, (0, 1), done.stderr)  # the guard reads such paths since 0.6.0
         self.assertNotIn("Traceback", done.stderr)
 
     def test_a_missing_base_is_named(self):

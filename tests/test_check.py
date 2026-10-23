@@ -1,4 +1,5 @@
 """`check` lints the working copy's rules against this repo; `--version` names the guard's version."""
+import os
 import unittest
 
 from support import RULES, Repo, load_guard, review_md
@@ -39,6 +40,14 @@ class CheckTest(unittest.TestCase):
         repo = Repo(self)
         repo.write("REVIEW.md", review_md(RULES + "critical: core/*, deploy/*\n"))
         self.assertIn("one glob per line", repo.guard("level").stdout)
+
+    def test_a_review_md_that_is_not_utf8_gives_no_traceback(self):
+        repo = Repo(self)
+        with open(os.path.join(repo.path, "REVIEW.md"), "ab") as handle:
+            handle.write(b"\n\xff\xfe stray bytes\n")
+        done = repo.guard("check")
+        self.assertNotIn("Traceback", done.stderr)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
 
     def test_version(self):
         repo = Repo(self)

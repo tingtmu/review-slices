@@ -2,7 +2,9 @@
 
 The vocabulary for checking an agent's work before it counts as done, and for learning from what got through
 anyway. It describes how a repo is developed, not what the repo builds. A repo's own glossary may reuse one of
-these words for something else only if it says so.
+these words for something else only if it says so. The _Avoid_ words are other names for these concepts; in
+their everyday senses (to stage a file, a pull request template, the ref a push targets) they are fine, and the
+skill's description quotes the words users say.
 
 ## Defences
 

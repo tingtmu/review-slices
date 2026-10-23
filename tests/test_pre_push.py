@@ -191,6 +191,40 @@ class PrePushTest(unittest.TestCase):
         self.suite()
         self.assert_pushed(repo.try_push("fork", "feature"))
 
+    def test_a_stamp_carries_over_to_a_change_of_trivial_paths_only(self):
+        repo = self.repo
+        repo.write("core/a.py")
+        repo.commit("reviewed", trailer=repo.trailer("critical"))
+        self.suite()
+        repo.write("notes/n.md")
+        repo.commit("notes only, no new suite run")
+        done = repo.try_push()
+        self.assert_pushed(done)
+        self.assertIn("carries over", done.stderr)
+
+    def test_a_stamp_does_not_carry_over_to_a_change_a_check_could_read(self):
+        repo = self.repo
+        repo.write("core/a.py")
+        repo.commit("reviewed", trailer=repo.trailer("critical"))
+        self.suite()
+        repo.write("src/b.py")
+        repo.commit("code, reviewed", trailer=repo.trailer("simple"))
+        self.assert_refused(repo.try_push(), "run-suite")
+
+    def test_a_path_that_is_not_utf8_gives_no_traceback(self):
+        repo = self.repo
+        os.makedirs(os.path.join(repo.path, "core"), exist_ok=True)
+        with open(os.path.join(os.fsencode(repo.path), b"core", b"caf\xe9.py"), "w") as handle:
+            handle.write("x\n")
+        repo.commit("a Latin-1 file name")
+        self.suite()
+        done = repo.try_push()
+        self.assertNotIn("Traceback", done.stderr)
+        self.assert_refused(done, "critical")
+        status = repo.guard("status")
+        self.assertEqual(status.returncode, 0, status.stderr)
+        self.assertIn("core/caf", status.stdout)
+
     def test_a_tag_push_is_checked(self):  # H6
         repo = self.repo
         repo.write("core/a.py")

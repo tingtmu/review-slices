@@ -12,8 +12,8 @@ each failure class from getting through again. Terms: the skill's
 ## I1. The guard trusts input the change controls
 
 - **Date / kind / status:** 2026-10-23 · defect · plugged
-- **What happened:** In 0.1.0, a commit could swap the base's failing suite for `test: true`, stamp and push
-  without a word (H1), and an edited guard copy judged its own push (H10).
+- **What happened:** In 0.1.0, a commit could swap the base's failing `test:` line for `test: true`, stamp and
+  push without a word (H1), and an edited guard copy judged its own push (H10).
 - **Slice that should have caught it:** 2 Review. Why it did not: 0.1.0 was released without a review or tests
   of the guard.
 - **Failure class:** the guard trusts input the change itself controls
@@ -32,7 +32,7 @@ each failure class from getting through again. Terms: the skill's
 - **Date / kind / status:** 2026-10-23 · defect · plugged
 - **What happened:** In 0.1.0, comma-separated globs matched nothing (H3), a `#` cut a test command (H4), tag
   pushes went unchecked (H6), a hook chained before the guard could drain its input (H5), a deleted REVIEW.md
-  switched the guard off (H7), `diff.relative` and `log.showSignature` hid paths and trailers (H9), a duplicate
+  switched the guard off (H7), `diff.relative` and `log.showSignature` hid paths and trailers (H9), a second
   `test:` line won silently (H13) and an ignored submodule update was invisible (H14).
 - **Slice that should have caught it:** 1 Offline suite. Why it did not: the guard had no tests.
 - **Failure class:** the guard fails open on input it did not expect

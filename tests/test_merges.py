@@ -65,6 +65,16 @@ class MergePathsTest(unittest.TestCase):
         head, parents = self.merge("other", keep="core/a.py")
         self.assertEqual(self.guard.merge_paths_by_side(head, parents), ["core/a.py"])
 
+    def test_a_clean_merge_of_one_file_both_sides_edited_counts_nothing(self):
+        self.repo.write("core/a.py", "one\n1\n2\n3\n4\ntwo\n")
+        self.repo.commit("base")
+        self.branch("other", "core/a.py", "one\n1\n2\n3\n4\nTWO\n")
+        self.repo.git("switch", "-q", "main")
+        self.repo.write("core/a.py", "ONE\n1\n2\n3\n4\ntwo\n")
+        self.repo.commit("main's edit")
+        head, parents = self.merge("other")
+        self.assertEqual(self.guard.merge_paths_by_side(head, parents), [])
+
     def test_a_clean_merge_of_separate_files_counts_nothing(self):
         self.branch("other", "src/x.py")
         self.repo.git("switch", "-q", "main")

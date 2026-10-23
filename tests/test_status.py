@@ -89,6 +89,27 @@ class StatusTest(unittest.TestCase):
         self.assertIn("guard: ", out)
         self.assertIn("REVIEW.md's base is main", out)
 
+    def test_an_upstream_that_is_someone_else_s_branch_is_not_trusted(self):
+        repo = self.repo
+        repo.git("switch", "-q", "-c", "teammate")
+        repo.write("core/t.py")
+        repo.commit("a teammate's unreviewed change")
+        repo.git("push", "-q", "--no-verify", "origin", "teammate")
+        repo.git("fetch", "-q")
+        repo.git("switch", "-q", "-c", "mine", "--track", "origin/teammate")
+        repo.write("notes/n.md")
+        repo.commit("notes")
+        self.assertIn("level: critical", self.status())
+
+    def test_edits_and_new_files_are_named_apart(self):
+        repo = self.repo
+        repo.write("README.md", "edited\n")
+        repo.write("build/out.o", "binary\n")
+        step = self.next_step()
+        self.assertIn("Edited: README.md", step)
+        self.assertIn("New: build/out.o", step)
+        self.assertIn(".gitignore", step)
+
     def test_an_unwired_clone_is_named(self):
         repo = Repo(self)
         self.assertIn("NOT WIRED", repo.guard("status").stdout)

@@ -17,6 +17,13 @@ class RunSuiteTest(unittest.TestCase):
         with open(self.stamp_file(repo), encoding="utf-8") as handle:
             self.assertIn(tree, handle.read())
 
+    def test_each_check_reports_its_exit_code_and_time(self):
+        repo = Repo(self, rules=RULES.replace("test: true", "test: true\ntest: true"))
+        done = repo.run_suite()
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("[1/2] exit 0 after", done.stdout)
+        self.assertIn("[2/2] exit 0 after", done.stdout)
+
     def test_a_failure_writes_no_stamp(self):
         repo = Repo(self, rules=RULES.replace("test: true", "test: false"))
         self.assertNotEqual(repo.run_suite().returncode, 0)

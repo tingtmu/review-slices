@@ -111,6 +111,30 @@ class InstallTest(unittest.TestCase):
         self.unreviewed_critical_change()
         self.assertNotEqual(repo.try_push().returncode, 0)
 
+    def test_installed_copies_are_executable(self):
+        repo = Repo(self, guard=False)
+        self.assertEqual(repo.setup("install", "--apply", "--agent-hooks").returncode, 0)
+        for name in ("review_slices.py", "agent_hook.py"):
+            self.assertTrue(os.access(os.path.join(repo.path, ".githooks", name), os.X_OK), name)
+
+    def test_a_hook_that_runs_another_clone_s_bootstrap_is_not_wired(self):
+        repo = self.repo
+        self.assertEqual(repo.setup("install", "--apply").returncode, 0)
+        path = os.path.join(self.hooks, "pre-push")
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        common = repo.out("rev-parse", "--path-format=absolute", "--git-common-dir")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text.replace(common, "/elsewhere/clone/.git"))
+        self.assertIn("NOT WIRED", repo.guard("status").stdout)
+        self.assertEqual(repo.setup("doctor").returncode, 1)
+
+    def test_doctor_says_what_is_not_committed_yet(self):
+        repo = Repo(self, rules=None, guard=False)
+        repo.write("REVIEW.md", "```review-slices\ntest: true\n```\n")
+        repo.setup("install", "--apply")
+        self.assertIn("uncommitted", repo.setup("doctor").stdout)
+
     def test_install_twice_changes_nothing_the_second_time(self):
         self.assertEqual(self.repo.setup("install", "--apply").returncode, 0)
         self.assertIn("nothing to change", self.repo.setup("install").stdout)
@@ -139,14 +163,24 @@ class BootstrapTest(unittest.TestCase):
         repo.git("push", "-q", "--no-verify", "origin", "main")
         return source
 
-    def test_a_base_branch_that_lost_its_guard_refuses_a_checkout_without_one(self):
+    def test_a_base_branch_that_lost_its_guard_is_judged_by_its_last_guard(self):
         repo = self.repo
         self.lose_the_guard_on_main()
-        repo.write("notes/n.md")
-        repo.commit("notes")
+        repo.write("core/a.py")
+        repo.commit("unreviewed")
+        self.assertEqual(repo.run_suite().returncode, 0)
         done = repo.try_push()
         self.assertNotEqual(done.returncode, 0)
-        self.assertIn("neither the base branch nor this checkout", done.stderr)
+        self.assertIn("the last guard it had runs", done.stderr)
+
+    def test_an_edited_checkout_guard_does_not_judge_after_the_base_lost_its_own(self):
+        repo = self.repo
+        source = self.lose_the_guard_on_main()
+        repo.write(".githooks/review_slices.py", source.replace("def main(argv):\n", "def main(argv):\n    return 0\n", 1))
+        repo.write("core/a.py")
+        repo.commit("a friendlier guard and an unreviewed change")
+        self.assertEqual(repo.run_suite().returncode, 0)
+        self.assertNotEqual(repo.try_push().returncode, 0)
 
     def test_the_push_that_restores_a_lost_guard_goes_through(self):
         repo = self.repo
@@ -156,7 +190,18 @@ class BootstrapTest(unittest.TestCase):
         self.assertEqual(repo.run_suite().returncode, 0)
         done = repo.try_push()
         self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertIn("restore the guard there", done.stderr)
+        self.assertIn("restore it there", done.stderr)
+
+    def test_a_repo_on_master_needs_no_base_line(self):
+        repo = Repo(self, rules=None, guard=False)
+        repo.git("branch", "-m", "main", "master")
+        repo.git("push", "-q", "origin", "master")
+        repo.git("remote", "set-head", "origin", "master")
+        repo.write("REVIEW.md", "```review-slices\ntest: true\ncritical: README.md\n```\n")
+        self.assertEqual(repo.guard("check").returncode, 0, repo.guard("check").stdout)
+        done = repo.setup("install", "--apply")
+        self.assertEqual(done.returncode, 0, done.stdout)
+        self.assertEqual(repo.out("config", "--get", "review-slices.base"), "origin/master")
 
     def test_an_unrelated_review_md_on_main_is_not_adoption(self):
         repo = Repo(self, rules=None, guard=False)

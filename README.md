@@ -46,7 +46,8 @@ to the guard reaches every clone by push. Only clones that run `install` are che
 Before writing REVIEW.md, `discover.py` lists the checks the repo already has (CI files, package scripts, Makefile
 and more), marked local or remote, and `--run` tries the local ones on a clean tree. `calibrate.py` shows how a draft
 level table would have judged the base branch's last 50 commits. `incidents.py [--check]` reports
-docs/INCIDENTS.md and checks that every plug still exists. All three stay in the skill's `scripts/`.
+docs/INCIDENTS.md and checks that every plug still exists. All three run from the skill's `scripts/`;
+`incidents.py` can also be copied into `.githooks/` to run in a repo's suite, and `upgrade` keeps it current.
 
 `install --agent-hooks` also adds a PreToolUse hook for Claude Code (`.claude/settings.json`) and Codex
 (`.codex/hooks.json`, once its hooks feature is on; unverified against a live Codex session) that refuses an
@@ -59,6 +60,8 @@ The guard needs Python 3.8+ and git 2.32+, and nothing else.
 ## Versions
 
 `0.1.0`: first release, 2026-10-23.
+
+`0.1.1` to `0.5.0` were milestones on the way to `0.6.0`, the release after `0.1.0`; none was released alone.
 
 `0.1.1`: tests for the guard (with the known 0.1.0 holes as expected failures), this repo reviewed with its
 own skill, and setup that no longer sets `core.hooksPath` over existing hooks.
@@ -74,7 +77,7 @@ Spec reviewer briefs.
 branches and tags, are checked; `run-suite` says when the stamped tree is not HEAD's; git 2.32+.
 
 `0.4.0`: a push is judged by its new commits only (those neither the target ref nor the base branch has), so
-merging main no longer asks for main to be reviewed, and a merge counts only where it differs from git's own merge
+merging the base branch no longer asks for its commits to be reviewed, and a merge counts only where it differs from git's own merge
 (`--remerge-diff`). `ci BASE HEAD` for pull requests, with a workflow template. An agent hook for Claude Code and
 Codex. `install` writes a hook file by default, since a config hook is invisible to older git. The last `Review:`
 trailer counts, and the printed amend command replaces an earlier one.
