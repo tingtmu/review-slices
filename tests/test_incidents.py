@@ -107,12 +107,19 @@ class ParseTest(unittest.TestCase):
         self.assertEqual((len(found), skipped), (1, 0))
 
     def test_a_heading_that_is_almost_an_incident_is_a_problem(self):
-        for heading in ("### I1.", "## i1."):
+        for heading in ("### I1.", "## i1.", "## Incident 1."):
             _found, problems, _notes, _skipped = incidents.parse_log(entry(1).replace("## I1.", heading))
             self.assertIn("looks like an incident heading", problems[0], heading)
 
+    def test_headings_inside_a_code_fence_are_not_read(self):
+        found, problems, _notes, _skipped = incidents.parse_log("```\n## i1. example\n## I2. example\n```\n" + entry(3))
+        self.assertEqual(([incident.id for incident in found], problems), (["I3"], []))
+
+    def test_a_comma_inside_test_parameters_does_not_split_the_item(self):
+        self.assertEqual(incidents.parse_plug("test a.py::test_top[1,2], guard b")[1], [])
+
     def test_no_or_a_dash_is_no_recurrence(self):
-        for text in ("none", "No", "n/a", "-", ""):
+        for text in ("none", "No", "n/a", "Not yet", "-", ""):
             self.assertFalse(incidents.has_recurrences(incidents.parse_log(entry(1, recurrences=text))[0][0]), text)
 
     def test_wrapped_bullets_are_joined(self):
@@ -202,6 +209,37 @@ class ReportTest(unittest.TestCase):
             repo.write("docs/INCIDENTS.md", entry(1, status="plugged", plug="test tests/test_b.py::" + name))
             done = repo.run("--check")
             self.assertEqual(done.returncode, code, name + "\n" + done.stdout)
+
+    def test_every_way_a_test_never_fails_is_found(self):
+        cases = {
+            "redefined": "def test_x():\n    pass\n\n\n@pytest.mark.skip\ndef test_x():\n    pass\n",
+            "skipped base": "@unittest.skip('x')\nclass A(unittest.TestCase):\n    pass\n\n\nclass B(A):\n"
+                            "    def test_x(self):\n        pass\n",
+            "pytestmark": "pytestmark = [pytest.mark.skip]\n\n\ndef test_x():\n    pass\n",
+            "skipIf True": "@unittest.skipIf(True, 'until fixed')\ndef test_x():\n    pass\n",
+            "skipTest": "class B(unittest.TestCase):\n    def test_x(self):\n        self.skipTest('later')\n",
+        }
+        repo = LogRepo(self, entry(1, status="plugged", plug="test tests/test_b.py::test_x"))
+        for case, body in cases.items():
+            repo.write("tests/test_b.py", "import unittest\nimport pytest\n\n\n" + body)
+            done = repo.run("--check")
+            self.assertEqual(done.returncode, 1, case + "\n" + done.stdout)
+            self.assertIn("so it passes while the defect is back", done.stdout, case)
+
+    def test_a_half_filled_template_entry_is_still_checked(self):
+        text = entry(1, status="plugged", plug="test tests/test_a.py::test_gone")
+        done = LogRepo(self, text.replace("defect", "<defect or process>")).run("--check")
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertIn("test_gone", done.stdout)
+
+    def test_a_guard_linked_outside_the_repo_does_not_count(self):
+        repo = LogRepo(self, entry(1, status="plugged", plug="guard g"))
+        outside = tempfile.NamedTemporaryFile(prefix="review-slices-outside-")
+        self.addCleanup(outside.close)
+        os.symlink(outside.name, os.path.join(repo.path, "g"))
+        done = repo.run("--check")
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertIn("is a link to a file outside the repo", done.stdout)
 
     def test_a_rule_line_with_backticks_is_found(self):
         repo = LogRepo(self, entry(1, status="plugged", plug='rule REVIEW.md "a `#` cut a test command"'))

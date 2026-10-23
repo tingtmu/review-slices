@@ -1,27 +1,20 @@
 #!/usr/bin/env python3
 """review-slices incident log report: open incidents, counts per slice, recurrences, and whether each plug exists.
 
-    incidents.py [--path docs/INCIDENTS.md] [--check]
+    incidents.py [--path docs/INCIDENTS.md] [--check]   run inside the target repo; --check exits 1 on a problem
 
-Run it inside the target repo. It reads the incident log in the format of the skill's templates/INCIDENTS.md: one
-`## I<n>. <title>` heading per incident, then `- **<label>:** <value>` bullets. It prints the open incidents with
-their age and plug, how many incidents each slice should have caught, and the incidents with recurrences (each one
-means a weak plug).
+The log is in the format of the skill's templates/INCIDENTS.md: `## I<n>. <title>` headings, then `- **<label>:**`
+bullets; entries whose date is still the template's `<...>` are skipped. For a `plugged` incident, each plug item
+(separated by commas, semicolons, "and" or "or"; a trailing parenthetical is ignored) must exist:
 
-For a `plugged` incident it checks that each plug item (separated by commas, semicolons, "and" or "or") exists:
-
-    test <path>::<function>          the file defines that function, or a method of that name in any class, and
-    test <path>::<Class>::<method>   (or <path>::<Class>.<method>) neither it nor its class is marked
-                                     expectedFailure, skip or xfail
+    test <path>::<function>          the file defines it as a function or as a method of any class; with
+    test <path>::<Class>::<method>   <path>::<Class>.<method>, that class defines it. Neither may be marked to never
+                                     fail (expectedFailure, skip, xfail, skipTest, an always-true skipIf)
     guard <path>                     the file exists
-    rule REVIEW.md "<line>"          that text appears in REVIEW.md (backticks and whitespace runs are ignored)
+    rule REVIEW.md "<line>"          REVIEW.md holds that text (backticks and whitespace runs are ignored)
 
-Paths are relative to the repo root and must stay inside it. A parenthetical after an item, such as "(expected
-failures until fixed)", is ignored; any other text makes the item one it does not understand, which is a problem
-for a plugged incident. A missing plug is a problem: the hole is open again. An open incident older than 30 days
-is a note. --check exits 1 on any problem, so a repo can put it in its suite; without it the report exits 0.
-Entries whose date line still holds the template's `<...>` placeholders are skipped.
-Standard library only, Python 3.8+.
+Paths are relative to the repo root and stay inside it. A missing plug is a problem: the hole is open again. An
+open incident older than 30 days is a note. Standard library only, Python 3.8+.
 """
 import argparse
 import ast
@@ -42,7 +35,8 @@ STATUSES = ("open", "plugged")
 KINDS = ("defect", "process")
 REOPEN = "the hole is open again; reopen the incident"
 HEADING = re.compile(r"^##\s+(I\d+)\b\.?\s*(.*?)\s*$")
-NEAR_HEADING = re.compile(r"^#{1,6}\s*I\d+\b", re.I)
+NEAR_HEADING = re.compile(r"^#{1,6}\s*(?:I|incident\s*)\d+\b", re.I)
+FENCE = re.compile(r"^\s*(```|~~~)")
 OTHER_HEADING = re.compile(r"^#{1,6}\s")
 BULLET = re.compile(r"^[-*]\s+\*\*([^*]+?)\s*:?\s*\*\*\s*:?\s*(.*)$")
 NESTED_BULLET = re.compile(r"^\s+[-*]\s+")
@@ -57,9 +51,10 @@ AFTER_ITEM = re.compile(r"^\s*(\([^()]*\))?\s*\.?\s*$")
 # A separator between plug items, outside quotes and parentheses.
 SEPARATOR = re.compile(r",|;|\s+and\s+|\s+or\s+")
 NO_PLUG = re.compile(r"^(none|not yet)\b", re.I)
-NO_RECURRENCE = re.compile(r"^(none|no|n/a)\b|^[-—\s]*$", re.I)
-# Decorators that keep a test from failing while its defect is back (skipIf and skipUnless are conditional).
-NEVER_FAILS = ("expectedFailure", "skip", "xfail")
+NO_RECURRENCE = re.compile(r"^(none|no|n/a|not yet)\b|^[-—\s]*$", re.I)
+# Markers that keep a test from failing while its defect is back; skipIf and skipUnless only with a literal condition.
+NEVER_FAILS = ("expectedFailure", "skip", "xfail", "skipTest")
+CONDITIONAL = {"skipif": True, "skipunless": False}
 Incident = collections.namedtuple("Incident", "id title date kind status slice fields")
 Plug = collections.namedtuple("Plug", "kind path names text")
 
@@ -68,10 +63,20 @@ class IncidentError(Exception):
     """A problem the user can fix; printed without a traceback."""
 
 
+def unfenced(text):
+    """TEXT's lines, with lines inside fenced code blocks blanked."""
+    lines, fenced = [], False
+    for line in text.splitlines():
+        fence = bool(FENCE.match(line))
+        lines.append("" if fenced or fence else line)
+        fenced = fenced != fence
+    return lines
+
+
 def split_entries(text):
     """[(id, title, {label: value})] for each `## I<n>.` heading; wrapped bullet lines are joined with a space."""
     entries, fields, label = [], None, None
-    for line in text.splitlines():
+    for line in unfenced(text):
         heading = HEADING.match(line)
         if heading or OTHER_HEADING.match(line):
             fields, label = None, None
@@ -96,7 +101,7 @@ def split_entries(text):
 
 def near_headings(text):
     """Lines that look like an incident heading but are not `## I<n>. <title>`."""
-    return [line.strip() for line in text.splitlines() if NEAR_HEADING.match(line) and not HEADING.match(line)]
+    return [line.strip() for line in unfenced(text) if NEAR_HEADING.match(line) and not HEADING.match(line)]
 
 
 def slice_of(value):
@@ -144,7 +149,7 @@ def parse_log(text):
     if not entries:
         notes.append("no `## I<n>. <title>` heading found, so there are no incidents to report")
     for ident, title, fields in entries:
-        if PLACEHOLDER.search(fields.get("date / kind / status", "")):
+        if PLACEHOLDER.search(fields.get("date / kind / status", "").split("·")[0]):
             skipped += 1
             continue
         incident = parse_incident(ident, title, fields, problems, notes)
@@ -158,14 +163,14 @@ def parse_log(text):
 
 
 def split_items(value):
-    """VALUE split at commas, semicolons, "and" and "or" outside double quotes and parentheses."""
+    """VALUE split at commas, semicolons, "and" and "or" outside double quotes, parentheses and brackets."""
     items, start, depth, quoted, index = [], 0, 0, False, 0
     while index < len(value):
         char = value[index]
         if char in "\"“”":
             quoted = not quoted if char == '"' else char == "“"
-        elif not quoted and char in "()":
-            depth = max(0, depth + (1 if char == "(" else -1))
+        elif not quoted and char in "()[]":
+            depth = max(0, depth + (1 if char in "([" else -1))
         separator = None if quoted or depth else SEPARATOR.match(value, index)
         if separator:
             items.append(value[start:index])
@@ -202,28 +207,43 @@ def parse_plug(value):
     return plugs, unread
 
 
+def last(scope, kinds, name):
+    """The last node of KINDS named NAME in SCOPE (a later definition replaces an earlier one), or None."""
+    found = [node for node in scope if isinstance(node, kinds) and node.name == name]
+    return found[-1] if found else None
+
+
 def find_function(tree, names):
     """(function, classes around it) that NAMES points at in the module TREE: [function] is a function or a method
     of any class; [Class, ..., method] a method. (None, []) when there is none."""
     functions = (ast.FunctionDef, ast.AsyncFunctionDef)
     if len(names) == 1:
-        for node in tree.body:
-            if isinstance(node, functions) and node.name == names[0]:
-                return node, []
-        for cls in (node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)):
-            for node in cls.body:
-                if isinstance(node, functions) and node.name == names[0]:
-                    return node, [cls]
+        for scope in [tree] + [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]:
+            found = last(scope.body, functions, names[0])
+            if found:
+                return found, [] if scope is tree else [scope]
         return None, []
     scope, classes = tree.body, []
     for name in names[:-1]:
-        found = [node for node in scope if isinstance(node, ast.ClassDef) and node.name == name]
-        if not found:
+        cls = last(scope, ast.ClassDef, name)
+        if cls is None:
             return None, []
-        classes.append(found[0])
-        scope = found[0].body
-    found = [node for node in scope if isinstance(node, functions) and node.name == names[-1]]
-    return (found[0], classes) if found else (None, [])
+        classes.append(cls)
+        scope = cls.body
+    method = last(scope, functions, names[-1])
+    return (method, classes) if method else (None, [])
+
+
+def lineage(tree, classes):
+    """CLASSES and every base class of theirs that the module TREE defines."""
+    module = {node.name: node for node in tree.body if isinstance(node, ast.ClassDef)}
+    found, todo = [], list(classes)
+    while todo:
+        cls = todo.pop()
+        if cls not in found:
+            found.append(cls)
+            todo += [module[base.id] for base in cls.bases if isinstance(base, ast.Name) and base.id in module]
+    return found
 
 
 def decorator_name(node):
@@ -231,12 +251,29 @@ def decorator_name(node):
     return node.attr if isinstance(node, ast.Attribute) else getattr(node, "id", "")
 
 
-def never_fails(function, classes):
-    """The decorator on FUNCTION or its CLASSES that stops it failing (expectedFailure, skip, xfail), or None."""
-    for node in [function] + classes:
-        for decorator in node.decorator_list:
-            if decorator_name(decorator) in NEVER_FAILS:
-                return decorator_name(decorator)
+def always_skips(node):
+    """The name of NODE (a marker, or a list of them) when it always stops a test failing, else None."""
+    for item in node.elts if isinstance(node, (ast.List, ast.Tuple)) else [node]:
+        name = decorator_name(item)
+        first = item.args[0] if isinstance(item, ast.Call) and item.args else None
+        literal = isinstance(first, ast.Constant) and first.value is CONDITIONAL.get(name.lower())
+        if name in NEVER_FAILS or (name.lower() in CONDITIONAL and literal):
+            return name
+    return None
+
+
+def never_fails(tree, function, classes):
+    """The marker that stops FUNCTION failing: on it, its classes or their bases, a `pytestmark`, or a skip call in
+    its body. None when there is none."""
+    scopes = lineage(tree, classes)
+    markers = [decorator for node in [function] + scopes for decorator in node.decorator_list]
+    markers += [node.value for scope in [tree] + scopes for node in scope.body if isinstance(node, ast.Assign)
+                and any(getattr(target, "id", "") == "pytestmark" for target in node.targets)]
+    markers += [node.value for node in function.body if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
+                and decorator_name(node.value) in NEVER_FAILS]
+    for marker in markers:
+        if always_skips(marker):
+            return always_skips(marker)
     return None
 
 
@@ -262,7 +299,7 @@ def broken_test(path, plug, text):
     function, classes = find_function(tree, plug.names)
     if function is None:
         return "%s defines no %s" % (plug.path, ".".join(plug.names))
-    marker = never_fails(function, classes)
+    marker = never_fails(tree, function, classes)
     if marker:
         return "%s is marked %s, so it passes while the defect is back" % (".".join(plug.names), marker)
     return None
@@ -280,6 +317,8 @@ def plug_problem(root, plug):
     path = os.path.join(root, plug.path)
     if not os.path.isfile(path):
         return "%s does not exist" % plug.path
+    if os.path.commonpath([os.path.realpath(path), os.path.realpath(root)]) != os.path.realpath(root):
+        return "%s is a link to a file outside the repo" % plug.path
     try:
         text = read_text(path)
     except OSError as error:
@@ -336,8 +375,8 @@ def repo_root():
     try:
         done = subprocess.run(("git", "rev-parse", "--show-toplevel"), capture_output=True, text=True)
     except OSError:
-        return os.getcwd()
-    return done.stdout.strip() if done.returncode == 0 and done.stdout.strip() else os.getcwd()
+        done = None
+    return done.stdout.strip() if done and done.returncode == 0 and done.stdout.strip() else os.getcwd()
 
 
 def report(path, root, check, today=None):
