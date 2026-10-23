@@ -50,8 +50,7 @@ class LevelTest(unittest.TestCase):
         repo.commit("change")
         self.assertIn("level: critical", self.level(repo, cwd=os.path.join(repo.path, "docs")))
 
-    @unittest.expectedFailure  # H11
-    def test_level_measures_from_the_last_local_trailer(self):
+    def test_level_measures_from_the_last_local_trailer(self):  # H11
         repo = Repo(self)
         repo.write("core/a.py")
         repo.commit("reviewed", trailer=repo.trailer("critical"))

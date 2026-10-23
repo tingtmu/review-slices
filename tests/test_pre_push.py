@@ -183,7 +183,6 @@ class PrePushTest(unittest.TestCase):
         repo.commit("drop the rules", trailer=repo.trailer("critical"))
         self.assert_refused(repo.try_push(), "deletes or moves REVIEW.md")
 
-    @unittest.expectedFailure  # 0.3.0: with core.hooksPath=.githooks, a checkout without .githooks runs no hook
     def test_a_branch_from_before_adoption_is_not_checked(self):
         repo = self.repo
         repo.git("switch", "-q", "--orphan", "old")
@@ -204,15 +203,32 @@ class PrePushTest(unittest.TestCase):
         self.assert_pushed(done)
         self.assertIn("echo weaker", done.stderr)
 
-    def test_a_deleted_review_md_does_not_switch_the_guard_off(self):  # H7
+    def test_a_deletion_the_user_pushed_is_named_on_every_later_push(self):  # H7
         repo = self.repo
         repo.git("rm", "-q", "REVIEW.md")
         repo.commit("drop the rules")
         repo.git("push", "-q", "--no-verify", "origin", "main")
         repo.write("core/a.py")
         repo.commit("unreviewed")
-        repo.run_suite()
-        self.assert_refused(repo.try_push(), "REVIEW.md")
+        done = repo.try_push()
+        self.assert_pushed(done)
+        self.assertIn("NOT checked", done.stderr)
+
+    def test_broken_standing_rules_fail_closed(self):
+        repo = self.repo
+        repo.write("REVIEW.md", review_md(RULES.replace("critical:", "Critical:")))
+        repo.commit("a typo in the rules")
+        repo.git("push", "-q", "--no-verify", "origin", "main")
+        repo.write("notes/n.md")
+        repo.commit("notes, normally trivial")
+        self.assert_refused(repo.try_push(), "needs a review at level critical")
+
+    def test_a_push_to_a_review_ref_is_checked(self):
+        repo = self.repo
+        repo.write("core/a.py")
+        repo.commit("unreviewed")
+        self.suite()
+        self.assert_refused(repo.try_push("origin", "HEAD:refs/for/main"), "critical")
 
     def test_broken_rules_on_main_do_not_block_their_own_fix(self):  # H8
         repo = self.repo
@@ -243,8 +259,7 @@ class PrePushTest(unittest.TestCase):
         self.suite()
         self.assert_pushed(repo.try_push())
 
-    @unittest.expectedFailure  # H16
-    def test_an_existing_hook_keeps_running_beside_the_guard(self):
+    def test_an_existing_hook_keeps_running_beside_the_guard(self):  # H16
         repo = Repo(self)
         marker = os.path.join(repo.tmp, "lfs-ran")
         hook = repo.out("rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push")
@@ -261,8 +276,7 @@ class PrePushTest(unittest.TestCase):
         with open(marker, encoding="utf-8") as handle:
             self.assertIn("refs/heads/main", handle.read())
 
-    @unittest.expectedFailure  # H10
-    def test_an_edited_guard_does_not_judge_its_own_push(self):
+    def test_an_edited_guard_does_not_judge_its_own_push(self):  # H10
         repo = self.repo
         path = os.path.join(repo.path, ".githooks", "review_slices.py")
         with open(path, encoding="utf-8") as handle:

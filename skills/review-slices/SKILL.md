@@ -9,8 +9,10 @@ No single check is reliable. Stack independent slices so a defect ships only whe
 and plug a hole every time something gets through. Terms are defined in this skill's [GLOSSARY.md](GLOSSARY.md);
 use them exactly.
 
-Start by reading the repo's `REVIEW.md` (its rules, level table and "failure looks like" list). If the repo has
-none, go to [Set up a repo](#set-up-a-repo).
+Start by reading the repo's `REVIEW.md` (its rules, level table and "failure looks like" list) and running
+`python3 .githooks/review_slices.py status`, which says where the work stands and what to do next. If the repo has
+no REVIEW.md, go to [Set up a repo](#set-up-a-repo). If `python3 .githooks/review_slices.py --version` is older than
+this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py upgrade` can update it.
 
 ## The slices
 
@@ -27,10 +29,12 @@ none, go to [Set up a repo](#set-up-a-repo).
 1. **Work with shown output.** Never write "done", "fixed" or "passes" without the output that shows it.
 2. **Commit locally, without a trailer.** Reviewers read committed work. A local commit needs no go-ahead and is
    not a claim of done.
-3. **Compute the review level.** Run `python3 .githooks/review_slices.py level`. It prints the level, the paths
-   that set it, the trailer to write and any problem in REVIEW.md; fix an `error in REVIEW.md` first. Raise the
-   level for planned actions REVIEW.md lists (for example a live cloud action); when unsure, go one higher. A
-   raised level is the level the trailer records. Never lower it. Put its output in your report.
+3. **Run `python3 .githooks/review_slices.py status`** (`level` is the same). It prints the review level of the
+   work since the last trailer, the paths that set it, the trailer to write, the standing rules, the pass stamp,
+   whether the hook is wired, and the next step. Fix errors in REVIEW.md that your change introduced; report the
+   ones it says are in the standing rules to the user. Raise the level for planned actions REVIEW.md lists (for
+   example a live cloud action); when unsure, go one higher. A raised level is the level the trailer records.
+   Never lower it. Put its output in your report.
 4. **Review at that level** (briefs in [references/reviewer-briefs.md](references/reviewer-briefs.md)):
 
    | Level | Slice 2 |
@@ -40,7 +44,7 @@ none, go to [Set up a repo](#set-up-a-repo).
    | Important | a Standards, a Spec and an adversarial reviewer, all in parallel |
    | Critical | Important's three; then the user's go-ahead for the one-way door, given with the review findings. A [review meeting](references/review-meeting.md) only for a disputed review finding, only if the user says yes |
 
-   Reviewers read `git diff <base>..HEAD`, with `<base>` from the trailer line `level` printed. They are
+   Reviewers read `git diff <base>..HEAD`, with `<base>` from the trailer line `status` printed. They are
    read-only, have fresh context and use the strongest model available. Give them the diff command, REVIEW.md,
    the spec path and the level output. If you cannot start a fresh-context reviewer, use, in order: a CLI
    reviewer in a read-only sandbox (`claude -p`, `codex exec`), an Orca terminal, or ask the user. Never act as
@@ -54,17 +58,19 @@ none, go to [Set up a repo](#set-up-a-repo).
 6. **Converge.** One review round, then at most one second round on the new commits only
    (`git diff <old head>..HEAD`), resuming the same reviewers. Never re-raise a review finding already settled.
    Still split after that: escalate to the user.
-7. **Add the trailer** `level` printed, `Review: <level> <base-sha>`, to the last commit the review covered: amend
-   its message only (`git commit --amend` with nothing staged), or put it on the last fix commit. It goes in the
-   message's last paragraph, with any other trailer. Each trailer must cover the level of the commits since the
-   previous one; a later commit above Trivial needs its own review and trailer. The hook refuses both otherwise.
-   Never amend new content into a commit that carries a trailer: add a commit.
+7. **Add the trailer** `status` printed to the last commit the review covered, with exactly
+   `git commit --amend --only --no-edit --trailer "Review: <level> <base-sha>"`: it keeps the message and leaves
+   anything staged out. Each trailer must cover the level of the commits since the previous one; a later commit
+   above Trivial needs its own review and trailer. The hook refuses both otherwise. Never amend new content into
+   a commit that carries a trailer: add a commit.
 8. **Run the suite once:** `python3 .githooks/review_slices.py run-suite`. It runs every `test:` line and stamps
-   the tree only when all pass and no file changed during the run. The suite can be slow: use a long tool timeout
-   or run it in the background. If it fails, the fix is a new commit and goes through step 6's second round.
+   the working tree only when all pass and no file changed during the run. If it says the working tree is not
+   HEAD's, commit what is yours and ask the user about the rest; never stash, revert or commit someone else's
+   edits. The suite can be slow: use a long tool timeout or run it in the background. If it fails, the fix is a
+   new commit and goes through step 6's second round.
 9. **Push** only with the user's go-ahead. The pre-push hook checks the stamp and the trailers in about a second.
-   If it refuses, fix what it names. `git push --no-verify`, an empty `core.hooksPath`, an edited guard and a
-   hand-written stamp are the user's override, never yours; using one is an incident.
+   If it refuses, fix what it names. `git push --no-verify`, changing the hook's git config, an edited guard or
+   bootstrap and a hand-written stamp are the user's override, never yours; using one is an incident.
 
 ## Record an incident
 
@@ -81,20 +87,36 @@ find one, in your own work or another agent's:
 
 ## Set up a repo
 
-Ask the user before each step; these change how the repo works. First check that this clone can take the hook:
-`git config --get core.hooksPath` prints nothing (in any scope), `ls "$(git rev-parse --git-path hooks)"` shows
-only `*.sample` files, and there is no `.husky/`, no `.pre-commit-config.yaml` and no `filter=lfs` in
-`.gitattributes`. If any of these fails, stop and tell the user: step 3 would silently turn those hooks off,
-including git-lfs's upload on push.
+Ask the user before each step; these change how the repo works. `<skill>` is this skill's directory.
 
 1. Copy [templates/REVIEW.md](templates/REVIEW.md) to the repo root and fill in its level table (one glob per
    line), its `test:` lines (one per check of the suite) and its failure list. Copy
    [templates/INCIDENTS.md](templates/INCIDENTS.md) to `docs/INCIDENTS.md`.
-2. Copy `scripts/review_slices.py` to `.githooks/review_slices.py`, and write `.githooks/pre-push`:
-   `#!/bin/sh` then `exec python3 "$(dirname "$0")/review_slices.py" pre-push "$@"`. Make it executable. Run
-   `python3 .githooks/review_slices.py check` until it reports no error.
-3. Each clone opts in with `git config core.hooksPath .githooks`, after the same check.
-4. Point the repo's agent instructions (AGENTS.md or CLAUDE.md) at REVIEW.md with a plain path, not an import.
+2. Run `python3 <skill>/scripts/setup_tools.py install`, show the user what it would change, and with their
+   go-ahead run it again with `--apply`. It copies the guard to `.githooks/` if missing, writes this clone's
+   bootstrap, records the base branch, and wires pre-push: a git config hook on git 2.54+, else a hook file that
+   runs any hook already there after the guard. It never sets `core.hooksPath`, so git-lfs, Husky and pre-commit
+   keep running. If it reports a problem, tell the user.
+3. Run `python3 .githooks/review_slices.py check` until it reports no error, and `setup_tools.py doctor` until
+   it reports ok.
+4. Commit REVIEW.md, `docs/INCIDENTS.md` and `.githooks/review_slices.py` together; REVIEW.md puts them at
+   Important or higher, so they are reviewed like any change. Every other clone that wants the guard runs
+   `install --apply` once; teammates who do not are never blocked by it.
+5. Point the repo's agent instructions (AGENTS.md or CLAUDE.md) at REVIEW.md with a plain path, not an import.
+
+When the skill is newer than the repo's guard, `setup_tools.py upgrade --apply` copies it in; commit it as a
+reviewed change. What gets installed:
+
+```
+<repo>/REVIEW.md                       rules and level table               committed
+<repo>/docs/INCIDENTS.md               incidents and their plugs           committed
+<repo>/.githooks/review_slices.py      the guard; the base branch's copy   committed
+                                       judges every push
+<git-common-dir>/review-slices/        per clone, never committed:
+    bootstrap.py                       runs the base branch's guard on pre-push
+    suite-pass                         pass stamps
+git config (per clone)                 hook.review-slices.* or a pre-push hook file; review-slices.base
+```
 
 ## Report
 

@@ -34,6 +34,14 @@ class RunSuiteTest(unittest.TestCase):
         repo.write("REVIEW.md", review_md(RULES.replace("test: true", "test: false")))
         self.assertNotEqual(repo.run_suite().returncode, 0)
 
+    def test_a_pass_on_a_tree_that_is_not_head_says_so(self):
+        repo = Repo(self)
+        repo.write("README.md", "someone else's uncommitted edit\n")
+        done = repo.run_suite()
+        self.assertEqual(done.returncode, 0)
+        self.assertIn("NOT HEAD's tree", done.stderr)
+        self.assertIn("README.md", done.stderr)
+
     def test_every_test_line_is_required(self):  # H13
         repo = Repo(self, rules=RULES.replace("test: true", "test: false\ntest: true"))
         self.assertNotEqual(repo.run_suite().returncode, 0)

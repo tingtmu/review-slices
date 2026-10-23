@@ -29,15 +29,21 @@ The Python guard checks pass stamps and review trailers, not whether reviewers a
 
 ## Set up a repo
 
-Ask your agent to "set up review-slices in this repo". It copies the templates and the guard, then:
+Ask your agent to "set up review-slices in this repo". It fills in the templates, then runs the skill's
+`scripts/setup_tools.py install` (a dry run you approve, then `--apply`):
 
 ```sh
-git config core.hooksPath .githooks   # once per clone, only if it has no other hooks (see SKILL.md)
-python3 .githooks/review_slices.py level       # review level of your changes, and the trailer to write
-python3 .githooks/review_slices.py run-suite   # the full suite, once per pushed tree; stamps a pass
+python3 .githooks/review_slices.py status      # the review level, the trailer to write, and the next step
+python3 .githooks/review_slices.py run-suite   # every check in the suite, once per pushed tree; stamps a pass
+python3 <skill>/scripts/setup_tools.py doctor  # is this clone's hook wired, and is the setup sound
 ```
 
-The guard needs Python 3.8+ and git 2.31+, and nothing else.
+`install` never sets `core.hooksPath`: on git 2.54+ it registers a config hook beside git-lfs, Husky or
+pre-commit, and on older git it chains any pre-push hook already there. Each clone keeps a small bootstrap that
+runs the guard committed on the base branch, so an edited copy never judges its own push and a fix to the guard
+reaches every clone by push. Only clones that run `install` are checked; nobody else is blocked.
+
+The guard needs Python 3.8+ and git 2.32+, and nothing else.
 
 ## Versions
 
@@ -51,3 +57,7 @@ critical instead of deadlocking, ignores user git settings that hid paths or tra
 reads `a, b` as two globs, runs every `test:` line, reports a changed suite, and lints the rules (`check`). The
 procedure commits before review, asks the go-ahead before pushes and one-way doors, and ships its own Standards and
 Spec reviewer briefs.
+
+`0.3.0`: `setup_tools.py install`, `upgrade` and `doctor`; a per-clone bootstrap that runs the base branch's guard;
+`status`, which names the standing rules, the pass stamp, the hook and the next step; pushes to any ref, not only
+branches and tags, are checked; `run-suite` says when the stamped tree is not HEAD's; git 2.32+.
