@@ -115,3 +115,8 @@ only in paths an explicit `trivial:` glob names, and the stamp line records each
 
 `0.7.0`: `secrets: gitleaks` scans the commits every push adds for secrets (in `status`, pre-push and `ci`),
 `.gitleaks*` files are always at least important, and SKILL.md says what to do when a secret turns up.
+
+`0.7.1`: `install` makes a remote other than origin the base branch only when it has review rules (a fork whose
+base branch tracked such a remote kept running the checkout's own guard), no longer counts a REVIEW.md that only
+mentions the rules block in prose, and says why it chose the base. A clean secret scan reads "gitleaks found none
+in N commit(s) scanned" in pre-push, `ci` and `status`, which labels it once.
