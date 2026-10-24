@@ -193,22 +193,41 @@ class BootstrapTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("restore it there", done.stderr)
 
-    def upstream_at(self, ref):
-        """Add an `upstream` remote whose main is REF, and fetch it."""
+    def upstream_at(self, ref, remote="upstream"):
+        """Add a REMOTE whose main is REF, and fetch it."""
         repo = self.repo
-        upstream = os.path.join(repo.tmp, "upstream.git")
+        upstream = os.path.join(repo.tmp, remote + ".git")
         repo.run_git(repo.tmp, "init", "-q", "--bare", "-b", "main", upstream)
         repo.git("push", "-q", "--no-verify", upstream, "%s:refs/heads/main" % ref)
-        repo.git("remote", "add", "upstream", upstream)
-        repo.git("fetch", "-q", "upstream")
+        repo.git("remote", "add", remote, upstream)
+        repo.git("fetch", "-q", remote)
 
-    def a_project_without_rules(self):
+    def a_project_without_rules(self, remote="upstream"):
         repo = self.repo
         repo.git("switch", "-q", "--orphan", "project")
         repo.write("project.txt")
         repo.commit("the open-source project, without review rules")
         repo.git("switch", "-q", "main")
-        self.upstream_at("project")
+        self.upstream_at("project", remote)
+
+    def assert_origin_judges_while_main_tracks(self, remote):
+        """main tracks REMOTE, a project without rules: install picks origin and says why, and origin's guard
+        refuses a push whose own guard copy says yes."""
+        repo = self.repo
+        self.a_project_without_rules(remote)
+        repo.git("config", "branch.main.remote", remote)
+        repo.git("config", "--unset", "review-slices.base")
+        self.assertIn("set review-slices.base to origin/main (the base branch on origin)",
+                      repo.setup("install").stdout)
+        self.assertEqual(self.installed_base(), "origin/main")
+        with open(os.path.join(repo.path, ".githooks", "review_slices.py"), encoding="utf-8") as handle:
+            source = handle.read()
+        friendlier = source.replace("def main(argv):\n", "def main(argv):\n    return 0\n", 1)
+        repo.write(".githooks/review_slices.py", friendlier)
+        repo.write("core/a.py")
+        repo.commit("unreviewed, with a friendlier guard")
+        repo.run_suite()
+        self.assertNotEqual(repo.try_push().returncode, 0)
 
     def installed_base(self):
         done = self.repo.setup("install", "--apply")
@@ -232,23 +251,32 @@ class BootstrapTest(unittest.TestCase):
         self.upstream_at("prose")
         self.assertEqual(self.installed_base(), "origin/main")
 
-    def test_an_upstream_with_rules_behind_the_forks_base_is_not_the_base(self):
+    def an_upstream_with_rules_behind_origin(self):
         repo = self.repo
         self.upstream_at("main")
         repo.write("notes/fork-only.md")
         repo.commit("a fork-only commit")
         repo.git("push", "-q", "--no-verify", "origin", "HEAD:refs/heads/main")
+
+    def test_an_upstream_with_rules_behind_the_forks_base_is_not_the_base(self):
+        self.an_upstream_with_rules_behind_origin()
+        self.assertEqual(self.installed_base(), "origin/main")
+
+    def test_an_upstream_behind_the_forks_base_is_not_the_base_when_main_tracks_it(self):
+        self.an_upstream_with_rules_behind_origin()
+        self.repo.git("config", "branch.main.remote", "upstream")
         self.assertEqual(self.installed_base(), "origin/main")
 
     def test_a_base_branch_tracking_an_upstream_without_rules_keeps_origin(self):
+        self.assert_origin_judges_while_main_tracks("upstream")
+
+    def test_a_base_branch_tracking_another_remote_without_rules_keeps_origin(self):
+        self.assert_origin_judges_while_main_tracks("canonical")
+
+    def test_a_clone_whose_only_remote_is_an_upstream_with_rules_uses_it(self):
         repo = self.repo
-        self.a_project_without_rules()
-        repo.git("config", "branch.main.remote", "upstream")
-        self.assertEqual(self.installed_base(), "origin/main")
-        repo.write("core/a.py")
-        repo.commit("unreviewed")
-        self.assertEqual(repo.run_suite().returncode, 0)
-        self.assertNotEqual(repo.try_push().returncode, 0)
+        repo.git("remote", "rename", "origin", "upstream")
+        self.assertEqual(self.installed_base(), "upstream/main")
 
     def test_doctor_notes_another_remote_whose_base_branch_is_ahead(self):
         repo = self.repo

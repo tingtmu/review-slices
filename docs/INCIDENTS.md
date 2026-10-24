@@ -23,12 +23,19 @@ each failure class from getting through again. Terms: the skill's
   test tests/test_pre_push.py::test_an_edited_guard_does_not_judge_its_own_push,
   test tests/test_ci.py::test_ci_runs_the_guard_committed_at_base,
   test tests/test_agent_hook.py::test_the_settings_command_runs_the_base_branch_copy_not_an_edited_one,
-  test tests/test_install.py::BootstrapTest::test_an_edited_checkout_guard_does_not_judge_after_the_base_lost_its_own
+  test tests/test_install.py::BootstrapTest::test_an_edited_checkout_guard_does_not_judge_after_the_base_lost_its_own,
+  test tests/test_install.py::BootstrapTest::test_a_base_branch_tracking_an_upstream_without_rules_keeps_origin,
+  test tests/test_install.py::BootstrapTest::test_a_base_branch_tracking_another_remote_without_rules_keeps_origin,
+  test tests/test_install.py::BootstrapTest::test_an_upstream_that_only_mentions_a_rules_block_has_no_rules
 - **Recurrences:**
   - 2026-10-24, review finding on 0.4.0: the agent hook ran the checkout's copy, which the agent can edit. The plug
     covered the guard and `ci`, not the agent hook added after it.
   - 2026-10-24, final review: when the base branch lost its guard, the bootstrap ran the checkout's copy. The plug
     tested a base branch with a guard; the last guard the base branch had now judges.
+  - 2026-10-24, re-review of 0.6.0's last commit (2a67cce): install made a base branch's tracking remote the base
+    even when it had no review rules (an `upstream` or any other remote), so the checkout's own guard judged
+    pushes; a REVIEW.md that only mentioned the rules block in prose also counted as rules. The plug tested an
+    `upstream` with no REVIEW.md, never a base branch tracking one, and never an edited guard after install.
 
 ## I2. The guard fails open on unexpected input
 

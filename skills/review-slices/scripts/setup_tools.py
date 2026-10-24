@@ -167,30 +167,42 @@ def paths():
 
 
 def resolve_base(root):
-    """The base branch's remote-tracking name (e.g. origin/main): REVIEW.md's base on the `upstream` remote when it
-    is a fork's canonical repo with review rules, else on its tracking remote, else origin's default branch; None
-    if none is fetched. A base branch that tracks `upstream` falls back to origin, so `upstream` judges only when
-    it has rules."""
+    """(name, why): the base branch's remote-tracking name (e.g. origin/main) and why install chose it; (None, None)
+    if none is fetched. In order: REVIEW.md's base on the `upstream` remote when it is a fork's canonical repo with
+    review rules; on its tracking remote when that is origin or has review rules; on origin; origin's default
+    branch. Any other remote without rules never judges, since the checkout's own guard would run in its place."""
     config = guard.working_config(root)
     default = git("symbolic-ref", "--short", "--quiet", "refs/remotes/origin/HEAD", check=False)
     branch = (config or {}).get("base") or (default.split("/", 1)[-1] if default else "main")
     remote = git("config", "--get", "branch.%s.remote" % branch, check=False) or "origin"
-    if remote == "upstream":
-        remote = "origin"
-    for name in (canonical_upstream(branch, remote), "%s/%s" % (remote, branch), default):
-        if name and git("rev-parse", "--verify", "--quiet", "refs/remotes/%s^{commit}" % name, check=False):
-            return name
-    return None
+    tracking, on_origin = "%s/%s" % (remote, branch), "origin/" + branch
+    if remote == "upstream" or (remote != "origin" and guard.rules_at("refs/remotes/" + tracking) is None):
+        tracking = None
+    own = tracking if fetched(tracking) else on_origin
+    for name, why in ((canonical_upstream(branch, own), "the canonical repo, which has review rules"),
+                      (tracking, "the base branch on its tracking remote"),
+                      (on_origin, "the base branch on origin"),
+                      (default, "origin's default branch")):
+        if fetched(name):
+            return name, why
+    return None, None
 
 
-def canonical_upstream(branch, remote):
-    """`upstream/BRANCH` when a fork's canonical repo has adopted review-slices and already contains the fork's own
-    base branch; None otherwise, so a canonical repo without rules never becomes the judge."""
-    name, own = "upstream/" + branch, "refs/remotes/%s/%s" % (remote, branch)
+def fetched(name):
+    """Whether NAME (e.g. origin/main) is a fetched remote-tracking branch."""
+    return bool(name and git("rev-parse", "--verify", "--quiet", "refs/remotes/%s^{commit}" % name, check=False))
+
+
+def canonical_upstream(branch, own):
+    """`upstream/BRANCH` when a fork's canonical repo has adopted review-slices and already contains OWN, the fork's
+    own base branch (if fetched); None otherwise, so a canonical repo without rules never becomes the judge."""
+    name = "upstream/" + branch
     if guard.rules_at("refs/remotes/" + name) is None:
         return None
-    contained = git("merge-base", "--is-ancestor", own, "refs/remotes/" + name, check=False) is not None
-    return name if contained else None
+    if not fetched(own):
+        return name
+    contained = git("merge-base", "--is-ancestor", "refs/remotes/" + own, "refs/remotes/" + name, check=False)
+    return name if contained is not None else None
 
 
 def hook_file_steps(hooks, bootstrap):
@@ -285,12 +297,10 @@ def install_steps(config_hook=False, agent_hooks=False):
     if read(bootstrap) != BOOTSTRAP:
         steps.append(("write %s, which runs the guard committed on the base branch" % bootstrap,
                       lambda: write(bootstrap, BOOTSTRAP, 0o755)))
-    base = resolve_base(root)
+    base, why = resolve_base(root)
     if base is None:
         problems.append("no remote-tracking base branch: fetch, then run install again (a first push is fine)")
     elif git("config", "--get", "review-slices.base", check=False) != base:
-        why = ("the canonical repo, which has review rules" if base.startswith("upstream/")
-               else "the base branch on its tracking remote")
         steps.append(("set review-slices.base to %s (%s)" % (base, why),
                       lambda: git("config", "review-slices.base", base)))
     hooks_path = git("config", "--get", "core.hooksPath", check=False)
