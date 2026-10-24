@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""review-slices setup tools (skill version 0.6.0): install the guard in a clone, upgrade it, check the setup.
+"""review-slices setup tools (skill version 0.7.0): install the guard in a clone, upgrade it, check the setup.
 
 Run it from inside the target repo. It stays in the skill and is never copied into a repo.
 
@@ -7,7 +7,7 @@ Run it from inside the target repo. It stays in the skill and is never copied in
                          wire this clone's pre-push to the guard committed on the base branch; with --agent-hooks,
                          also add the agent hook to .claude/settings.json and .codex/hooks.json (committed files);
                          without --apply, print what would change and stop
-    setup_tools.py upgrade [--apply]                 copy this skill's guard and agent hook into .githooks/
+    setup_tools.py upgrade [--apply]                 copy this skill's scripts over the repo's in .githooks/
     setup_tools.py doctor                            check this clone's setup; exit 1 on a problem
 
 `install` never sets core.hooksPath. It writes a pre-push hook file, which every git version runs, chaining any
@@ -25,9 +25,11 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_GUARD = os.path.join(HERE, "review_slices.py")
 SKILL_AGENT_HOOK = os.path.join(HERE, "agent_hook.py")
+SKILL_SCANNER = os.path.join(HERE, "secret_scan.py")
 AGENT_HOOK_PATH = ".githooks/agent_hook.py"
-# Scripts a repo keeps copies of in .githooks/; upgrade refreshes the ones it has.
-COPIED = (SKILL_GUARD, SKILL_AGENT_HOOK, os.path.join(HERE, "incidents.py"))
+# Scripts a repo keeps copies of in .githooks/; upgrade refreshes the ones it has, and adds the secret scan when
+# REVIEW.md asks for it.
+COPIED = (SKILL_GUARD, SKILL_AGENT_HOOK, os.path.join(HERE, "incidents.py"), SKILL_SCANNER)
 # Runs the agent hook committed on the base branch (the checkout's copy only before it is there), so an edited
 # copy never decides; a clone that never ran install has no review-slices.base, and any error allows the action.
 AGENT_COMMAND = ("sh -c 'top=$(git -C \"${CLAUDE_PROJECT_DIR:-.}\" rev-parse --show-toplevel 2>/dev/null) && "
@@ -126,15 +128,21 @@ if [ -x "$next" ]; then "$next" "$@" < "$input" || exit $?; fi
 '''
 
 
-def load_guard():
-    spec = importlib.util.spec_from_file_location("review_slices", SKILL_GUARD)
+def load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-guard = load_guard()
+guard = load("review_slices", SKILL_GUARD)
+scanner = load("secret_scan", SKILL_SCANNER)
 git = guard.git
+
+
+def wants_scanner(root):
+    """Whether the working REVIEW.md says `secrets:`, so the repo needs the secret scan beside the guard."""
+    return bool((guard.working_config(root) or {}).get("secrets"))
 
 
 def read(path):
@@ -268,6 +276,10 @@ def install_steps(config_hook=False, agent_hooks=False):
     if not os.path.exists(os.path.join(root, guard.GUARD_PATH)):
         steps.append(("copy the skill's guard %s to %s; commit it as a reviewed change" % (guard.VERSION,
                       guard.GUARD_PATH), lambda: write(os.path.join(root, guard.GUARD_PATH), read(SKILL_GUARD), 0o755)))
+    if wants_scanner(root) and not os.path.exists(os.path.join(root, guard.SCANNER_PATH)):
+        steps.append(("copy the skill's secret scan to %s (REVIEW.md says secrets:); commit it with the guard"
+                      % guard.SCANNER_PATH, lambda: write(os.path.join(root, guard.SCANNER_PATH), read(SKILL_SCANNER),
+                                                          0o755)))
     if read(bootstrap) != BOOTSTRAP:
         steps.append(("write %s, which runs the guard committed on the base branch" % bootstrap,
                       lambda: write(bootstrap, BOOTSTRAP, 0o755)))
@@ -326,7 +338,7 @@ def cmd_install(args):
 
 def cmd_upgrade(args):
     """Copy this skill's scripts over the repo's copies in .githooks/: the guard always, the agent hook and the
-    incident report only where the repo already has them."""
+    incident report only where the repo already has them, the secret scan also where REVIEW.md says secrets:."""
     root, _common, _bootstrap = paths()
     current = read(os.path.join(root, guard.GUARD_PATH))
     if current is None:
@@ -337,8 +349,9 @@ def cmd_upgrade(args):
         print("the repo's guard (%s) is newer than this skill's (%s): update the skill instead" % (
             ".".join(map(str, have)), guard.VERSION))
         return 1
-    stale = [(source, os.path.join(root, ".githooks", os.path.basename(source))) for source in COPIED
-             if read(os.path.join(root, ".githooks", os.path.basename(source))) not in (None, read(source))]
+    copies = [(source, os.path.join(root, ".githooks", os.path.basename(source))) for source in COPIED]
+    stale = [(source, copy) for source, copy in copies if read(copy) not in (None, read(source))
+             or (read(copy) is None and source == SKILL_SCANNER and wants_scanner(root))]
     if not stale:
         print("the repo's copies are this skill's (%s)" % guard.VERSION)
         return 0
@@ -359,6 +372,8 @@ def tree_lines(root, bootstrap, base_has_guard):
     committed = (("REVIEW.md", "the rules"), ("docs/INCIDENTS.md", "incidents and their plugs"),
                  (guard.GUARD_PATH, "the guard; " + ("the base branch's copy judges pushes" if base_has_guard
                                                      else "the base branch has none yet, so this checkout's runs")))
+    if wants_scanner(root):
+        committed += ((guard.SCANNER_PATH, "the secret scan the guard runs (REVIEW.md says secrets:)"),)
     lines = []
     for path, what in committed:
         tracked = git("ls-files", "--error-unmatch", "--", path, check=False) is not None
@@ -395,6 +410,10 @@ def cmd_doctor(_args):
         errors, warnings = guard.lint(config)
         problems += ["REVIEW.md: " + message for message in errors]
         notes += ["REVIEW.md: " + message for message in warnings]
+        if config.get("secrets"):
+            problems += [problem for problem in (scanner.preconditions(git, shutil.which("gitleaks")),) if problem]
+            if not os.path.exists(os.path.join(root, guard.SCANNER_PATH)):
+                problems.append("REVIEW.md says secrets: but %s is missing: run upgrade --apply" % guard.SCANNER_PATH)
     copy = read(os.path.join(root, guard.GUARD_PATH))
     if copy is None:
         problems.append("no %s: run install" % guard.GUARD_PATH)

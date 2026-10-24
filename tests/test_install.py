@@ -2,7 +2,7 @@
 import os
 import unittest
 
-from support import Repo, git_version
+from support import ENV, RULES, SCRIPTS, Repo, git_version
 
 CONFIG_HOOKS = git_version() >= (2, 54)
 
@@ -291,6 +291,25 @@ class UpgradeAndDoctorTest(unittest.TestCase):
             self.assertIn("incident log report", handle.read())
         self.assertFalse(os.path.exists(os.path.join(repo.path, ".githooks", "agent_hook.py")))
         self.assertIn("are this skill's", repo.setup("upgrade").stdout)
+
+    def test_the_secret_scan_is_copied_only_where_review_md_asks_for_it(self):
+        self.assertNotIn("secret_scan.py", Repo(self).setup("install").stdout)
+        repo = Repo(self, rules=RULES + "secrets: gitleaks\n")
+        self.assertIn("secret_scan.py", repo.setup("install").stdout)
+        done = repo.setup("upgrade", "--apply")
+        self.assertEqual(done.returncode, 0, done.stdout)
+        with open(os.path.join(SCRIPTS, "secret_scan.py"), encoding="utf-8") as skill, \
+                open(os.path.join(repo.path, ".githooks", "secret_scan.py"), encoding="utf-8") as copy:
+            self.assertEqual(copy.read(), skill.read())
+
+    def test_doctor_names_a_missing_gitleaks_where_review_md_asks_for_it(self):
+        repo = Repo(self, rules=RULES + "secrets: gitleaks\n")
+        path = os.pathsep.join(entry for entry in ENV.get("PATH", "").split(os.pathsep)
+                               if entry and not os.path.exists(os.path.join(entry, "gitleaks")))
+        done = repo.setup("doctor", env={"PATH": path})
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("gitleaks is not installed", done.stdout)
+        self.assertIn(".githooks/secret_scan.py is missing", done.stdout)
 
     def test_doctor_names_an_unwired_clone(self):
         repo = Repo(self)
