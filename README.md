@@ -51,9 +51,9 @@ docs/INCIDENTS.md and checks that every plug still exists. All three run from th
 `incidents.py` can also be copied into `.githooks/` to run in a repo's suite, and `upgrade` keeps it current.
 
 `install --agent-hooks` also adds a PreToolUse hook for Claude Code (`.claude/settings.json`) and Codex
-(`.codex/hooks.json`, once its hooks feature is on and the user trusts the hook; checked live with Codex 0.164.0)
-that refuses an agent's overrides: `--no-verify`, rewiring the hook, writing pass stamps, amending content into
-reviewed work. For checks no clone can skip, copy
+(`.codex/hooks.json`, shell commands only, once its hooks feature is on and the user trusts the hook; a refused
+`git push --no-verify` checked live with Codex 0.164.0) that refuses an agent's overrides: `--no-verify`, rewiring
+the hook, writing pass stamps, amending content into reviewed work. For checks no clone can skip, copy
 `templates/review-slices-ci.yml` to `.github/workflows/`: it runs `review_slices.py ci` on every pull request.
 
 ### Secret scanning

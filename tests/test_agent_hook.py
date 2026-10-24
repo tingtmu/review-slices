@@ -189,6 +189,11 @@ class SettingsTest(unittest.TestCase):
             fixture = json.load(handle)
         repo = Repo(self)
         self.assertEqual(repo.setup("install", "--apply", "--agent-hooks").returncode, 0)
+        repo.commit("add the agent hook")
+        repo.git("push", "-q", "--no-verify", "origin", "main")
+        repo.git("fetch", "-q")
+        # The reply can only come from the base branch's copy, the one Codex ran live.
+        repo.write(".githooks/agent_hook.py", "import sys\nsys.exit(0)\n")
         with open(os.path.join(repo.path, ".codex", "hooks.json"), encoding="utf-8") as handle:
             command = json.load(handle)["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
         payload = dict(fixture["payload"], cwd=repo.path)
