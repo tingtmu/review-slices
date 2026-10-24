@@ -21,6 +21,7 @@ important: <core logic>
 important: <agent instructions, such as AGENTS.md>
 simple: <files tests read, test-only paths>
 trivial: <notes and roadmap files no check reads>
+# secrets: gitleaks   (optional: scan the commits every push adds; needs gitleaks 8.19+ and git 2.36+)
 ```
 
 Planned actions that make a change Critical: <for example a live cloud action, a release tag, a data deletion>.

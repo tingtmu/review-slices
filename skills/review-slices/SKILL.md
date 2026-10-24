@@ -28,10 +28,13 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
 
 1. **Work with shown output.** Never write "done", "fixed" or "passes" without the output that shows it.
 2. **Commit locally, without a trailer.** Reviewers read committed work. A local commit needs no go-ahead and is
-   not a claim of done.
+   not a claim of done. Where REVIEW.md has `secrets: gitleaks`, first run
+   `gitleaks git --pre-commit --staged --redact --no-banner`; if it finds anything, do not commit: see
+   [A secret turns up](#a-secret-turns-up).
 3. **Run `python3 .githooks/review_slices.py status`** (`level` is the same). It prints the review level of the
    work since the last trailer, the paths that set it, the trailer to write, the standing rules, the pass stamp,
-   whether the hook is wired, and the next step. Fix errors in REVIEW.md that your change introduced; report the
+   whether the hook is wired, the secret scan of the new commits (where REVIEW.md has `secrets:`), and the next
+   step. A secret it finds goes to [A secret turns up](#a-secret-turns-up) before any reviewer sees the diff. Fix errors in REVIEW.md that your change introduced; report the
    ones it says are in the standing rules to the user. Raise the level for planned actions REVIEW.md lists (for
    example a live cloud action); when unsure, go one higher. A raised level is the level the trailer records.
    Never lower it. Put its output in your report.
@@ -54,7 +57,8 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    - Fix: fix it, or reject it with a written reason in your report.
    - Nit: at most three are worth raising; fix them only if cheap.
    - Pre-existing: record it as an incident or a roadmap item, never just a label.
-   Fix a review finding's whole class at once, not only the line quoted. Fixes are new commits.
+   Fix a review finding's whole class at once, not only the line quoted. Fixes are new commits, except a secret
+   in unpushed commits, which is removed by rewriting them ([A secret turns up](#a-secret-turns-up)).
 6. **Converge.** One review round, then at most one second round on the new commits only
    (`git diff <old head>..HEAD`), resuming the same reviewers. Never re-raise a review finding already settled.
    Still split after that: escalate to the user.
@@ -79,6 +83,33 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
     record an incident of failure class "the local suite differs from CI"; its plug is the missing check, added to
     the suite as a `test:` line or listed under REVIEW.md's "Remote checks". If you cannot read CI (no `gh`, another
     host), say so in your report and ask the user to check it; never report done over a result nobody read.
+
+## A secret turns up
+
+When the secret scan (`status`, the pre-push hook, `ci`, or the staged scan of step 2) finds a secret:
+
+1. Never write the value anywhere: not in your report, INCIDENTS.md, a commit message or a reviewer brief. Cite
+   the rule, file, line and fingerprint the guard printed.
+2. Whether it is a real secret or a false positive is the user's call. For a false positive the user, never the
+   agent, adds the full fingerprint (`<commit>:<file>:<rule>:<line>`) to `.gitleaksignore` and commits it, with
+   the reason as a `#` comment on the line above (a trailing comment breaks the match). Only fingerprints that
+   name a commit count, and a rewrite of that commit changes its fingerprint. `gitleaks:allow` markers count
+   for nothing.
+3. **Not pushed yet** (the commit is among the new commits `status` counts): move the value out (an environment
+   variable or a secret manager), then rewrite the new commits so no commit holds it:
+   - First stop and ask the user if the new commits include a merge, the working tree has edits that are not
+     yours, or another branch, tag or stash holds the commit (`git branch --contains <sha>`,
+     `git tag --contains <sha>`, `git stash list`).
+   - Otherwise `git reset --soft <parent of the oldest new commit>`, remove the value, commit again, and redo
+     steps 3 to 8: the old trailers went with the old commits.
+   - Never `git reset --hard`, a backup branch, `push --all` or `--mirror`.
+   - Tell the user. If the value is real, rotating it is the user's call: you and any reviewer have seen it.
+4. **Already pushed:** tell the user first. Rotating or revoking the value is the fix, and the user's action.
+   Remove the value with an ordinary commit; once the user has dealt with it, they add its fingerprint to
+   `.gitleaksignore` so later pushes and the pull request pass. Rewriting published history needs a force-push,
+   a one-way door: only with the user's go-ahead, and it does not unpublish (forks, pull request refs, caches,
+   CI logs). Record an incident.
+5. A secret already in the base branch's history that this change did not add is Pre-existing (step 5).
 
 ## Record an incident
 
@@ -128,17 +159,22 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    and `.codex/hooks.json`, keeping what is there. Codex runs it once its hooks feature is on and the user trusts
    the hook; its payload and deny response follow Codex's hook documentation but have not yet been checked against
    a live Codex session, so tell the user it is unverified there. If install reports a problem, tell the user.
-5. Run `python3 .githooks/review_slices.py check` until it reports no error, and `setup_tools.py doctor` until
+5. Optional, with the user: add `secrets: gitleaks` to REVIEW.md's block to scan the commits every push adds,
+   then run `setup_tools.py upgrade --apply`, which copies `secret_scan.py` beside the guard. Every clone that
+   pushes, and CI, then needs gitleaks 8.19+ and git 2.36+. Where the base branch already has a guard older than
+   0.7.0, push the upgraded guard first: an older guard cannot parse the line, so it counts every path as
+   critical and scans nothing.
+6. Run `python3 .githooks/review_slices.py check` until it reports no error, and `setup_tools.py doctor` until
    it reports ok. The scripts in `.githooks/` are vendored: they tell ruff, flake8, pylint, isort and mypy to skip
    them. If another check in the suite (a formatter such as black or prettier) still reads `.githooks/`, exclude it
    there in this same setup commit and say so to the user; it is not a weakened check.
-6. Commit REVIEW.md, `docs/INCIDENTS.md`, `.githooks/` and the agent hook settings together; REVIEW.md puts them
+7. Commit REVIEW.md, `docs/INCIDENTS.md`, `.githooks/` and the agent hook settings together; REVIEW.md puts them
    at Important or higher, so they are reviewed like any change. Every other clone that wants the guard runs
    `install --apply` once; teammates who do not are never blocked by it, and the agent hook does nothing for them.
-7. Offer the user [templates/review-slices-ci.yml](templates/review-slices-ci.yml) as
+8. Offer the user [templates/review-slices-ci.yml](templates/review-slices-ci.yml) as
    `.github/workflows/review-slices.yml`: it runs `review_slices.py ci` on every pull request, so trailers are
    checked even from clones that never installed the hook.
-8. Point the repo's agent instructions (AGENTS.md or CLAUDE.md) at REVIEW.md with a plain path, not an import.
+9. Point the repo's agent instructions (AGENTS.md or CLAUDE.md) at REVIEW.md with a plain path, not an import.
 
 When the skill is newer than the repo's guard, `setup_tools.py upgrade --apply` copies it in; commit it as a
 reviewed change. What gets installed:
@@ -149,6 +185,7 @@ reviewed change. What gets installed:
 <repo>/.githooks/review_slices.py      the guard; the base branch's copy   committed
                                        judges every push
 <repo>/.githooks/agent_hook.py         blocks an agent's overrides         committed
+<repo>/.githooks/secret_scan.py        the secret scan (with secrets:)     committed
 <repo>/.claude/settings.json           runs the agent hook (Claude Code)   committed
 <repo>/.codex/hooks.json               runs the agent hook (Codex)         committed
 <repo>/.github/workflows/...           optional: `ci` on pull requests     committed
@@ -163,4 +200,5 @@ git config (per clone)                 review-slices.base; hook.review-slices.* 
 
 End every review with: the level output, the reviewers run and their lenses, each review finding with its tag and
 what happened to it (fixed, rejected and why), the shown output for the final state, and any incident recorded.
+Never a secret's value.
 What the guard cannot see is listed in [references/known-holes.md](references/known-holes.md).

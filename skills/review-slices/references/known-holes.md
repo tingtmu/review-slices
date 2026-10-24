@@ -22,6 +22,14 @@ are known; reviewers and the user cover them.
   unchecked until then.
 - A config hook (used only where another tool owns `core.hooksPath`) runs for git 2.54+ only; an older git pushing
   from that clone runs nothing. `status` and `doctor` say when the hook is a config hook.
+- The secret scan (`secrets: gitleaks`) sees only what gitleaks's rules match: a custom secret format, or one
+  encoded or inside binary content, passes. gitleaks's default config also skips some paths (lockfiles,
+  `node_modules/` and the like); a base branch that wants them scanned commits a full `.gitleaks.toml` that does
+  not extend the default. The pushed commit's own `.gitleaksignore` can allow its findings;
+  the floor puts it at important, so it is reviewed, but the author writes the trailer. A fake `gitleaks` earlier
+  on PATH defeats the scan. The guard refuses a scan that read no commits, but cannot tell a partial one. The
+  staged scan before a commit is a procedure step, not a hook. A clone without the hook pushes unscanned; the
+  host's push protection, where it is on, is the only stop on the server.
 - The agent hook reads commands the way a shell splits them, sees through common wrappers (`env`, `timeout`,
   `xargs`, `sudo`) and aliases set on the command line, and checks what it cannot read against a few plain
   patterns. A command built at run time (`eval`, a script file, an alias already in git config) gets past it; so

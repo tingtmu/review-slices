@@ -43,8 +43,13 @@ _Avoid_: review tag, sign-off
 
 **Guard**:
 An automatic check, other than a test, that refuses work showing a failure class. The review-slices guard checks
-pass stamps and review trailers before a push.
+pass stamps and review trailers before a push, and runs the secret scan where REVIEW.md asks for it.
 _Avoid_: gate, blocker (Blocker is a review finding tag)
+
+**Secret scan**:
+The guard's gitleaks run over exactly the commits a push adds, on with `secrets: gitleaks`; a finding, or a scan
+that could not run, refuses the push.
+_Avoid_: leak check, secret lint
 
 **Override**:
 A way past the guard that only the user may take, such as skipping the push hook. An agent taking one is an

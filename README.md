@@ -56,6 +56,27 @@ agent's overrides: `--no-verify`, rewiring the
 hook, writing pass stamps, amending content into reviewed work. For checks no clone can skip, copy
 `templates/review-slices-ci.yml` to `.github/workflows/`: it runs `review_slices.py ci` on every pull request.
 
+### Secret scanning
+
+The procedure commits before review, so a secret can land in a local commit; a later fix commit would still
+publish it. With `secrets: gitleaks` in REVIEW.md's block, `status`, the pre-push hook and `ci` scan exactly the
+commits a push adds with [gitleaks](https://github.com/gitleaks/gitleaks) 8.19+ (and git 2.36+, to read merge
+commits). The scanner, `.githooks/secret_scan.py`, and its `.gitleaks.toml` come from the base branch like the
+guard. Settings, attributes and `gitleaks:allow` markers cannot hide a line, only the pushed commit's committed
+`.gitleaksignore` fingerprints that name a commit apply, and a missing or failed scan refuses the push. SKILL.md's
+"A secret turns up" says how to remove one. The CI template installs a pinned, checksum-verified gitleaks.
+
+To also stop a secret before it is committed, a hook of your own in `.git/hooks/pre-commit` (setup never installs
+one) can run the staged scan:
+
+```sh
+#!/bin/sh
+exec gitleaks git --pre-commit --staged --redact --no-banner
+```
+
+On GitHub, turn on push protection where your plan has it: it is free for public repositories and part of the
+paid GitHub Secret Protection for private ones. It is the only check on the server.
+
 The guard needs Python 3.8+ and git 2.32+, and nothing else. On GitHub, reading CI after a push (SKILL.md
 step 10) needs GitHub CLI 2.40.0+, for `gh run list --commit`; step 10's other `gh` commands work from 2.6.0.
 
@@ -91,3 +112,6 @@ level table would have judged recent history.
 after the push; `upgrade` refreshes every script a repo keeps in `.githooks/`. A pass stamp carries over to a tree that differs
 only in paths an explicit `trivial:` glob names, and the stamp line records each check's time. A fork prefers its
 `upstream` base branch when that repo has review rules.
+
+`0.7.0`: `secrets: gitleaks` scans the commits every push adds for secrets (in `status`, pre-push and `ci`),
+`.gitleaks*` files are always at least important, and SKILL.md says what to do when a secret turns up.
