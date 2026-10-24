@@ -10,7 +10,7 @@ import sys
 import tempfile
 import unittest
 
-from support import ENV, GUARD, RULES, SCRIPTS, Repo, review_md
+from support import ENV, GUARD, RULES, SCRIPTS, Repo, git_version, review_md
 
 SCANNER = os.path.join(SCRIPTS, "secret_scan.py")
 SECRETS_RULES = RULES + "secrets: gitleaks\n"
@@ -23,6 +23,7 @@ sys.stderr.write(os.environ.get("FAKE_GITLEAKS_STDERR", "") + "\\n")
 sys.exit(int(os.environ.get("FAKE_GITLEAKS_EXIT", "0")))
 """
 REAL = shutil.which("gitleaks", path=ENV.get("PATH"))
+SCANS = git_version() >= (2, 36)  # secret_scan.MIN_GIT: an older git refuses every scan
 
 
 def token():
@@ -47,7 +48,7 @@ class SecretScanCase(unittest.TestCase):
             repo.git("push", "-q", "origin", "main")
             repo.git("fetch", "-q", "origin")
         done = repo.setup("install", "--apply", env=env)
-        if scanner:  # without the scanner, doctor rightly reports it missing
+        if scanner and SCANS:  # without the scanner, or on a git too old to scan, doctor rightly reports a problem
             self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         repo.git("switch", "-q", "-c", "work")
         return repo
@@ -70,8 +71,8 @@ class SecretScanCase(unittest.TestCase):
         self.assertEqual(done.returncode, 0, "push refused:\n" + done.stderr)
 
 
-class FakeGitleaksTest(SecretScanCase):
-    """Each way the scan can pass or refuse, with a stand-in gitleaks."""
+class FakeGitleaksCase(SecretScanCase):
+    """A stand-in gitleaks on PATH."""
 
     def setUp(self):
         self.bin = tempfile.mkdtemp(prefix="review-slices-fake-gitleaks-")
@@ -84,6 +85,22 @@ class FakeGitleaksTest(SecretScanCase):
     def fake(self, exit_code=0, stderr="1 commits scanned."):
         return {"PATH": self.bin + os.pathsep + ENV.get("PATH", ""), "FAKE_GITLEAKS_EXIT": str(exit_code),
                 "FAKE_GITLEAKS_STDERR": stderr}
+
+
+@unittest.skipIf(SCANS, "this git can read merge commits")
+class OldGitTest(FakeGitleaksCase):
+    """A git older than 2.36 cannot read merge commits, so a declared scan refuses rather than skip them."""
+
+    def test_an_old_git_refuses(self):
+        repo = self.make_repo(env=self.fake())
+        self.commit_change(repo)
+        self.assertIn("needs git 2.36.0+", repo.guard("status", env=self.fake()).stdout)
+        self.assert_refused(self.push(repo, env=self.fake()), "needs git 2.36.0+")
+
+
+@unittest.skipUnless(SCANS, "the secret scan needs git 2.36+")
+class FakeGitleaksTest(FakeGitleaksCase):
+    """Each way the scan can pass or refuse, with a stand-in gitleaks."""
 
     def test_without_the_line_nothing_is_scanned(self):
         repo = self.make_repo(rules=RULES, env=self.fake())
@@ -194,6 +211,7 @@ class FakeGitleaksTest(SecretScanCase):
                 (self.assertIn if scanned else self.assertNotIn)("the secret scan failed", done.stderr)
 
 
+@unittest.skipUnless(SCANS, "the secret scan needs git 2.36+")
 class RealGitleaksTest(SecretScanCase):
     """The scan against the real gitleaks: what it must catch, and what it must not flag."""
 

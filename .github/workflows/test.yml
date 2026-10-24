@@ -34,6 +34,21 @@ jobs:
         env:
           REQUIRE_GITLEAKS: "1"
 
+  # Ubuntu 22.04's own git 2.34: the fallbacks for git before 2.36 and 2.54, and the tests only an old git runs.
+  # No gitleaks: `secrets:` needs git 2.36+, so here a declared scan must refuse.
+  old-git:
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    steps:
+      - name: Install git and Python from Ubuntu 22.04
+        run: |
+          apt-get update -q
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+            ca-certificates git openssh-client python3
+      - uses: actions/checkout@v4
+      - run: git --version
+      - run: python3 -m unittest discover -s tests -v
+
   review-trailers:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
