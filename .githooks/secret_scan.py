@@ -28,7 +28,7 @@ TIMEOUT = 600
 SHOWN = 10
 # Flags for every `git log -p` behind the scan: patch text whatever the user's or repo's settings and attributes.
 LOG = ("--no-color", "--text", "--no-textconv", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/",
-       "--no-relative", "--no-show-signature", "--no-abbrev-commit", "--diff-merges=remerge")
+       "--no-relative", "--no-show-signature", "--no-abbrev-commit", "--pretty=medium", "--diff-merges=remerge")
 DEFAULT_CONFIG = "[extend]\nuseDefault = true\n"
 FINGERPRINT = re.compile(r"^[0-9a-f]{40}:")
 INSTALL = "see https://github.com/gitleaks/gitleaks#installing"
@@ -82,7 +82,7 @@ def finding_lines(report_path):
 
 def adds_lines(git, scope):
     """Whether the commits in SCOPE add any line, read the way gitleaks reads them."""
-    patch = git("log", "-p", "-U0", "--format=", *(LOG + tuple(scope))) or ""
+    patch = git("log", "-p", "-U0", *(LOG + ("--format=",) + tuple(scope))) or ""
     return any(line.startswith("+") and not line.startswith("+++") for line in patch.splitlines())
 
 
@@ -124,9 +124,10 @@ def scan(git, at, head, tips):
             handle.write("".join(line + "\n" for line in kept))
         argv = [binary, "git", "--no-banner", "--no-color", "--redact", "--exit-code", "2", "--ignore-gitleaks-allow",
                 "--config", config, "--gitleaks-ignore-path", ignore, "--report-format", "json", "--report-path",
-                report, "--log-opts", " ".join(LOG + scope), git_dir]
-        # From an empty directory and the git dir, gitleaks finds no .gitleaksignore but the one passed to it.
-        env = {key: value for key, value in os.environ.items() if key not in ("GIT_DIR", "GIT_WORK_TREE")}
+                report, "--log-opts", " ".join(LOG + scope), tmp]
+        # Its source is this temp dir and git finds the repo by GIT_DIR, so gitleaks reads no .gitleaksignore
+        # (not the working tree's, not one in the git dir) but the one passed to it.
+        env = dict({key: value for key, value in os.environ.items() if key != "GIT_WORK_TREE"}, GIT_DIR=git_dir)
         try:
             done = subprocess.run(argv, cwd=tmp, env=env, capture_output=True, text=True, errors="replace",
                                   timeout=TIMEOUT)

@@ -323,6 +323,13 @@ class UpgradeAndDoctorTest(unittest.TestCase):
         done = repo.setup("doctor")
         self.assertEqual(done.returncode, 0, done.stdout)
         self.assertIn("bootstrap.py", done.stdout)
+        self.assertIn("secrets: not scanned", done.stdout)
+
+    def test_doctor_names_a_base_that_declares_secrets_without_the_scanner(self):
+        repo = Repo(self, rules=RULES + "secrets: gitleaks\n")
+        done = repo.setup("doctor")
+        self.assertIn("the base branch's REVIEW.md says secrets: but it has no .githooks/secret_scan.py",
+                      done.stdout)
 
 
 if __name__ == "__main__":

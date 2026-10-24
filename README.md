@@ -71,7 +71,7 @@ one) can run the staged scan:
 
 ```sh
 #!/bin/sh
-exec gitleaks git --pre-commit --staged --redact --no-banner
+exec gitleaks git --pre-commit --staged --redact --no-banner -v
 ```
 
 On GitHub, turn on push protection where your plan has it: it is free for public repositories and part of the

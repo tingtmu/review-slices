@@ -75,7 +75,14 @@ class ParseTest(unittest.TestCase):
         config = parse("trivial: *\n")
         self.assertEqual(guard.path_level(config, "REVIEW.md")[0], "important")
         self.assertEqual(guard.path_level(config, ".githooks/review_slices.py")[0], "important")
+        self.assertEqual(guard.path_level(config, ".gitleaksignore")[0], "important")
+        self.assertEqual(guard.path_level(config, ".gitleaks.toml")[0], "important")
         self.assertEqual(guard.path_level(config, "docs/REVIEW.md")[0], "trivial")
+
+    def test_a_secrets_line_other_than_gitleaks_is_a_lint_error_and_still_scans(self):
+        config = parse("secrets: trufflehog\n")
+        self.assertTrue(config["errors"])
+        self.assertEqual(config["secrets"], "trufflehog")
 
     def test_unreadable_rules_put_every_path_at_critical(self):
         config = guard.unreadable_rules("broken")

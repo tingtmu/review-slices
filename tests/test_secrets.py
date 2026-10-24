@@ -128,10 +128,23 @@ class FakeGitleaksTest(SecretScanCase):
         self.commit_change(repo, ".githooks/secret_scan.py", "def scan(*args):\n    return [], []\n", "important")
         self.assert_refused(self.push(repo, env=self.fake(exit_code=1)), "the secret scan failed")
 
+    def test_a_broken_scanner_on_the_base_refuses_by_name(self):
+        repo = self.make_repo(env=self.fake())
+        repo.git("switch", "-q", "main")
+        repo.write(".githooks/secret_scan.py", "def nothing():\n    pass\n")
+        repo.commit("break the scanner")
+        repo.git("push", "-q", "--no-verify", "origin", "main")
+        repo.git("fetch", "-q", "origin")
+        repo.git("switch", "-q", "-C", "work")
+        self.commit_change(repo)
+        done = self.push(repo, env=self.fake())
+        self.assert_refused(done, ".githooks/secret_scan.py at", "did not run")
+        self.assertNotIn("Traceback", done.stderr)
+
     def test_a_base_with_the_guard_but_no_scanner_refuses(self):
         repo = self.make_repo(scanner=False, env=self.fake())
         self.commit_change(repo)
-        self.assert_refused(self.push(repo, env=self.fake()), "has no .githooks/secret_scan.py")
+        self.assert_refused(self.push(repo, env=self.fake()), "has no .githooks/secret_scan.py", "ask the user")
 
     def test_a_base_that_lost_its_guard_keeps_judging_with_its_last_scanner(self):
         repo = self.make_repo(env=self.fake())
@@ -228,6 +241,7 @@ class RealGitleaksTest(SecretScanCase):
         self.commit_change(repo, "f.txt", "work\n")
         self.push_main(repo, "main.py", "published = %r\n" % token())
         repo.git("merge", "-q", "--no-edit", "origin/main")
+        repo.git("config", "format.pretty", "oneline")  # a clean push is read whatever log's format
         self.assert_pushed(self.push(repo))
 
     def test_settings_attributes_and_markers_do_not_hide_a_secret(self):
@@ -246,6 +260,7 @@ class RealGitleaksTest(SecretScanCase):
         fingerprint = re.search(r"fingerprint (\S+)", first.stderr).group(1)
         self.assertRegex(fingerprint, r"^[0-9a-f]{40}:")
         repo.write(".gitleaksignore", fingerprint + "\n")
+        repo.write(".git/.gitleaksignore", fingerprint + "\n")
         self.assert_refused(repo.try_push("origin", "HEAD"), "github-pat at leak.py:1")
 
     def test_only_a_committed_fingerprint_with_its_commit_allows_a_finding(self):

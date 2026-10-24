@@ -414,12 +414,19 @@ def cmd_doctor(_args):
             problems += [problem for problem in (scanner.preconditions(git, shutil.which("gitleaks")),) if problem]
             if not os.path.exists(os.path.join(root, guard.SCANNER_PATH)):
                 problems.append("REVIEW.md says secrets: but %s is missing: run upgrade --apply" % guard.SCANNER_PATH)
+        else:
+            notes.append("secrets: not scanned (REVIEW.md has no secrets: line)")
     copy = read(os.path.join(root, guard.GUARD_PATH))
     if copy is None:
         problems.append("no %s: run install" % guard.GUARD_PATH)
     elif guard.source_version(copy) < guard.version_tuple(guard.VERSION):
         notes.append("the repo's guard is older than this skill's %s: run upgrade" % guard.VERSION)
     name, tip = guard.base_tip()
+    base_rules = tip and guard.rules_at(tip)
+    if (base_rules and base_rules.get("secrets") and guard.git_raw("show", "%s:%s" % (tip, guard.GUARD_PATH))
+            and guard.git_raw("show", "%s:%s" % (tip, guard.SCANNER_PATH)) is None):
+        problems.append("the base branch's REVIEW.md says secrets: but it has no %s, so every push is refused: "
+                        "adding it there is the user's override" % guard.SCANNER_PATH)
     if not tip:
         problems.append("the base branch %s is not fetched in this clone" % name)
     elif config and config["base"] and name.split("/", 1)[-1] != config["base"]:

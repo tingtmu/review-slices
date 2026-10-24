@@ -322,11 +322,15 @@ def secret_scan(config, judge, head, tips):
     at = (judge if judge and git_raw("show", "%s:%s" % (judge, GUARD_PATH)) else removed and removed + "^") or head
     source = git_raw("show", "%s:%s" % (at, SCANNER_PATH))
     if not source:
-        return ["the rules say `secrets:` but %s has no %s: run the skill's setup_tools.py upgrade there"
-                % (at[:12], SCANNER_PATH)], []
+        return ["the rules say `secrets:` but %s has no %s: %s" % (at[:12], SCANNER_PATH, "run the skill's "
+                "setup_tools.py upgrade --apply and commit it" if at == head else "no push through the hook can add "
+                "it to the base branch, so ask the user, whose override that is")], []
     scanner = types.ModuleType("secret_scan")
-    exec(compile(source, SCANNER_PATH, "exec"), scanner.__dict__)
-    return scanner.scan(git, at, head, tips)
+    try:
+        exec(compile(source, SCANNER_PATH, "exec"), scanner.__dict__)
+        return scanner.scan(git, at, head, tips)
+    except Exception as error:  # a broken scanner refuses by name, not with a traceback
+        return ["%s at %s did not run: %r" % (SCANNER_PATH, at[:12], error)], []
 
 
 def base_resolves(base):
