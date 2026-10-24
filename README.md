@@ -56,8 +56,8 @@ agent's overrides: `--no-verify`, rewiring the
 hook, writing pass stamps, amending content into reviewed work. For checks no clone can skip, copy
 `templates/review-slices-ci.yml` to `.github/workflows/`: it runs `review_slices.py ci` on every pull request.
 
-The guard needs Python 3.8+ and git 2.32+, and nothing else. Reading CI after a push (SKILL.md step 10) uses
-GitHub CLI 2.40.0+, for `gh run list --commit` and `gh run rerun --failed`.
+The guard needs Python 3.8+ and git 2.32+, and nothing else. On GitHub, reading CI after a push (SKILL.md
+step 10) needs GitHub CLI 2.40.0+, for `gh run list --commit`; step 10's other `gh` commands work from 2.6.0.
 
 ## Versions
 
