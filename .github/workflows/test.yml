@@ -46,7 +46,8 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
             ca-certificates git openssh-client python3
       - uses: actions/checkout@v4
-      - run: git --version
+      - name: This leg must run a git older than 2.36
+        run: git --version && git --version | grep -q '^git version 2\.3[2-5]\.'
       - run: python3 -m unittest discover -s tests -v
 
   review-trailers:

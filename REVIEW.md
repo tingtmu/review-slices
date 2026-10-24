@@ -29,6 +29,13 @@ simple: README.md
 Planned actions that make a change Critical: a release tag; a change to the pass stamp or review trailer
 format, or to how the hook is installed, since every adopting clone depends on them.
 
+## Remote checks
+
+Checks that run only in CI or another remote service, outside the suite. Read their result after the push.
+
+- `tests / old-git` (GitHub Actions, an `ubuntu:22.04` container): the suite on git 2.34, the only run of the
+  fallbacks for git before 2.36 and 2.54 and of the tests only an old git runs; no local git here is that old.
+
 ## Failure looks like
 
 - The guard trusts input the change itself controls ([I1](docs/INCIDENTS.md#i1-the-guard-trusts-input-the-change-controls))

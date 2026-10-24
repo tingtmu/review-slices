@@ -93,6 +93,10 @@ class OldGitTest(FakeGitleaksCase):
 
     def test_an_old_git_refuses(self):
         repo = self.make_repo(env=self.fake())
+        doctor = repo.setup("doctor", env=self.fake())
+        self.assertNotEqual(doctor.returncode, 0, doctor.stdout)
+        self.assertIn("problem: the secret scan needs git 2.36.0+", doctor.stdout)
+        self.assertNotIn("Traceback", doctor.stdout + doctor.stderr)
         self.commit_change(repo)
         self.assertIn("needs git 2.36.0+", repo.guard("status", env=self.fake()).stdout)
         self.assert_refused(self.push(repo, env=self.fake()), "needs git 2.36.0+")
