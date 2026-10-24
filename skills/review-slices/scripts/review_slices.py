@@ -5,7 +5,7 @@
 # pylint: skip-file
 # mypy: ignore-errors
 # isort: skip_file
-"""review-slices guard (skill version 0.6.0): review levels, pass stamps and the pre-push check.
+"""review-slices guard (skill version 0.7.0): review levels, pass stamps and the pre-push check.
 
     review_slices.py status [BASE]         where this work stands: its review level and the trailer to write, the
                                            rules it is judged by, the pass stamp, the hook, and the next step
@@ -22,16 +22,14 @@ Configuration is the first ```review-slices fenced block in REVIEW.md at the rep
     base: main                           # the base branch (default: origin's default branch)
     default: simple                      # level of a path no glob matches (default: simple)
     critical: engine/src/*/approval.py   # "<level>: <glob>", one per line; "*" also matches "/"
+    secrets: gitleaks                    # scan the commits a push adds (.githooks/secret_scan.py, gitleaks 8.19+)
 
-A path takes the highest level whose glob matches it, and REVIEW.md and .githooks/* are always at least important.
-A push is judged by its new commits only (those neither the target ref nor the base branch has), each by its own
-paths; a merge counts only where it differs from git's own merge of its parents. A review trailer covers the new
-commits in its own history that no earlier trailer reaches, and must be at least their highest level. The
-standing rules judge a change: REVIEW.md as committed where its branch left the base branch, so a change cannot
-lower the levels it is judged by. A change to the suite is reported and reviewed (REVIEW.md is at least
-important), not blocked. `status`, `pre-push` and `ci` hand off to the guard committed on the base branch when
-this copy differs from it, so an edited copy does not judge its own push.
-Standard library only, Python 3.8+, git 2.32+.
+A path takes its highest matching level; REVIEW.md, .githooks/* and .gitleaks* are at least important. A push is
+judged by its new commits (neither the target ref nor the base branch has them), a merge only where it differs
+from git's own merge. A trailer covers the new commits in its history no earlier trailer reaches, at their level
+or higher. The standing rules (REVIEW.md where the branch left the base branch) judge a change, so it cannot lower
+its own levels; a suite change is reported, not blocked. `status`, `pre-push` and `ci` hand off to the base
+branch's guard when this copy differs from it. Standard library only, Python 3.8+, git 2.32+.
 """
 import collections
 import datetime
@@ -44,11 +42,13 @@ import subprocess
 import sys
 import tempfile
 import time
+import types
 
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 LEVELS = ("trivial", "simple", "important", "critical")
-FLOOR = (("REVIEW.md", "important"), (".githooks/*", "important"))
+FLOOR = (("REVIEW.md", "important"), (".githooks/*", "important"), (".gitleaks*", "important"))
 GUARD_PATH = ".githooks/review_slices.py"
+SCANNER_PATH = ".githooks/secret_scan.py"
 HANDOFF = "REVIEW_SLICES_HANDOFF"
 # The first guard version that has each command; the base branch's guard runs a command only if it has it.
 SINCE = {"level": (0, 1, 0), "run-suite": (0, 1, 0), "pre-push": (0, 1, 0), "check": (0, 2, 0),
@@ -113,7 +113,8 @@ def parse_config(text):
     match = re.search(r"^```review-slices[ \t]*\r?\n(.*?)^```", text, re.S | re.M)
     if not match:
         raise GuardError("REVIEW.md has no ```review-slices block")
-    config = {"tests": [], "base": None, "default": "simple", "globs": [], "errors": [], "warnings": []}
+    config = {"tests": [], "base": None, "default": "simple", "globs": [], "errors": [], "warnings": [],
+              "secrets": None}
     seen = set()
     for number, raw in enumerate(match.group(1).splitlines(), 1):
         line = COMMENT.sub("", raw).strip()
@@ -131,6 +132,9 @@ def parse_config(text):
             config["globs"] += [(key, glob) for glob in globs]
         elif key == "test":
             config["tests"].append(value)
+        elif key == "secrets":  # any value turns the scan on; `check` names one it does not know
+            config["secrets"] = value
+            config["errors"] += [] if value == "gitleaks" else ["line %d: secrets: takes gitleaks" % number]
         elif key == "base" or (key == "default" and value in LEVELS):
             if key in seen:
                 config["errors"].append("line %d repeats %r; the last one counts" % (number, key))
@@ -141,11 +145,14 @@ def parse_config(text):
     return config
 
 
-def unreadable_rules(reason):
+def unreadable_rules(reason, text=""):
     """Rules for a REVIEW.md that does not parse: every path is critical and a stamp is required, but nothing is
-    refused outright, so the push that fixes the file can still go after a critical review."""
+    refused outright, so the push that fixes the file can still go after a critical review. A `secrets:` line
+    in its block (not a commented one) keeps the secret scan on."""
+    block = re.search(r"^```review-slices[ \t]*\r?\n(.*?)^```", text, re.S | re.M)
+    secrets = bool(block and re.search(r"^[ \t]*secrets[ \t]*:", block.group(1), re.M))
     return {"tests": ["?"], "base": None, "default": "critical", "globs": [("critical", "*")], "errors": [reason],
-            "warnings": [], "unreadable": reason}
+            "warnings": [], "unreadable": reason, "secrets": "gitleaks" if secrets else None}
 
 
 def read_config(root):
@@ -179,7 +186,7 @@ def rules_at(commit):
         return parse_config(text + "\n")
     except GuardError as error:
         return unreadable_rules("REVIEW.md at %s does not parse (%s), so every path counts as critical; fix it "
-                                "on the base branch" % (commit[:12], error))
+                                "on the base branch" % (commit[:12], error), text)
 
 
 def path_level(config, path):
@@ -303,6 +310,23 @@ def suite_change(old, new):
     lines = ["  - " + test for test in old["tests"] if test not in new["tests"]]
     lines += ["  + " + test for test in new["tests"] if test not in old["tests"]]
     return "this change edits the suite; reviewers must confirm it is not weaker:\n" + "\n".join(lines or ["  (order)"])
+
+
+def secret_scan(config, judge, head, tips):
+    """(problems, notes) from the secret scan of the commits HEAD adds over TIPS, when the rules declare one. The
+    scanner comes from where the judging guard does: JUDGE, or the base branch's last commit with a guard if it
+    lost it; HEAD's own copy only where the base branch never had a guard."""
+    if not config.get("secrets"):
+        return [], []
+    removed = judge and git("log", "-1", "--format=%H", "--diff-filter=D", judge, "--", GUARD_PATH, check=False)
+    at = (judge if judge and git_raw("show", "%s:%s" % (judge, GUARD_PATH)) else removed and removed + "^") or head
+    source = git_raw("show", "%s:%s" % (at, SCANNER_PATH))
+    if not source:
+        return ["the rules say `secrets:` but %s has no %s: run the skill's setup_tools.py upgrade there"
+                % (at[:12], SCANNER_PATH)], []
+    scanner = types.ModuleType("secret_scan")
+    exec(compile(source, SCANNER_PATH, "exec"), scanner.__dict__)
+    return scanner.scan(git, at, head, tips)
 
 
 def base_resolves(base):
@@ -544,8 +568,12 @@ def cmd_status(args):
     if note:
         print("note: " + note)
     print_rule_messages(config, working, (standing or start)[:12])
+    secret, notes = secret_scan(config, base_tip()[1], "HEAD", tips) if commits else ([], [])
+    print("secrets: " + ("\n  ".join(secret + notes) or ("no new commits to scan" if config.get("secrets") else
+                                                       "not scanned (REVIEW.md has no secrets: line)")))
     uncommitted = sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
-    print("next: " + next_step(config, level, start, commits, uncommitted, tips))
+    print("next: " + ("deal with the secret scan before review: " + secret[0].splitlines()[0] if secret else
+                      next_step(config, level, start, commits, uncommitted, tips)))
     return 0
 
 
@@ -692,7 +720,8 @@ def check_ref(local_sha, remote_sha, stamped):
     elif config["tests"] and tree not in stamped:
         problems.append("no pass stamp for %s: run `python3 %s run-suite` on this commit (the full suite, once), "
                         "then push" % (local_sha[:12], GUARD_PATH))
-    return problems + review_problems(config, commits, tips), notes
+    secret, secret_notes = secret_scan(config, base_tip()[1], local_sha, tips)
+    return problems + review_problems(config, commits, tips) + secret, notes + secret_notes
 
 
 def cmd_pre_push(args, data=""):
@@ -733,6 +762,9 @@ def cmd_ci(args):
     if config is not None:
         notes = notes + [note for note in (config.get("unreadable"), suite_change(config, rules_at(head))) if note]
     problems = [problem] if problem else (review_problems(config, commits, (base,)) if config else [])
+    if config is not None and commits:
+        secret, secret_notes = secret_scan(config, base, head, (base,))
+        problems, notes = problems + secret, notes + secret_notes
     for note in notes:
         print("note: " + note)
     if problems:
