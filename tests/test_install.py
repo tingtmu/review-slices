@@ -193,30 +193,62 @@ class BootstrapTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("restore it there", done.stderr)
 
-    def test_a_downstream_fork_whose_upstream_has_no_rules_keeps_its_own_base(self):
+    def upstream_at(self, ref):
+        """Add an `upstream` remote whose main is REF, and fetch it."""
         repo = self.repo
         upstream = os.path.join(repo.tmp, "upstream.git")
         repo.run_git(repo.tmp, "init", "-q", "--bare", "-b", "main", upstream)
+        repo.git("push", "-q", "--no-verify", upstream, "%s:refs/heads/main" % ref)
+        repo.git("remote", "add", "upstream", upstream)
+        repo.git("fetch", "-q", "upstream")
+
+    def a_project_without_rules(self):
+        repo = self.repo
         repo.git("switch", "-q", "--orphan", "project")
         repo.write("project.txt")
         repo.commit("the open-source project, without review rules")
-        repo.git("push", "-q", upstream, "project:refs/heads/main")
         repo.git("switch", "-q", "main")
-        repo.git("remote", "add", "upstream", upstream)
-        repo.git("fetch", "-q", "upstream")
-        done = repo.setup("install", "--apply")
+        self.upstream_at("project")
+
+    def installed_base(self):
+        done = self.repo.setup("install", "--apply")
         self.assertEqual(done.returncode, 0, done.stdout)
-        self.assertEqual(repo.out("config", "--get", "review-slices.base"), "origin/main")
+        return self.repo.out("config", "--get", "review-slices.base")
+
+    def test_a_downstream_fork_whose_upstream_has_no_rules_keeps_its_own_base(self):
+        self.a_project_without_rules()
+        self.assertEqual(self.installed_base(), "origin/main")
 
     def test_a_fork_prefers_a_canonical_upstream_with_rules(self):
+        self.upstream_at("main")
+        self.assertEqual(self.installed_base(), "upstream/main")
+
+    def test_an_upstream_that_only_mentions_a_rules_block_has_no_rules(self):
         repo = self.repo
-        upstream = os.path.join(repo.tmp, "upstream.git")
-        repo.run_git(repo.tmp, "init", "-q", "--bare", "-b", "main", upstream)
-        repo.git("push", "-q", upstream, "main:refs/heads/main")
-        repo.git("remote", "add", "upstream", upstream)
-        repo.git("fetch", "-q", "upstream")
-        self.assertEqual(repo.setup("install", "--apply").returncode, 0)
-        self.assertEqual(repo.out("config", "--get", "review-slices.base"), "upstream/main")
+        repo.git("switch", "-q", "-c", "prose")
+        repo.write("REVIEW.md", "# Review\nWe do not use a ```review-slices block here.\n")
+        repo.commit("upstream's REVIEW.md, prose only")
+        repo.git("switch", "-q", "main")
+        self.upstream_at("prose")
+        self.assertEqual(self.installed_base(), "origin/main")
+
+    def test_an_upstream_with_rules_behind_the_forks_base_is_not_the_base(self):
+        repo = self.repo
+        self.upstream_at("main")
+        repo.write("notes/fork-only.md")
+        repo.commit("a fork-only commit")
+        repo.git("push", "-q", "--no-verify", "origin", "HEAD:refs/heads/main")
+        self.assertEqual(self.installed_base(), "origin/main")
+
+    def test_a_base_branch_tracking_an_upstream_without_rules_keeps_origin(self):
+        repo = self.repo
+        self.a_project_without_rules()
+        repo.git("config", "branch.main.remote", "upstream")
+        self.assertEqual(self.installed_base(), "origin/main")
+        repo.write("core/a.py")
+        repo.commit("unreviewed")
+        self.assertEqual(repo.run_suite().returncode, 0)
+        self.assertNotEqual(repo.try_push().returncode, 0)
 
     def test_doctor_notes_another_remote_whose_base_branch_is_ahead(self):
         repo = self.repo

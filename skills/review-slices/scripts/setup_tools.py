@@ -169,11 +169,14 @@ def paths():
 def resolve_base(root):
     """The base branch's remote-tracking name (e.g. origin/main): REVIEW.md's base on the `upstream` remote when it
     is a fork's canonical repo with review rules, else on its tracking remote, else origin's default branch; None
-    if none is fetched."""
+    if none is fetched. A base branch that tracks `upstream` falls back to origin, so `upstream` judges only when
+    it has rules."""
     config = guard.working_config(root)
     default = git("symbolic-ref", "--short", "--quiet", "refs/remotes/origin/HEAD", check=False)
     branch = (config or {}).get("base") or (default.split("/", 1)[-1] if default else "main")
     remote = git("config", "--get", "branch.%s.remote" % branch, check=False) or "origin"
+    if remote == "upstream":
+        remote = "origin"
     for name in (canonical_upstream(branch, remote), "%s/%s" % (remote, branch), default):
         if name and git("rev-parse", "--verify", "--quiet", "refs/remotes/%s^{commit}" % name, check=False):
             return name
@@ -184,8 +187,7 @@ def canonical_upstream(branch, remote):
     """`upstream/BRANCH` when a fork's canonical repo has adopted review-slices and already contains the fork's own
     base branch; None otherwise, so a canonical repo without rules never becomes the judge."""
     name, own = "upstream/" + branch, "refs/remotes/%s/%s" % (remote, branch)
-    rules = guard.git_raw("show", "refs/remotes/%s:REVIEW.md" % name) or ""
-    if "```review-slices" not in rules:
+    if guard.rules_at("refs/remotes/" + name) is None:
         return None
     contained = git("merge-base", "--is-ancestor", own, "refs/remotes/" + name, check=False) is not None
     return name if contained else None
