@@ -8,10 +8,11 @@
 """review-slices secret scan (skill version 0.7.0): gitleaks over the commits a push adds.
 
 The guard loads this file from the commit its own copy comes from (the base branch) and calls scan() when REVIEW.md
-says `secrets: gitleaks`; it is not run on its own. Everything the change being judged could control is kept out
-of the scan: the config comes from that same commit, only the pushed commit's committed .gitleaksignore applies,
-and git settings, attributes and `gitleaks:allow` markers that would hide a line are overridden. Anything short of
-a scan that read the commits and found nothing refuses the push.
+says `secrets: gitleaks`; it is not run on its own. The config comes from that same commit, only the pushed commit's
+committed .gitleaksignore lines that name a commit apply, and git settings, attributes and `gitleaks:allow` markers
+that would hide a line are overridden. Anything short of a scan that read the commits and found nothing refuses the
+push. gitleaks's default config skips some paths (lockfiles, node_modules/ and the like); a base branch that wants
+them scanned commits a full .gitleaks.toml that does not extend the default.
 """
 import json
 import os
@@ -27,7 +28,7 @@ TIMEOUT = 600
 SHOWN = 10
 # Flags for every `git log -p` behind the scan: patch text whatever the user's or repo's settings and attributes.
 LOG = ("--no-color", "--text", "--no-textconv", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/",
-       "--no-relative", "--no-show-signature", "--diff-merges=remerge")
+       "--no-relative", "--no-show-signature", "--no-abbrev-commit", "--diff-merges=remerge")
 DEFAULT_CONFIG = "[extend]\nuseDefault = true\n"
 FINGERPRINT = re.compile(r"^[0-9a-f]{40}:")
 INSTALL = "see https://github.com/gitleaks/gitleaks#installing"
@@ -54,7 +55,7 @@ def ignore_lines(text):
 def preconditions(git, binary):
     """A problem that stops the scan before it runs, or None."""
     if not binary:
-        return "gitleaks is not installed (REVIEW.md says `secrets: gitleaks`): install %s+, %s" % (
+        return "gitleaks is not installed (REVIEW.md says `secrets: gitleaks`): ask the user to install %s+, %s" % (
             dotted(MIN_GITLEAKS), INSTALL)
     try:
         found = version_tuple(subprocess.run((binary, "version"), capture_output=True, text=True,
@@ -62,9 +63,10 @@ def preconditions(git, binary):
     except (OSError, subprocess.SubprocessError) as error:
         return "gitleaks did not run: %s" % error
     if found < MIN_GITLEAKS:
-        return "gitleaks %s is older than %s: upgrade it, %s" % (dotted(found), dotted(MIN_GITLEAKS), INSTALL)
+        return "gitleaks %s is older than %s: ask the user to upgrade it, %s" % (dotted(found), dotted(MIN_GITLEAKS),
+                                                                               INSTALL)
     if version_tuple(git("--version")) < MIN_GIT:
-        return "the secret scan needs git %s+ to read merge commits: upgrade git" % dotted(MIN_GIT)
+        return "the secret scan needs git %s+ to read merge commits: ask the user to upgrade git" % dotted(MIN_GIT)
     return None
 
 

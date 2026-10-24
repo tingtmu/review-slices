@@ -149,7 +149,7 @@ def unreadable_rules(reason, text=""):
     """Rules for a REVIEW.md that does not parse: every path is critical and a stamp is required, but nothing is
     refused outright, so the push that fixes the file can still go after a critical review. A `secrets:` line
     in its block (not a commented one) keeps the secret scan on."""
-    block = re.search(r"^```review-slices[ \t]*\r?\n(.*?)^```", text, re.S | re.M)
+    block = re.search(r"^```review-slices[^\n]*\n(.*?)(?:^```|\Z)", text, re.S | re.M)
     secrets = bool(block and re.search(r"^[ \t]*secrets[ \t]*:", block.group(1), re.M))
     return {"tests": ["?"], "base": None, "default": "critical", "globs": [("critical", "*")], "errors": [reason],
             "warnings": [], "unreadable": reason, "secrets": "gitleaks" if secrets else None}

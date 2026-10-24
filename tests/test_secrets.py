@@ -36,8 +36,9 @@ def path_without_gitleaks():
 
 
 class SecretScanCase(unittest.TestCase):
-    def make_repo(self, rules=SECRETS_RULES, scanner=True):
-        """A wired clone whose main has the rules, the guard and (unless told not to) the scanner."""
+    def make_repo(self, rules=SECRETS_RULES, scanner=True, env=None):
+        """A wired clone whose main has the rules, the guard and (unless told not to) the scanner. ENV is for
+        install, whose doctor run checks for gitleaks."""
         repo = Repo(self, rules=rules)
         if scanner:
             with open(SCANNER, encoding="utf-8") as handle:
@@ -45,7 +46,9 @@ class SecretScanCase(unittest.TestCase):
             repo.commit("add the scanner")
             repo.git("push", "-q", "origin", "main")
             repo.git("fetch", "-q", "origin")
-        repo.install()
+        done = repo.setup("install", "--apply", env=env)
+        if scanner:  # without the scanner, doctor rightly reports it missing
+            self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         repo.git("switch", "-q", "-c", "work")
         return repo
 
@@ -83,25 +86,25 @@ class FakeGitleaksTest(SecretScanCase):
                 "FAKE_GITLEAKS_STDERR": stderr}
 
     def test_without_the_line_nothing_is_scanned(self):
-        repo = self.make_repo(rules=RULES)
+        repo = self.make_repo(rules=RULES, env=self.fake())
         self.commit_change(repo)
         missing = {"PATH": path_without_gitleaks()}
         self.assertIn("secrets: not scanned", repo.guard("status", env=missing).stdout)
         self.assert_pushed(self.push(repo, env=missing))
 
     def test_a_clean_scan_lets_the_push_go(self):
-        repo = self.make_repo()
+        repo = self.make_repo(env=self.fake())
         self.commit_change(repo)
         self.assertIn("none found in 1 commit(s)", repo.guard("status", env=self.fake()).stdout)
         self.assert_pushed(self.push(repo, env=self.fake()))
 
     def test_a_missing_gitleaks_refuses(self):
-        repo = self.make_repo()
+        repo = self.make_repo(env=self.fake())
         self.commit_change(repo)
         self.assert_refused(self.push(repo, env={"PATH": path_without_gitleaks()}), "gitleaks is not installed")
 
     def test_a_failed_scan_refuses_in_status_and_pre_push_alike(self):
-        repo = self.make_repo()
+        repo = self.make_repo(env=self.fake())
         self.commit_change(repo)
         env = self.fake(exit_code=1, stderr="fatal: something broke")
         status = repo.guard("status", env=env).stdout
@@ -110,32 +113,58 @@ class FakeGitleaksTest(SecretScanCase):
         self.assert_refused(self.push(repo, env=env), "the secret scan failed (gitleaks exit 1)")
 
     def test_a_scan_that_read_nothing_refuses(self):
-        repo = self.make_repo()
+        repo = self.make_repo(env=self.fake())
         self.commit_change(repo)
         self.assert_refused(self.push(repo, env=self.fake(stderr="0 commits scanned.")), "read no commits")
 
     def test_an_old_gitleaks_refuses(self):
-        repo = self.make_repo()
+        repo = self.make_repo(env=self.fake())
         self.commit_change(repo)
         self.assert_refused(self.push(repo, env=dict(self.fake(), FAKE_GITLEAKS_VERSION="8.18.4")),
                             "older than 8.19.0")
 
     def test_the_change_s_own_scanner_does_not_judge_it(self):
-        repo = self.make_repo()
+        repo = self.make_repo(env=self.fake())
         self.commit_change(repo, ".githooks/secret_scan.py", "def scan(*args):\n    return [], []\n", "important")
         self.assert_refused(self.push(repo, env=self.fake(exit_code=1)), "the secret scan failed")
 
     def test_a_base_with_the_guard_but_no_scanner_refuses(self):
-        repo = self.make_repo(scanner=False)
+        repo = self.make_repo(scanner=False, env=self.fake())
         self.commit_change(repo)
         self.assert_refused(self.push(repo, env=self.fake()), "has no .githooks/secret_scan.py")
 
+    def test_a_base_that_lost_its_guard_keeps_judging_with_its_last_scanner(self):
+        repo = self.make_repo(env=self.fake())
+        repo.git("switch", "-q", "main")
+        repo.git("rm", "-q", ".githooks/review_slices.py", ".githooks/secret_scan.py")
+        repo.commit("lose the guard")
+        repo.git("push", "-q", "--no-verify", "origin", "main")
+        repo.git("fetch", "-q", "origin")
+        repo.git("switch", "-q", "-C", "work")
+        repo.write(".githooks/secret_scan.py", "def scan(*args):\n    return [], []\n")
+        repo.commit("a friendlier scanner", trailer=repo.trailer("important"))
+        self.assert_refused(self.push(repo, env=self.fake(exit_code=1)), "the secret scan failed")
+
+    def test_adoption_scans_with_the_push_s_own_scanner(self):
+        repo = Repo(self, rules=None, guard=False)
+        repo.git("config", "review-slices.base", "origin/main")
+        repo.setup("install", "--apply", env=self.fake())  # exits 1: the new guard copy is not committed yet
+        repo.write("REVIEW.md", review_md(SECRETS_RULES))
+        with open(SCANNER, encoding="utf-8") as handle:
+            repo.write(".githooks/secret_scan.py", handle.read())
+        repo.commit("adopt review-slices", trailer=repo.trailer("important"))
+        done = self.push(repo, env=self.fake(exit_code=1))
+        self.assert_refused(done, "this checkout's guard runs", "the secret scan failed")
+
     def test_unreadable_rules_keep_a_declared_scan_on(self):
-        for rules, scanned in ((SECRETS_RULES + "not a rule\n", True), (RULES + "# secrets: gitleaks\nnot a rule\n", False)):
-            with self.subTest(rules=rules):
-                repo = self.make_repo()
+        broken = "```review-slices\n" + SECRETS_RULES  # the closing fence is gone
+        for text, scanned in ((review_md(SECRETS_RULES + "not a rule\n"), True), (broken, True),
+                              (review_md(SECRETS_RULES).replace("```review-slices", "```review-slices yaml"), True),
+                              (review_md(RULES + "# secrets: gitleaks\nnot a rule\n"), False)):
+            with self.subTest(text=text):
+                repo = self.make_repo(env=self.fake())
                 repo.git("switch", "-q", "main")
-                repo.write("REVIEW.md", review_md(rules))
+                repo.write("REVIEW.md", text)
                 repo.commit("break the rules")
                 repo.git("push", "-q", "--no-verify", "origin", "main")
                 repo.git("fetch", "-q", "origin")
@@ -178,7 +207,9 @@ class RealGitleaksTest(SecretScanCase):
         done = self.push(repo)
         self.assert_refused(done, "github-pat at leak.py:1")
         self.assertNotIn("old.py", done.stderr)
-        output = done.stdout + done.stderr + repo.guard("status").stdout
+        status = repo.guard("status").stdout
+        self.assertIn("github-pat at leak.py:1", status)
+        output = done.stdout + done.stderr + status
         self.assertNotIn(leaked, output)
         self.assertNotIn(leaked[4:20], output)
 
@@ -201,7 +232,8 @@ class RealGitleaksTest(SecretScanCase):
 
     def test_settings_attributes_and_markers_do_not_hide_a_secret(self):
         repo = self.make_repo()
-        for key, value in (("color.ui", "always"), ("diff.noprefix", "true"), ("diff.mnemonicPrefix", "true")):
+        for key, value in (("color.ui", "always"), ("diff.noprefix", "true"), ("diff.mnemonicPrefix", "true"),
+                           ("log.abbrevCommit", "true")):
             repo.git("config", key, value)
         repo.write(".gitattributes", "leak.py -diff\n")
         repo.write(".git/info/attributes", "leak.py -diff\n")  # read even where no working tree is
@@ -211,7 +243,9 @@ class RealGitleaksTest(SecretScanCase):
         repo.write(".gitleaks.toml", '[extend]\nuseDefault = true\n[allowlist]\npaths = [".*"]\n')
         first = self.push(repo)
         self.assert_refused(first, "github-pat at leak.py:1")
-        repo.write(".gitleaksignore", re.search(r"fingerprint (\S+)", first.stderr).group(1) + "\n")
+        fingerprint = re.search(r"fingerprint (\S+)", first.stderr).group(1)
+        self.assertRegex(fingerprint, r"^[0-9a-f]{40}:")
+        repo.write(".gitleaksignore", fingerprint + "\n")
         self.assert_refused(repo.try_push("origin", "HEAD"), "github-pat at leak.py:1")
 
     def test_only_a_committed_fingerprint_with_its_commit_allows_a_finding(self):
