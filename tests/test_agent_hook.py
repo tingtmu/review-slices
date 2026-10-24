@@ -8,6 +8,7 @@ import unittest
 from support import ENV, SCRIPTS, SETUP, Repo, load_script
 
 AGENT_HOOK = os.path.join(SCRIPTS, "agent_hook.py")
+CODEX_FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "codex_pre_tool_use.json")
 
 
 class AgentHookTest(unittest.TestCase):
@@ -182,6 +183,20 @@ class SettingsTest(unittest.TestCase):
         with open(os.path.join(repo.path, ".claude", "settings.json"), encoding="utf-8") as handle:
             entries = json.load(handle)["hooks"]["PreToolUse"]
         self.assertEqual(len(entries), 1)
+
+    def test_a_recorded_codex_payload_gets_the_reply_codex_honoured(self):
+        with open(CODEX_FIXTURE, encoding="utf-8") as handle:
+            fixture = json.load(handle)
+        repo = Repo(self)
+        self.assertEqual(repo.setup("install", "--apply", "--agent-hooks").returncode, 0)
+        with open(os.path.join(repo.path, ".codex", "hooks.json"), encoding="utf-8") as handle:
+            command = json.load(handle)["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+        payload = dict(fixture["payload"], cwd=repo.path)
+        # Codex sets no CLAUDE_PROJECT_DIR; the command falls back to the directory Codex runs it in.
+        env = {key: value for key, value in ENV.items() if key != "CLAUDE_PROJECT_DIR"}
+        decided = subprocess.run(("sh", "-c", command), input=json.dumps(payload), capture_output=True, text=True,
+                                 cwd=repo.path, env=env)
+        self.assertEqual(json.loads(decided.stdout), fixture["response"])
 
     def test_the_settings_command_judges_the_project_even_when_the_agent_is_elsewhere(self):
         repo = Repo(self)

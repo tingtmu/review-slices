@@ -1,0 +1,24 @@
+{
+  "recorded": "Codex 0.164.0 (codex-cli), 2026-10-24: the PreToolUse payload Codex sent for a Bash call and the agent hook's reply, which Codex honoured (\"Command blocked by PreToolUse hook\"). Paths are neutralised; {repo} stands for the repo's path.",
+  "payload": {
+    "session_id": "01a16d21-a652-7da3-98be-eb5b489b260c",
+    "turn_id": "01a16d22-22cb-7c20-bb5d-3a0cf043602e",
+    "transcript_path": "/home/user/.codex/sessions/2026/10/24/rollout-2026-10-24T16-58-04-01a16d21-a652-7da3-98be-eb5b489b260c.jsonl",
+    "cwd": "{repo}",
+    "hook_event_name": "PreToolUse",
+    "model": "gpt-6.1-sol",
+    "permission_mode": "default",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "git push --no-verify /tmp/probe.git HEAD:refs/heads/probe"
+    },
+    "tool_use_id": "exec-e6c4fe98-2ad9-45ce-b919-ecbf4376d2d2"
+  },
+  "response": {
+    "hookSpecificOutput": {
+      "hookEventName": "PreToolUse",
+      "permissionDecision": "deny",
+      "permissionDecisionReason": "review-slices: `git push --no-verify` skips the review-slices guard. That is the user's override, never an agent's: ask the user."
+    }
+  }
+}

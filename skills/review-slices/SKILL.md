@@ -159,8 +159,7 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    (Husky), it registers a git config hook instead, which only git 2.54+ runs. It never sets `core.hooksPath`,
    so git-lfs, Husky and pre-commit keep running. `--agent-hooks` adds the agent hook to `.claude/settings.json`
    and `.codex/hooks.json`, keeping what is there. Codex runs it once its hooks feature is on and the user trusts
-   the hook; its payload and deny response follow Codex's hook documentation but have not yet been checked against
-   a live Codex session, so tell the user it is unverified there. If install reports a problem, tell the user.
+   the hook (checked live with Codex 0.164.0). If install reports a problem, tell the user.
 5. Optional, with the user: add `secrets: gitleaks` to REVIEW.md's block to scan the commits every push adds,
    then run `setup_tools.py upgrade --apply`, which copies `secret_scan.py` beside the guard. Every clone that
    pushes, and CI, then needs gitleaks 8.19+ and git 2.36+. Where the base branch already has a guard older than
