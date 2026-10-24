@@ -95,8 +95,14 @@ class FakeGitleaksTest(SecretScanCase):
     def test_a_clean_scan_lets_the_push_go(self):
         repo = self.make_repo(env=self.fake())
         self.commit_change(repo)
-        self.assertIn("none found in 1 commit(s)", repo.guard("status", env=self.fake()).stdout)
+        self.assertIn("found none in 1 commit(s)", repo.guard("status", env=self.fake()).stdout)
         self.assert_pushed(self.push(repo, env=self.fake()))
+
+    def test_status_labels_a_clean_scan_once(self):
+        repo = self.make_repo(env=self.fake())
+        self.commit_change(repo)
+        lines = repo.guard("status", env=self.fake()).stdout.splitlines()
+        self.assertIn("secrets: gitleaks found none in 1 commit(s) scanned", lines)
 
     def test_a_missing_gitleaks_refuses(self):
         repo = self.make_repo(env=self.fake())
@@ -279,7 +285,7 @@ class RealGitleaksTest(SecretScanCase):
                                   "important")
         done = self.ci(repo, base, head)
         self.assertEqual(done.returncode, 0, done.stdout)
-        self.assertIn("none found", done.stdout)
+        self.assertIn("found none", done.stdout)
 
 
 if __name__ == "__main__":

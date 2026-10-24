@@ -101,7 +101,7 @@ def verdict(git, done, report_path, scope):
         return ["the secret scan failed (gitleaks exit %d): %s" % (done.returncode, last)], []
     if int(count.group(1)) == 0 and adds_lines(git, scope):
         return ["the secret scan read no commits although they add lines (gitleaks: %s)" % last], []
-    return [], ["secrets: none found in %s commit(s) scanned" % count.group(1)]
+    return [], ["gitleaks found none in %s commit(s) scanned" % count.group(1)]
 
 
 def scan(git, at, head, tips):

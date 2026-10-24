@@ -501,10 +501,10 @@ def next_step(config, level, start, commits, uncommitted, tips):
     if uncommitted:
         edited = sorted(set(changed_paths("HEAD")))
         new = [path for path in uncommitted if path not in edited]
-        return ("commit this work locally (no trailer yet), then run status again. %s%s Commit only what this work "
+        return ("commit this work locally (no trailer yet), then run status again.%s%s Commit only what this work "
                 "changed; if a file is not this work's, ask the user, and never commit, stash or revert someone "
                 "else's edits. Files a tool wrote (build output, caches) belong in .gitignore: ask the user"
-                % ("Edited: %s. " % listed(edited) if edited else "", "New: %s." % listed(new) if new else ""))
+                % (" Edited: %s." % listed(edited) if edited else "", " New: %s." % listed(new) if new else ""))
     if level != "trivial":
         return ("review at %s: %s, on `git diff %s..HEAD`; then add the trailer to the last commit with "
                 "`git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer \"Review: %s %s\"`"

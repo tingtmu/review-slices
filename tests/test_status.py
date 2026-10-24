@@ -110,6 +110,14 @@ class StatusTest(unittest.TestCase):
         self.assertIn("New: build/out.o", step)
         self.assertIn(".gitignore", step)
 
+    def test_the_named_files_are_one_space_apart(self):
+        repo = self.repo
+        repo.write("README.md", "edited\n")
+        self.assertIn("again. Edited: README.md. Commit only", self.next_step())
+        repo.git("checkout", "--", "README.md")
+        repo.write("build/out.o", "binary\n")
+        self.assertIn("again. New: build/out.o. Commit only", self.next_step())
+
     def test_an_unwired_clone_is_named(self):
         repo = Repo(self)
         self.assertIn("NOT WIRED", repo.guard("status").stdout)
