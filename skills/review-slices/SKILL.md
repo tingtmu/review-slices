@@ -151,7 +151,9 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
 3. **Calibrate the table** before committing it: `python3 <skill>/scripts/calibrate.py` shows how it would have
    judged the base branch's last 50 first-parent commits. Over 30% critical means people will route around it;
    over 60% trivial means most changes get no review. Tune the globs and run it again (`--rules PATH` tries a
-   draft kept elsewhere).
+   draft kept elsewhere). Its later sections show what a level costs and why: the globs involved in the most
+   levels (tune the one behind the most high levels first), trailers that declared more or less than the table
+   computes, and each review unit's size. Run it again as reviewers' level notes build up.
 4. Run `python3 <skill>/scripts/setup_tools.py install --agent-hooks`, show the user what it would change, and
    with their go-ahead run it again with `--apply`. It copies the guard to `.githooks/` if missing, writes this
    clone's bootstrap, records the base branch, and wires pre-push with a hook file that runs any hook already

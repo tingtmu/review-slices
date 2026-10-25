@@ -4,14 +4,22 @@
 Run it from inside the target repo, before the table is committed. It stays in the skill and is never copied into a
 repo.
 
-    calibrate.py [--count N] [--rules PATH] [--base REF]
+    calibrate.py [--count N] [--rules PATH] [--base REF] [--list-candidates LINES FILES]
 
 It takes the last N first-parent commits of the base branch (default 50) and computes each one's review level from
 its own change: a merge from its first parent, the first commit from nothing. The rules come from PATH (default: the
 working copy's REVIEW.md, committed or not, so a draft table can be tried). The base is REF, else
 `git config review-slices.base`, else origin/HEAD, else main. It prints the level distribution, the three most recent
 examples per level with the glob that set it, a warning when the table looks too strict or too loose, and the globs
-that matched nothing.
+that matched nothing. Then, to show what a level costs and why:
+1. glob attribution: the globs involved in the most levels, and how often each set one alone; tune the glob involved
+   in the most high levels first;
+2. declared vs computed: review units whose trailer says a higher or lower level than this table computes;
+3. size by level: weighted lines and files per review unit;
+4. whitespace- or comment-only units per level (an estimate);
+5. merged-lens candidates: important units by size, which one reviewer covering every lens could take;
+   --list-candidates LINES FILES lists those within LINES weighted lines and FILES files.
+A review unit is what gets one review (see calibrate_units.py). Run it again as reviewers' level notes build up.
 Standard library only, Python 3.8+, git 2.31+.
 """
 import argparse
@@ -26,18 +34,19 @@ DEFAULT_COUNT = 50
 EXAMPLES = 3
 TOO_STRICT, TOO_LOOSE = 0.30, 0.60
 MIN_COMMITS = 20  # fewer, and one commit moves the shares by 5 points or more
-Commit = collections.namedtuple("Commit", "sha short parent subject")
-Judged = collections.namedtuple("Judged", "commit level row")
+Commit = collections.namedtuple("Commit", "sha short parent subject others")
+Judged = collections.namedtuple("Judged", "commit level row paths")
 
 
-def load_guard():
-    spec = importlib.util.spec_from_file_location("review_slices", os.path.join(HERE, "review_slices.py"))
+def load_units():
+    spec = importlib.util.spec_from_file_location("calibrate_units", os.path.join(HERE, "calibrate_units.py"))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-guard = load_guard()
+units = load_units()  # it loads the guard, so both judge with the same one
+guard = units.guard
 git = guard.git
 
 
@@ -71,7 +80,8 @@ def first_parent_commits(sha, count):
     for record in out.split("\x1e"):
         fields = record.strip("\n").split("\x1f")
         if len(fields) == 4:
-            commits.append(Commit(fields[0], fields[1], (fields[2].split() or [None])[0], fields[3]))
+            parents = fields[2].split()
+            commits.append(Commit(fields[0], fields[1], (parents or [None])[0], fields[3], tuple(parents[1:])))
     return commits
 
 
@@ -115,7 +125,7 @@ def judge(config, commits):
         paths = guard.changed_paths(commit.parent or empty, commit.sha)
         touched.update(paths)
         level, rows = guard.range_level(config, paths)
-        judged.append(Judged(commit, level, rows[0] if rows else None))
+        judged.append(Judged(commit, level, rows[0] if rows else None, paths))
     return judged, touched
 
 
@@ -152,7 +162,7 @@ def print_examples(judged):
             print("    %s  %s  %s" % (item.commit.short, item.commit.subject[:60], where))
 
 
-def report(name, sha, label, config, count):
+def report(name, sha, label, config, count, listing=None):
     commits = first_parent_commits(sha, count)
     edge = shallow_edge(commits)
     commits = [commit for commit in commits if commit not in edge]
@@ -174,12 +184,19 @@ def report(name, sha, label, config, count):
               "\n  " + "\n  ".join(never))
     else:
         print("every glob matched at least one path in these commits")
+    units.print_sections(config, judged, listing)
     return 0
 
 
 def positive(text):
     if not text.isdigit() or int(text) < 1:
         raise argparse.ArgumentTypeError("expected a whole number above 0, not %r" % text)
+    return int(text)
+
+
+def whole(text):
+    if not text.isdigit():
+        raise argparse.ArgumentTypeError("expected a whole number, not %r" % text)
     return int(text)
 
 
@@ -192,12 +209,14 @@ def main(argv):
                         help="how many first-parent commits to judge (default %d)" % DEFAULT_COUNT)
     parser.add_argument("--rules", metavar="PATH", help="the REVIEW.md to take the rules from")
     parser.add_argument("--base", metavar="REF", help="the base branch to read the commits from")
+    parser.add_argument("--list-candidates", nargs=2, type=whole, metavar=("LINES", "FILES"),
+                        help="list the merged-lens candidates within LINES weighted lines and FILES files")
     options = parser.parse_args(argv[1:])
     try:
         root = git("rev-parse", "--show-toplevel")
         name, sha = pick_base(options.base)
         config, label = load_rules(root, options.rules)
-        return report(name, sha, label, config, options.count)
+        return report(name, sha, label, config, options.count, options.list_candidates)
     except guard.GuardError as error:
         print("review-slices: %s" % error, file=sys.stderr)
         return 2
