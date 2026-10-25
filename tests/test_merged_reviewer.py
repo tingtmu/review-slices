@@ -3,7 +3,7 @@ import unittest
 
 import os
 
-from support import MERGED, RULES, Repo, load_guard, load_script
+from support import MERGED, RULES, Repo, load_guard, load_script, read_text
 
 GUARD = load_guard()
 SIZER = load_script("merged_reviewer", MERGED)
@@ -62,7 +62,7 @@ class MergedReviewerTest(unittest.TestCase):
 
     def test_a_base_branch_without_a_guard_never_lets_the_branch_measure_itself(self):  # review: I1 in adoption
         self.repo = Repo(self, rules=LIB_RULES, guard=False)
-        self.change({".githooks/review_slices.py": open(GUARD.__file__, encoding="utf-8").read(),
+        self.change({".githooks/review_slices.py": read_text(GUARD.__file__),
                      ".githooks/merged_reviewer.py": "def allowed(*args):\n    return True, 'branch-module'\n",
                      "lib/a.py": "a\n" * 200})
         self.assertThree("the base branch has no guard yet")

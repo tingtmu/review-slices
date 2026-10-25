@@ -33,6 +33,11 @@ ENV.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_P
            XDG_CONFIG_HOME=HOME)
 
 
+def read_text(path):
+    with open(path, encoding="utf-8") as handle:
+        return handle.read()
+
+
 def load_script(name, path):
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
@@ -70,11 +75,11 @@ class Repo:
         if rules is not None:
             self.write("REVIEW.md", review_md(rules))
         if guard:
-            self.write(".githooks/review_slices.py", open(GUARD, encoding="utf-8").read())
+            self.write(".githooks/review_slices.py", read_text(GUARD))
             if os.path.exists(MERGED):  # install copies it beside the guard
-                self.write(".githooks/merged_reviewer.py", open(MERGED, encoding="utf-8").read())
+                self.write(".githooks/merged_reviewer.py", read_text(MERGED))
             if os.path.exists(SUITE):
-                self.write(".githooks/run_suite.py", open(SUITE, encoding="utf-8").read())
+                self.write(".githooks/run_suite.py", read_text(SUITE))
         self.write("README.md", "start\n")
         self.commit("init")
         self.git("push", "-q", "origin", "main")
