@@ -77,6 +77,11 @@ The new commits one review covers: from the previous review trailer, or from wha
 the commit that carries the trailer.
 _Avoid_: PR, batch, range
 
+**Level note**:
+A reviewer's one line that a change's level looks higher than it needs, naming the glob that set it and the level
+it would give that glob. Reported to the user, never a review finding, never acted on in the same change.
+_Avoid_: level finding, downgrade
+
 **Review finding**:
 One defect a reviewer reports, with file and line, tagged Blocker, Fix, Nit or Pre-existing.
 _Avoid_: comment, issue, finding (unqualified)

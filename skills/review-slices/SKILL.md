@@ -45,7 +45,7 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    |---|---|
    | Trivial | none |
    | Simple | 1–2 adversarial reviewers |
-   | Important | a Standards, a Spec and an adversarial reviewer, all in parallel; or one merged reviewer where `status` prints `review: merged lens allowed` and you raised no level |
+   | Important | a Standards, a Spec and an adversarial reviewer, all in parallel; or one merged reviewer where `status` prints `review: merged reviewer allowed` and you raised no level |
    | Critical | Important's three; then the user's go-ahead for the one-way door, given with the review findings. A [review meeting](references/review-meeting.md) only for a disputed review finding, only if the user says yes |
 
    Reviewers read `git diff <base>..HEAD`, with `<base>` from the trailer line `status` printed. They are
@@ -70,7 +70,7 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    Fix a review finding's whole class at once, not only the line quoted. Fixes are new commits, except a secret
    in unpushed commits, which is removed by rewriting them ([A secret turns up](#a-secret-turns-up)).
 6. **Converge.** After a merged review, run `status` again before a second round: if it no longer prints
-   `review: merged lens allowed`, the second round is the three reviewers on `git diff <base>..HEAD`. One review
+   `review: merged reviewer allowed`, the second round is the three reviewers on `git diff <base>..HEAD`. One review
    round, then at most one second round on the new commits only
    (`git diff <old head>..HEAD`), resuming the same reviewers. Never re-raise a review finding already settled.
    Still split after that: escalate to the user.
@@ -134,12 +134,12 @@ find one, in your own work or another agent's:
    happened, the slice that should have caught it and why it did not, the failure class, the fix, the plug.
 2. If an earlier incident has the same failure class, add this one under its Recurrences instead. A recurrence
    means the earlier plug is weak: say so.
-3. If the slice that should have caught it was a merged reviewer, say so in the entry and tell the user: the
-   merged-lens thresholds (`MERGED_LINES`, `MERGED_FILES` in the guard) are a candidate to narrow.
-3. Choose the plug in this order: a test or guard that fails on the class; else a rule in REVIEW.md's "Failure
+3. If the slice that should have caught it was a merged reviewer, say so in the entry and tell the user: it
+   narrows the merged-reviewer thresholds (`MERGED_LINES`, `MERGED_FILES` in the guard), a guard release.
+4. Choose the plug in this order: a test or guard that fails on the class; else a rule in REVIEW.md's "Failure
    looks like" list. An incident stays open until its plug exists.
-4. A new failure class gets a one-line entry in REVIEW.md's "Failure looks like" list, linked to the incident.
-5. **Check the log:** `python3 <skill>/scripts/incidents.py` lists open incidents with their age, counts per slice
+5. A new failure class gets a one-line entry in REVIEW.md's "Failure looks like" list, linked to the incident.
+6. **Check the log:** `python3 <skill>/scripts/incidents.py` lists open incidents with their age, counts per slice
    and recurrences; `--check` exits 1 when a plugged incident's plug is gone (the hole is open again: reopen it).
    Write plugs as `test <path>::<function>`, `guard <path>` or `rule REVIEW.md "<line>"` so it can check them. To
    make that part of the suite, copy the script to `.githooks/incidents.py` (`upgrade` keeps it current) and add

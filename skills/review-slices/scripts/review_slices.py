@@ -63,6 +63,7 @@ MERGED = ("one merged reviewer (the adversarial, Standards and Spec lenses), or 
 PATCH_ARGS = ("--patch", "-U0", "--inter-hunk-context=0", "--no-renames", "--no-ext-diff", "--no-textconv",
               "--no-color", "--submodule=short", "--ignore-submodules=none", "--no-relative", "--src-prefix=a/",
               "--dst-prefix=b/")
+LFS_POINTER = "version https://git-lfs.github.com/spec/"
 HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
 SLICE2 = {"trivial": "no review",
           "simple": "1-2 adversarial reviewers",
@@ -508,38 +509,33 @@ def read_patch(*args):
 
 
 def patch_size(text):
-    """(weighted lines, files, binary) of a `--patch -U0` listing. Hunk lengths come from the hunk headers, so a
-    deleted line that starts with `--` is never taken for a header."""
+    """(weighted lines, files, binary) of a `--patch -U0` listing; a Git LFS pointer counts as binary. Hunk lengths
+    come from the hunk headers, so a deleted line that starts with `--` is never taken for a header."""
     lines, files, binary, old, new = 0, set(), False, 0, 0
     for line in text.split("\n"):
         if old > 0 or new > 0:
             if not line.startswith("\\"):  # "\ No newline at end of file"
                 old, new = old - (not line.startswith("+")), new - (not line.startswith("-"))
                 lines += max(1, -(-(len(line) - 1) // LINE_WIDTH)) if line.startswith(("+", "-")) else 0
+                binary = binary or line[1:].startswith(LFS_POINTER)  # the file's size is not in the patch
         elif line.startswith("diff --git "):
             files.add(line)
         elif line.startswith("@@ "):
             match = HUNK.match(line)
-            old, new = (int(count) if count is not None else 1 for count in match.groups()) if match else (0, 0)
+            if not match:
+                raise GuardError("unexpected hunk header in git's patch: %r" % line[:80])
+            old, new = (int(count) if count is not None else 1 for count in match.groups())
         elif line.startswith("Binary files ") and line.endswith(" differ"):
             binary = True
     return lines, len(files), binary
 
 
-def change_size(commits):
-    """(weighted lines, files, binary) of COMMITS' own changes, per commit then summed; merges are left out."""
-    if not commits:
-        return 0, 0, False
-    return patch_size(read_patch("log", "--no-walk=unsorted", "--no-merges", "--root", "--format=", *PATCH_ARGS,
-                                 *commits))
-
-
-def merged_lens(commits, uncommitted, tips):
-    """(allowed, why): may one merged reviewer take this Important push? Measured over every commit the push adds,
-    so several small units add up; never with uncommitted work, an unfetched base branch, a floor path (so no suite
+def merged_reviewer(commits, uncommitted, tips):
+    """(allowed, why): may one merged reviewer take this Important push? Measured over every commit the push adds
+    (per commit then summed, merges left out), so several small units add up; never with uncommitted work, an unfetched base branch, a floor path (so no suite
     change), a merge with changes of its own, a submodule update or a binary file, whose size it cannot see."""
-    if uncommitted:
-        return False, "uncommitted work"
+    if uncommitted or not commits:
+        return False, "uncommitted work" if uncommitted else "no new commits"
     if not base_tip()[1]:
         return False, "the base branch is not fetched"
     floor = [path for path in paths_of(commits) if any(fnmatch.fnmatchcase(path, glob) for glob, _level in FLOOR)]
@@ -549,10 +545,12 @@ def merged_lens(commits, uncommitted, tips):
     for merge in merges:
         if commit_paths(merge):
             return False, "merge %s has changes of its own" % merge[:12]
-    raw = git("log", "--no-walk=unsorted", "--no-merges", "--root", "--format=", "--raw", "--no-abbrev", *commits)
+    raw = git("log", "--no-walk=unsorted", "--no-merges", "--root", "--format=", "--raw", "--no-abbrev",
+              "--no-renames", "--ignore-submodules=none", *commits)  # whatever .gitmodules or the user's config say
     if any("160000" in line[1:].split()[:2] for line in raw.splitlines() if line.startswith(":")):
         return False, "a submodule update"
-    lines, files, binary = change_size(commits)
+    lines, files, binary = patch_size(read_patch("log", "--no-walk=unsorted", "--no-merges", "--root", "--format=",
+                                                 *PATCH_ARGS, *commits))
     if binary:
         return False, "a binary file"
     size = "%d weighted line(s), %d file(s) in %d new commit(s)" % (lines, files, len(commits))
@@ -630,9 +628,9 @@ def cmd_status(args):
     print("trailer: Review: %s %s" % (level, start[:12]))
     uncommitted = sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
     merged = ((False, "a BASE was given, so the push is not measured whole") if args
-              else merged_lens(commits, uncommitted, tips)) if level == "important" else None
+              else merged_reviewer(commits, uncommitted, tips)) if level == "important" else None
     if merged:
-        print("review: %s (%s)" % ("merged lens allowed: one reviewer for the adversarial, Standards and Spec lenses"
+        print("review: %s (%s)" % ("merged reviewer allowed: one reviewer for the adversarial, Standards and Spec lenses"
                                    if merged[0] else "three reviewers", merged[1]))
     print("new commits: %d not yet on %s or this branch's remote" % (len(commits), tip_name))
     print("standing rules: %s" % ("REVIEW.md at %s, where this branch left %s" % (standing[:12], tip_name)

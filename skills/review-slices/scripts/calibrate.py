@@ -12,12 +12,12 @@ working copy's REVIEW.md, committed or not, so a draft table can be tried). The 
 `git config review-slices.base`, else origin/HEAD, else main. It prints the level distribution, the three most recent
 examples per level with the glob that set it, a warning when the table looks too strict or too loose, and the globs
 that matched nothing. Then, to show what a level costs and why:
-1. glob attribution: the globs involved in the most levels, and how often each set one alone; tune the glob involved
-   in the most high levels first;
+1. glob attribution: the globs involved in the most levels, and how often each set one alone; narrow first the glob
+   that alone sets the most high levels;
 2. declared vs computed: review units whose trailer says a higher or lower level than this table computes;
 3. size by level: weighted lines and files per review unit;
 4. whitespace- or comment-only units per level (an estimate);
-5. merged-lens candidates: important units by size, which one reviewer covering every lens could take;
+5. merged-reviewer candidates: important units by size, which one merged reviewer could take;
    --list-candidates LINES FILES lists those within LINES weighted lines and FILES files.
 A review unit is what gets one review (see calibrate_units.py). Run it again as reviewers' level notes build up.
 Standard library only, Python 3.8+, git 2.31+.
@@ -210,7 +210,7 @@ def main(argv):
     parser.add_argument("--rules", metavar="PATH", help="the REVIEW.md to take the rules from")
     parser.add_argument("--base", metavar="REF", help="the base branch to read the commits from")
     parser.add_argument("--list-candidates", nargs=2, type=whole, metavar=("LINES", "FILES"),
-                        help="list the merged-lens candidates within LINES weighted lines and FILES files")
+                        help="list the merged-reviewer candidates within LINES weighted lines and FILES files")
     options = parser.parse_args(argv[1:])
     try:
         root = git("rev-parse", "--show-toplevel")

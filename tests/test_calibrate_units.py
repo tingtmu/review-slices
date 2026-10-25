@@ -217,9 +217,9 @@ class UnitsTest(unittest.TestCase):
                     "Squash (#2)\n\n* part\n\nReview: important 0123456789ab\n\n* more\n\nCo-authored-by: X <x@example.com>")
         self.change({"lib/c.py": "c\n"}, "after the squash", "important")
         out = self.run_ok("--list-candidates", "100", "5")
-        self.assertIn("review units: 4 (1 with no declared level", out)  # init's; the squash declares its trailer's
+        self.assertIn("review units: 5 (2 with no declared level", out)  # init and the commit before the squash
         self.assertRegex(out, r"Squash \(#2\)\s+2 line\(s\), 2 file\(s\)")
-        self.assertRegex(out, r"after the squash\s+2 line\(s\), 2 file\(s\)")  # lib/a.py and lib/c.py
+        self.assertRegex(out, r"after the squash\s+1 line\(s\), 1 file\(s\)")  # review: lib/a.py was before it
 
     def test_a_no_ff_merge_of_an_untrailered_branch_is_left_out(self):
         repo = self.repo
@@ -276,14 +276,14 @@ class UnitsTest(unittest.TestCase):
         # the init unit and nine more are important; only the trailing space and the two comments are quiet
         self.assertIn("important 3 of 10", out)
 
-    def test_merged_lens_candidates_leave_out_floors_raises_binaries_and_big_units(self):
+    def test_merged_reviewer_candidates_leave_out_floors_raises_binaries_and_big_units(self):
         self.change({"lib/small.py": "s\n"}, "small", "important")
         self.change({"lib/big.py": "b\n" * 100}, "big", "important")
         self.change({".githooks/extra.py": "e\n"}, "floor path", "important")
         self.change({"lib/raised.py": "r\n"}, "raised", "critical")
         self.change({"lib/b.bin": "\0\n"}, "binary", "important")
         out = self.run_ok("--list-candidates", "10", "1")
-        self.assertIn("merged-lens candidates: 2 of 6 important unit(s)", out)  # init's REVIEW.md is a floor too
+        self.assertIn("merged-reviewer candidates: 2 of 6 important unit(s)", out)  # init's REVIEW.md is a floor too
         self.assertEqual(self.grid(out, 10), [1, 1, 1])
         self.assertEqual(self.grid(out, 80), [1, 1, 1])
         listed = out.split("candidates within 10 line(s) and 1 file(s)")[1]

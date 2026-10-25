@@ -78,7 +78,7 @@ shown output would prove it).
 <the rules every brief carries>
 ```
 
-## Merged reviewer (Important, only where `status` prints `review: merged lens allowed`)
+## Merged reviewer (Important, only where `status` prints `review: merged reviewer allowed`)
 
 One reviewer takes the three lenses, in this order. Use it only on the `status` line that allows it, never on a
 level you raised for a planned action. Before a second round, run `status` again: once fixes make the push too big,

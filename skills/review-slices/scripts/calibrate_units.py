@@ -119,10 +119,13 @@ def review_units(commits):
         side = bool(side_commits(commit))
         declared = guard.trailer_level(commit.sha)
         whole = pulled or (None if side else message_level(commit))
-        if pulled or (whole and declared is None) or (not side and SQUASH.search(commit.subject) and not open_unit):
+        if pulled or (whole and declared is None) or (not side and SQUASH.search(commit.subject)):
             if whole and not seen:
                 units.extend(before_first(pending, cut))
                 pending, seen = [], True
+            elif seen:  # on the remote before the forge made this commit: never part of a later unit
+                units.extend(unit_of([item], None) for item in pending)
+                pending = []
             units.append(Unit((commit,), whole, bool(pulled), False))
             continue
         pending.append((commit, side))
@@ -156,7 +159,9 @@ def parse_patch(text):
             continue
         elif line.startswith("@@ "):
             match = guard.HUNK.match(line)
-            old, new = (int(count) if count is not None else 1 for count in match.groups()) if match else (0, 0)
+            if not match:
+                raise guard.GuardError("unexpected hunk header in git's patch: %r" % line[:80])
+            old, new = (int(count) if count is not None else 1 for count in match.groups())
         elif line.startswith("+++ b/") or (line.startswith("--- a/") and files[-1]["path"] is None):
             files[-1]["path"] = line[6:].strip('"')
         elif line.startswith("Binary files ") and line.endswith(" differ"):
@@ -167,7 +172,7 @@ def parse_patch(text):
 
 
 def log_patch(shas, extra=()):
-    """The patch of SHAS' own changes, merges left out, read as the guard's change_size reads it."""
+    """The patch of SHAS' own changes, merges left out, read as the guard's merged_reviewer reads it."""
     if not shas:
         return ""
     return guard.read_patch("log", "--no-walk=unsorted", "--no-merges", "--root", "--format=",
@@ -334,7 +339,7 @@ def candidates(measured):
 def print_candidates(measured, listing):
     found = candidates(measured)
     important = sum(1 for item in measured if item.level == "important")
-    print("merged-lens candidates: %d of %d important unit(s) (per review unit; a push of several units adds them up, "
+    print("merged-reviewer candidates: %d of %d important unit(s) (per review unit; a push of several units adds them up, "
           "so this overstates pushes that carry several):" % (len(found), important))
     print("  %-10s" % "lines" + "".join("  files <=%-6d" % files for files in FILE_CAPS))
     for lines in LINE_CAPS:

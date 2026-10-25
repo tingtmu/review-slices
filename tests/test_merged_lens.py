@@ -32,7 +32,7 @@ class MergedLensTest(unittest.TestCase):
 
     def assertAllowed(self, size):
         review, step = self.review()
-        self.assertEqual(review, "review: merged lens allowed: one reviewer for the adversarial, Standards and Spec "
+        self.assertEqual(review, "review: merged reviewer allowed: one reviewer for the adversarial, Standards and Spec "
                                  "lenses (%s)" % size)
         self.assertIn("review at important: one merged reviewer", step)
 
@@ -44,6 +44,11 @@ class MergedLensTest(unittest.TestCase):
 
     def test_the_thresholds(self):
         self.assertEqual((GUARD.MERGED_LINES, GUARD.MERGED_FILES), (40, 3))
+
+    def test_a_hunk_header_it_cannot_read_is_an_error(self):  # review: it counted nothing after it (I2)
+        self.assertEqual(GUARD.patch_size("diff --git a/x b/x\n@@ -1 +1 @@\n-a\n+b\n"), (2, 1, False))
+        with self.assertRaises(GUARD.GuardError):
+            GUARD.patch_size("diff --git a/x b/x\n@@ -1 +1,2 xx @@\n+a\n+b\n")
 
     def test_a_small_important_push_is_allowed_up_to_the_thresholds(self):
         self.change({"lib/a.py": "a\n" * 38, "lib/b.py": "b\n", "lib/c.py": "c\n"})
@@ -127,6 +132,20 @@ class MergedLensTest(unittest.TestCase):
         self.repo.git("commit", "-q", "-m", "add a submodule")
         os.makedirs(os.path.join(self.repo.path, "lib", "sub"))  # not checked out: an empty directory
         self.assertThree("a submodule update")
+
+    def test_a_submodule_its_own_gitmodules_ignores_is_never_merged(self):  # review: ignore = all hid it (I1)
+        sha = self.repo.out("rev-parse", "HEAD")
+        self.repo.write(".gitmodules", '[submodule "sub"]\n\tpath = lib/sub\n\turl = ./sub\n\tignore = all\n')
+        self.repo.git("update-index", "--add", "--cacheinfo", "160000,%s,lib/sub" % sha)
+        self.repo.git("add", ".gitmodules")
+        self.repo.git("commit", "-q", "-m", "add a submodule")
+        os.makedirs(os.path.join(self.repo.path, "lib", "sub"))
+        self.assertThree("a submodule update")
+
+    def test_a_git_lfs_pointer_is_never_merged(self):  # review: a 500 MB model measured as its pointer
+        self.change({"lib/model.onnx": "version https://git-lfs.github.com/spec/v1\noid sha256:%s\nsize 524288000\n"
+                                       % ("0" * 64)})
+        self.assertThree("a binary file")
 
     def test_status_with_a_base_measures_no_push(self):  # review: BASE measured a subset of the push
         self.change({"lib/a.py": "a\n" * 200})
