@@ -118,8 +118,9 @@ each failure class from getting through again. Terms: the skill's
     executable, linted as the repo's own code). The plug covered hooks only; the copies now carry skip headers
     and are executable, and SKILL.md says how to exclude them from formatters.
   - 2026-10-25, roadmap item: `ruff check --select ALL` still failed on the copies, since ruff 0.11+ flags their
-    blanket `# ruff: noqa` and `# flake8: noqa` (PGH004). The plug was tried with ruff's default rules only; the
-    headers now exempt PGH004 too, checked on ruff 0.1.15 to 0.17.2.
+    blanket `# ruff: noqa` and `# flake8: noqa` (PGH004). No plug checked the headers (the executable test reads
+    only the mode bit), and they were tried with ruff's default rules only. The headers now exempt PGH004 too,
+    checked on ruff 0.1.15 to 0.17.2, and a test pins them; ruff's preview rules still need the exclude in SKILL.md.
 
 ## I5. A setup tool runs a one-way door it should only list
 

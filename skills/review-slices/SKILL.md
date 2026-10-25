@@ -168,8 +168,9 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    critical and scans nothing.
 6. Run `python3 .githooks/review_slices.py check` until it reports no error, and `setup_tools.py doctor` until
    it reports ok. The scripts in `.githooks/` are vendored: they tell ruff, flake8, pylint, isort and mypy to skip
-   them. If another check in the suite (a formatter such as black or prettier) still reads `.githooks/`, exclude it
-   there in this same setup commit and say so to the user; it is not a weakened check.
+   them. If another check in the suite (a formatter such as black or prettier, or ruff with `preview = true`, which
+   wants `# ruff: file-ignore`) still reads `.githooks/`, exclude it there in this same setup commit and say so to
+   the user; it is not a weakened check.
 7. Commit REVIEW.md, `docs/INCIDENTS.md`, `.githooks/` and the agent hook settings together; REVIEW.md puts them
    at Important or higher, so they are reviewed like any change. Every other clone that wants the guard runs
    `install --apply` once; teammates who do not are never blocked by it, and the agent hook does nothing for them.
