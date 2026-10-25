@@ -171,11 +171,11 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    loose; one below it, a table stricter than the one that judged it. Small Important units that are mostly prose
    call for a narrower glob, not fewer reviewers. Run it again as reviewers' level notes build up.
 4. Run `python3 <skill>/scripts/setup_tools.py install --agent-hooks`, show the user what it would change, and
-   with their go-ahead run it again with `--apply`. It copies the guard to `.githooks/` if missing, writes this
-   clone's bootstrap, records the base branch, and wires pre-push with a hook file that runs any hook already
-   there after the guard (pre-commit's through its `.legacy` hook). Where another tool owns `core.hooksPath`
-   (Husky), it registers a git config hook instead, which only git 2.54+ runs. It never sets `core.hooksPath`,
-   so git-lfs, Husky and pre-commit keep running. `--agent-hooks` adds the agent hook to `.claude/settings.json`
+   with their go-ahead run it again with `--apply`. It copies the guard and `merged_reviewer.py` to `.githooks/`
+   if missing, writes this clone's bootstrap, records the base branch, and wires pre-push with a hook file that
+   runs any hook already there after the guard (pre-commit's through its `.legacy` hook). Where another tool owns
+   `core.hooksPath` (Husky), it registers a git config hook instead, which only git 2.54+ runs. It never sets
+   `core.hooksPath`, so git-lfs, Husky and pre-commit keep running. `--agent-hooks` adds the agent hook to `.claude/settings.json`
    and `.codex/hooks.json`, keeping what is there. Codex runs it on shell commands once its hooks feature is on and
    the user trusts the hook (a refused `git push --no-verify` checked live with Codex 0.164.0). If install reports
    a problem, tell the user.

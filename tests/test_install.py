@@ -2,7 +2,7 @@
 import os
 import unittest
 
-from support import ENV, RULES, SCRIPTS, Repo, git_version
+from support import ENV, GUARD, MERGED, RULES, SCRIPTS, Repo, git_version, load_guard
 
 CONFIG_HOOKS = git_version() >= (2, 54)
 
@@ -377,7 +377,17 @@ class UpgradeAndDoctorTest(unittest.TestCase):
         repo = Repo(self)  # a repo from before 0.8.0: the guard, no merged reviewer
         repo.remove(".githooks/merged_reviewer.py")
         repo.commit("an older install")
-        self.assertIn("no .githooks/merged_reviewer.py", repo.setup("doctor").stdout)
+        repo.write(".githooks/review_slices.py", open(GUARD, encoding="utf-8").read().replace(
+            'VERSION = "%s"' % load_guard().VERSION, 'VERSION = "0.1.0"'))
+        out = repo.setup("doctor").stdout
+        self.assertIn("no .githooks/merged_reviewer.py", out)
+        self.assertIn("the repo's guard is older than this skill's", out)  # review: the two checks hid each other
+        repo.remove(".githooks/review_slices.py")
+        repo.write(".githooks/merged_reviewer.py", open(MERGED, encoding="utf-8").read())
+        done = repo.setup("doctor")
+        self.assertIn("no .githooks/review_slices.py: run install", done.stdout)
+        self.assertNotIn("Traceback", done.stderr)
+        repo.write(".githooks/review_slices.py", open(GUARD, encoding="utf-8").read())
         done = repo.setup("upgrade", "--apply")
         self.assertEqual(done.returncode, 0, done.stdout)
         with open(os.path.join(SCRIPTS, "merged_reviewer.py"), encoding="utf-8") as skill, \

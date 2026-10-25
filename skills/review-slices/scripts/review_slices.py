@@ -501,7 +501,12 @@ def print_lint(config, where):
 def merged_reviewer(commits, uncommitted, tips):
     """(allowed, why) from .githooks/merged_reviewer.py, loaded as the secret scanner is; without it, or if it
     fails, three reviewers."""
-    at, source = vendored(base_tip()[1], "HEAD", MERGED_PATH)
+    tip = base_tip()[1]
+    if not tip:  # vendored() would fall back to this branch's own copy
+        return False, "the base branch is not fetched"
+    at, source = vendored(tip, "HEAD", MERGED_PATH)
+    if at == "HEAD":  # the base branch never had a guard: nothing it trusts measures this push
+        return False, "the base branch has no guard yet"
     if not source:
         return False, "%s has no %s: run the skill's setup_tools.py upgrade" % (at[:12], MERGED_PATH)
     module = types.ModuleType("merged_reviewer")

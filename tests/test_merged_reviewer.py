@@ -52,13 +52,20 @@ class MergedReviewerTest(unittest.TestCase):
             SIZER.patch_size(GUARD, "diff --git a/x b/x\n@@ -1 +1,2 xx @@\n+a\n+b\n")
 
     def test_without_the_base_branch_s_measure_it_is_three_reviewers(self):  # loaded as the secret scanner is
-        base = self.repo.out("rev-parse", "origin/main")
         self.repo.remove(".githooks/merged_reviewer.py")
         self.on_main({}, "drop the measure")
         self.change({"lib/a.py": "a\n"})
         self.assertThree("%s has no .githooks/merged_reviewer.py: run the skill's setup_tools.py upgrade"
                          % self.repo.out("rev-parse", "origin/main")[:12])
-        self.assertNotEqual(base, self.repo.out("rev-parse", "origin/main"))
+        self.assertNotEqual(self.repo.git("cat-file", "-e", "origin/main:.githooks/merged_reviewer.py",
+                                          check=False).returncode, 0)
+
+    def test_a_base_branch_without_a_guard_never_lets_the_branch_measure_itself(self):  # review: I1 in adoption
+        self.repo = Repo(self, rules=LIB_RULES, guard=False)
+        self.change({".githooks/review_slices.py": open(GUARD.__file__, encoding="utf-8").read(),
+                     ".githooks/merged_reviewer.py": "def allowed(*args):\n    return True, 'branch-module'\n",
+                     "lib/a.py": "a\n" * 200})
+        self.assertThree("the base branch has no guard yet")
 
     def test_a_broken_measure_on_the_base_branch_is_three_reviewers(self):
         self.on_main({".githooks/merged_reviewer.py": "def allowed(*args):\n    raise ValueError('broken')\n"},
@@ -72,6 +79,8 @@ class MergedReviewerTest(unittest.TestCase):
         self.change({".githooks/merged_reviewer.py": "def allowed(*args):\n    return True, 'edited'\n",
                      "lib/a.py": "a\n" * 100})
         self.assertNotIn("edited", self.review()[0])
+        self.repo.git("update-ref", "-d", "refs/remotes/origin/main")  # review: unfetched, it ran this copy
+        self.assertThree("the base branch is not fetched")
 
     def test_a_small_important_push_is_allowed_up_to_the_thresholds(self):
         self.change({"lib/a.py": "a\n" * 38, "lib/b.py": "b\n", "lib/c.py": "c\n"})

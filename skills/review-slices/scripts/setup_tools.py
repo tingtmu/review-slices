@@ -436,10 +436,10 @@ def cmd_doctor(_args):
     copy = read(os.path.join(root, guard.GUARD_PATH))
     if copy is None:
         problems.append("no %s: run install" % guard.GUARD_PATH)
-    if not os.path.exists(os.path.join(root, guard.MERGED_PATH)):
-        notes.append("no %s, so status always says three reviewers at important: run upgrade" % guard.MERGED_PATH)
     elif guard.source_version(copy) < guard.version_tuple(guard.VERSION):
         notes.append("the repo's guard is older than this skill's %s: run upgrade" % guard.VERSION)
+    if not os.path.exists(os.path.join(root, guard.MERGED_PATH)):
+        notes.append("no %s, so status always says three reviewers at important: run upgrade" % guard.MERGED_PATH)
     name, tip = guard.base_tip()
     base_rules = tip and guard.rules_at(tip)
     if (base_rules and base_rules.get("secrets") and guard.git_raw("show", "%s:%s" % (tip, guard.GUARD_PATH))

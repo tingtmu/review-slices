@@ -15,8 +15,8 @@ are known; reviewers and the user cover them.
 - The pass stamp is a plain file under `.git/review-slices/`; writing to it by hand forges a pass. The bootstrap
   beside it and the hook's git config are per clone too; editing them takes the guard out of that clone.
 - Planned actions are not visible to the guard; raising the level for them is the author's and the reviewers' job.
-- The standing rules and the guard come from the base branch, so a branch's own edits to either apply once
-  they are on the base branch. Paths that moved after the standing rules' commit fall back to their globs'
+- The standing rules, the guard and `.githooks/merged_reviewer.py` come from the base branch, so a branch's own
+  edits to them apply once they are on the base branch. Paths that moved after the standing rules' commit fall back to their globs'
   defaults until then.
 - A change to the suite is reported, not blocked. Reviewers check it is not weaker; a weaker package script, skip
   marker or test config is invisible to the guard.
