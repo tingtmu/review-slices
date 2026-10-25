@@ -28,6 +28,11 @@ class DogfoodTest(unittest.TestCase):
             self.assertEqual(copy.read(), skill.read(), "copy skills/review-slices/scripts/merged_reviewer.py to "
                                                         ".githooks/")
 
+    def test_the_repo_suite_wrapper_copy_matches_the_skill(self):
+        with open(os.path.join(SCRIPTS, "run_suite.py"), encoding="utf-8") as skill, \
+                open(os.path.join(ROOT, ".githooks", "run_suite.py"), encoding="utf-8") as copy:
+            self.assertEqual(copy.read(), skill.read(), "copy skills/review-slices/scripts/run_suite.py to .githooks/")
+
     def test_the_repo_rules_parse(self):
         with open(os.path.join(ROOT, "REVIEW.md"), encoding="utf-8") as handle:
             load_guard().parse_config(handle.read())

@@ -26,15 +26,15 @@ Configuration is the first ```review-slices fenced block in REVIEW.md at the rep
     secrets: gitleaks                    # scan the commits a push adds (.githooks/secret_scan.py, gitleaks 8.19+)
 
 A path takes its highest matching level; REVIEW.md, .githooks/* and .gitleaks* are at least important. A push is
-judged by its new commits (neither the target ref nor the base branch has them), a merge only where it differs
-from git's own merge. A trailer covers the new commits in its history no earlier trailer reaches, at their level
-or higher. The standing rules (REVIEW.md where the branch left the base branch) judge a change, so it cannot lower
-its own levels; a suite change is reported, not blocked. `status` says when an Important push is small enough for
-one merged reviewer (.githooks/merged_reviewer.py). `status`, `pre-push` and `ci` hand off to the base
-branch's guard when this copy differs from it. Standard library only, Python 3.8+, git 2.32+.
+judged by its new commits (neither the target ref nor the base branch has them), a merge only where it differs from
+git's own merge. A trailer covers the new commits in its history no earlier trailer reaches, at their level or
+higher. The standing rules (REVIEW.md where the branch left the base branch) judge a change, so it cannot lower its
+own levels; a suite change is reported, not blocked. `status` says when an Important push is small enough for one
+merged reviewer (.githooks/merged_reviewer.py). `status`, `pre-push` and `ci` hand off to the base branch's guard
+when this copy differs from it; `run-suite` runs the .githooks/run_suite.py beside this copy. Standard library only,
+Python 3.8+, git 2.32+.
 """
 import collections
-import datetime
 import fnmatch
 import functools
 import os
@@ -43,7 +43,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 import types
 
 VERSION = "0.8.0"
@@ -52,6 +51,7 @@ FLOOR = (("REVIEW.md", "important"), (".githooks/*", "important"), (".gitleaks*"
 GUARD_PATH = ".githooks/review_slices.py"
 SCANNER_PATH = ".githooks/secret_scan.py"
 MERGED_PATH = ".githooks/merged_reviewer.py"
+SUITE_PATH = ".githooks/run_suite.py"
 HANDOFF = "REVIEW_SLICES_HANDOFF"
 # The first guard version that has each command; the base branch's guard runs a command only if it has it.
 SINCE = {"level": (0, 1, 0), "run-suite": (0, 1, 0), "pre-push": (0, 1, 0), "check": (0, 2, 0),
@@ -62,7 +62,6 @@ SLICE2 = {"trivial": "no review",
           "simple": "1-2 adversarial reviewers",
           "important": "a Standards, a Spec and an adversarial reviewer",
           "critical": "a Standards, a Spec and an adversarial reviewer, then the user's go-ahead for the one-way door"}
-STAMP_KEEP = 50
 OVERRIDE = "If the user decides to push anyway, the user runs `git push --no-verify`; an agent never does."
 # Settings in a user's git config that would change what the guard reads.
 GIT_SETTINGS = ("-c", "core.quotePath=false", "-c", "color.ui=never", "-c", "log.showSignature=false",
@@ -435,20 +434,6 @@ def carried_stamp(config, tree, stamped, tries=10):
     return None
 
 
-def write_stamp(tree, seconds, times=()):
-    path = stamp_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    try:
-        with open(path, encoding="utf-8") as handle:
-            lines = handle.read().splitlines()
-    except FileNotFoundError:
-        lines = []
-    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    with open(path, "w", encoding="utf-8") as handle:
-        line = "%s %s %.0fs %s" % (tree, now, seconds, ",".join("%.0fs" % taken for taken in times))
-        handle.write("\n".join((lines + [line.rstrip()])[-STAMP_KEEP:]) + "\n")
-
-
 def handoff(command, args, data=None, judge=None):
     """The exit code of the guard committed at JUDGE (the base branch), run instead of this copy, or None to run
     this copy. It runs when it differs from this file and has COMMAND, so an edited copy does not judge itself."""
@@ -622,51 +607,17 @@ def cmd_check(_args):
     return 1 if errors else 0
 
 
-def cmd_run_suite(_args):
-    """Run each check of the suite listed in the working copy's REVIEW.md, which is part of the tree it stamps."""
-    root = git("rev-parse", "--show-toplevel")
-    config = read_config(root)
-    if not config["tests"]:
-        raise GuardError("REVIEW.md's review-slices block names no test command")
-    wiring = hook_wiring()
-    if not wiring or "0.1.0" in wiring:
-        print("warning: this clone's pre-push does not reach the bootstrap, so pushes are not checked by the base "
-              "branch's guard; run the skill's setup_tools.py install", file=sys.stderr)
-    mismatch = base_mismatch(config, base_tip()[0])
-    if mismatch:
-        print("warning: " + mismatch, file=sys.stderr)
-    untracked = untracked_paths()
-    if untracked:
-        print("note: the stamp includes these untracked files; commit them all, or run again without them:\n  "
-              + "\n  ".join(untracked[:10]), file=sys.stderr)
-    before, started, times = worktree_tree(root), time.monotonic(), []
-    for number, command in enumerate(config["tests"], 1):
-        print("run-suite: [%d/%d] %s" % (number, len(config["tests"]), command), flush=True)
-        began = time.monotonic()
-        code = subprocess.run(command, shell=True, cwd=root).returncode
-        times = times + [time.monotonic() - began]
-        print("run-suite: [%d/%d] exit %d after %.0fs" % (number, len(config["tests"]), code, times[-1]), flush=True)
-        if code != 0:
-            print("run-suite: check %d failed; no stamp written" % number, file=sys.stderr)
-            return code
-    after = worktree_tree(root)
-    if before != after:
-        moved = split_nul(git("diff-tree", "-r", "-z", "--name-only", before, after))
-        print("run-suite: these files changed during the run, so no stamp was written; ignore or fix them and run "
-              "again:\n  " + "\n  ".join(moved[:10]), file=sys.stderr)
-        return 1
-    seconds = time.monotonic() - started
-    write_stamp(before, seconds, times)
-    head = git("rev-parse", "--verify", "--quiet", "HEAD^{tree}", check=False)
-    if head and head != before:
-        differ = split_nul(git("diff-tree", "-r", "-z", "--name-only", head, before))
-        print("run-suite: the suite passed on the working tree (stamped %s), but that is NOT HEAD's tree, so a push "
-              "of HEAD has no stamp. These paths differ from HEAD:\n  %s\nCommit them if they are this work's; if "
-              "they are not yours, ask the user before touching them." % (before[:12], "\n  ".join(differ[:10])),
-              file=sys.stderr)
-        return 0
-    print("run-suite: passed in %.0fs; stamped tree %s, which is HEAD's" % (seconds, before[:12]))
-    return 0
+def cmd_run_suite(args):
+    """Run the suite and stamp a pass with .githooks/run_suite.py from beside this copy; it never hands off."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.path.basename(SUITE_PATH))
+    module = types.ModuleType("run_suite")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            exec(compile(handle.read(), path, "exec"), module.__dict__)
+        run = module.run
+    except Exception as error:  # a missing or broken suite wrapper is named, not a traceback
+        raise GuardError("%s did not load (%r): run the skill's setup_tools.py upgrade --apply" % (path, error))
+    return run(types.SimpleNamespace(**globals()), args)
 
 
 def review_units(commits, trusted):

@@ -171,8 +171,8 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    loose; one below it, a table stricter than the one that judged it. Small Important units that are mostly prose
    call for a narrower glob, not fewer reviewers. Run it again as reviewers' level notes build up.
 4. Run `python3 <skill>/scripts/setup_tools.py install --agent-hooks`, show the user what it would change, and
-   with their go-ahead run it again with `--apply`. It copies the guard and `merged_reviewer.py` to `.githooks/`
-   if missing, writes this clone's bootstrap, records the base branch, and wires pre-push with a hook file that
+   with their go-ahead run it again with `--apply`. It copies the guard, `merged_reviewer.py` and `run_suite.py` to
+   `.githooks/` if missing, writes this clone's bootstrap, records the base branch, and wires pre-push with a hook file that
    runs any hook already there after the guard (pre-commit's through its `.legacy` hook). Where another tool owns
    `core.hooksPath` (Husky), it registers a git config hook instead, which only git 2.54+ runs. It never sets
    `core.hooksPath`, so git-lfs, Husky and pre-commit keep running. `--agent-hooks` adds the agent hook to `.claude/settings.json`
@@ -207,6 +207,7 @@ reviewed change. What gets installed:
                                        judges every push
 <repo>/.githooks/agent_hook.py         blocks an agent's overrides         committed
 <repo>/.githooks/merged_reviewer.py    when one reviewer may do            committed
+<repo>/.githooks/run_suite.py          run-suite: runs the suite, stamps   committed
 <repo>/.githooks/secret_scan.py        the secret scan (with secrets:)     committed
 <repo>/.claude/settings.json           runs the agent hook (Claude Code)   committed
 <repo>/.codex/hooks.json               runs the agent hook (Codex)         committed

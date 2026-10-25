@@ -2,7 +2,7 @@
 import os
 import unittest
 
-from support import ENV, GUARD, MERGED, RULES, SCRIPTS, Repo, git_version, load_guard
+from support import ENV, GUARD, MERGED, RULES, SCRIPTS, SUITE, Repo, git_version, load_guard
 
 CONFIG_HOOKS = git_version() >= (2, 54)
 
@@ -121,7 +121,8 @@ class InstallTest(unittest.TestCase):
         # `ruff check --select ALL` flags a blanket `# ruff: noqa` or `# flake8: noqa` (PGH004) unless it is exempted
         header = ["# ruff: noqa", "# flake8: noqa", "# ruff: noqa: PGH004", "# pylint: skip-file",
                   "# mypy: ignore-errors", "# isort: skip_file"]
-        for name in ("review_slices.py", "agent_hook.py", "incidents.py", "secret_scan.py", "merged_reviewer.py"):
+        for name in ("review_slices.py", "agent_hook.py", "incidents.py", "secret_scan.py", "merged_reviewer.py",
+                     "run_suite.py"):
             with open(os.path.join(SCRIPTS, name), encoding="utf-8") as handle:
                 self.assertEqual(handle.read().splitlines()[2:8], header, name)
 
@@ -392,6 +393,27 @@ class UpgradeAndDoctorTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stdout)
         with open(os.path.join(SCRIPTS, "merged_reviewer.py"), encoding="utf-8") as skill, \
                 open(os.path.join(repo.path, ".githooks", "merged_reviewer.py"), encoding="utf-8") as copy:
+            self.assertEqual(copy.read(), skill.read())
+
+    def test_install_and_upgrade_add_the_suite_wrapper_beside_the_guard(self):
+        repo = Repo(self, guard=False)
+        self.assertEqual(repo.setup("install", "--apply").returncode, 0)
+        self.assertTrue(os.access(os.path.join(repo.path, ".githooks", "run_suite.py"), os.X_OK))
+        repo = Repo(self)  # this guard without its suite wrapper: run-suite cannot stamp
+        repo.remove(".githooks/run_suite.py")
+        repo.commit("a half upgrade")
+        self.assertIn("problem: no .githooks/run_suite.py, so run-suite cannot stamp a pass",
+                      repo.setup("doctor").stdout)
+        # a guard from before run_suite.py runs the suite itself
+        repo.write(".githooks/review_slices.py", '"""review-slices guard"""\nVERSION = "0.8.0"\n')
+        out = repo.setup("doctor").stdout
+        self.assertIn("note: no .githooks/run_suite.py: run upgrade --apply", out)
+        self.assertNotIn("problem: no .githooks/run_suite.py", out)
+        repo.write(".githooks/review_slices.py", open(GUARD, encoding="utf-8").read())
+        done = repo.setup("upgrade", "--apply")
+        self.assertEqual(done.returncode, 0, done.stdout)
+        with open(SUITE, encoding="utf-8") as skill, \
+                open(os.path.join(repo.path, ".githooks", "run_suite.py"), encoding="utf-8") as copy:
             self.assertEqual(copy.read(), skill.read())
 
     def test_doctor_names_a_missing_gitleaks_where_review_md_asks_for_it(self):

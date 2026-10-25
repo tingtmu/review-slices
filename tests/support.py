@@ -13,6 +13,7 @@ SCRIPTS = os.path.join(ROOT, "skills", "review-slices", "scripts")
 GUARD = os.path.join(SCRIPTS, "review_slices.py")
 SETUP = os.path.join(SCRIPTS, "setup_tools.py")
 MERGED = os.path.join(SCRIPTS, "merged_reviewer.py")
+SUITE = os.path.join(SCRIPTS, "run_suite.py")
 
 RULES = """\
 test: true
@@ -72,6 +73,8 @@ class Repo:
             self.write(".githooks/review_slices.py", open(GUARD, encoding="utf-8").read())
             if os.path.exists(MERGED):  # install copies it beside the guard
                 self.write(".githooks/merged_reviewer.py", open(MERGED, encoding="utf-8").read())
+            if os.path.exists(SUITE):
+                self.write(".githooks/run_suite.py", open(SUITE, encoding="utf-8").read())
         self.write("README.md", "start\n")
         self.commit("init")
         self.git("push", "-q", "origin", "main")
