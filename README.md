@@ -46,9 +46,16 @@ to the guard reaches every clone by push. Only clones that run `install` are che
 
 Before writing REVIEW.md, `discover.py` lists the checks the repo already has (CI files, package scripts, Makefile
 and more), marked local or remote, and `--run` tries the local ones on a clean tree. `calibrate.py` shows how a draft
-level table would have judged the base branch's last 50 commits. `incidents.py [--check]` reports
-docs/INCIDENTS.md and checks that every plug still exists. All three run from the skill's `scripts/`;
-`incidents.py` can also be copied into `.githooks/` to run in a repo's suite, and `upgrade` keeps it current.
+level table would have judged the base branch's last 50 commits and, by review unit, which globs set the levels,
+what each level costs in size, and which small important units one merged reviewer could take.
+`incidents.py [--check]` reports docs/INCIDENTS.md and checks that every plug still exists. All three run from the
+skill's `scripts/`; `incidents.py` can also be copied into `.githooks/` to run in a repo's suite, and `upgrade`
+keeps it current.
+
+At important, `status` says whether one merged reviewer may take the push (at most 40 weighted lines and 3 files,
+with no floor path, merge changes of its own, submodule update or binary file) or why it needs three. That measure,
+`.githooks/merged_reviewer.py`, is copied by `install`, added by `upgrade`, and loaded from the base branch like the
+guard; without it `status` always says three reviewers.
 
 `install --agent-hooks` also adds a PreToolUse hook for Claude Code (`.claude/settings.json`) and Codex
 (`.codex/hooks.json`, shell commands only, once its hooks feature is on and the user trusts the hook; a refused
@@ -120,3 +127,11 @@ only in paths an explicit `trivial:` glob names, and the stamp line records each
 base branch tracked such a remote kept running the checkout's own guard), no longer counts a REVIEW.md that only
 mentions the rules block in prose, and says why it chose the base. A clean secret scan reads "gitleaks found none
 in N commit(s) scanned" in pre-push, `ci` and `status`, which labels it once.
+
+`0.8.0`: at important, `status` says whether one merged reviewer may take a small push (at most 40 weighted lines
+and 3 files) or why it needs three; the measure is a new vendored `.githooks/merged_reviewer.py`, loaded from the
+base branch like the guard, which `upgrade` adds. Reviewers add a level note when a level looks higher than the
+change needs and read REVIEW.md and the agent instruction files as committed at the standing rules; a change to
+those files, `.claude/` or `.codex/` gets a CLI reviewer started in an empty directory. `calibrate.py` adds, by
+review unit, which globs set the levels, declared vs computed levels, size by level, and the merged-reviewer
+candidates (`--list-candidates LINES FILES`). The vendored copies no longer trip ruff's PGH004 under `--select ALL`.
