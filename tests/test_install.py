@@ -117,6 +117,14 @@ class InstallTest(unittest.TestCase):
         for name in ("review_slices.py", "agent_hook.py"):
             self.assertTrue(os.access(os.path.join(repo.path, ".githooks", name), os.X_OK), name)
 
+    def test_copied_scripts_tell_strict_linters_to_skip_them(self):
+        # `ruff check --select ALL` flags a blanket `# ruff: noqa` or `# flake8: noqa` (PGH004) unless it is exempted
+        header = ["# ruff: noqa", "# flake8: noqa", "# ruff: noqa: PGH004", "# pylint: skip-file",
+                  "# mypy: ignore-errors", "# isort: skip_file"]
+        for name in ("review_slices.py", "agent_hook.py", "incidents.py", "secret_scan.py"):
+            with open(os.path.join(SCRIPTS, name), encoding="utf-8") as handle:
+                self.assertEqual(handle.read().splitlines()[2:8], header, name)
+
     def test_a_hook_that_runs_another_clone_s_bootstrap_is_not_wired(self):
         repo = self.repo
         self.assertEqual(repo.setup("install", "--apply").returncode, 0)

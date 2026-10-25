@@ -2,6 +2,7 @@
 # Vendored into repos by the review-slices skill and linted where it is written, so a host repo's tools skip it:
 # ruff: noqa
 # flake8: noqa
+# ruff: noqa: PGH004
 # pylint: skip-file
 # mypy: ignore-errors
 # isort: skip_file

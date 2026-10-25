@@ -111,11 +111,15 @@ each failure class from getting through again. Terms: the skill's
 - **Plug:** test tests/test_pre_push.py::test_an_existing_hook_keeps_running_beside_the_guard,
   test tests/test_install.py::test_a_config_hook_runs_beside_a_foreign_hooks_path,
   test tests/test_install.py::test_install_moves_a_0_1_0_clone_off_hooks_path,
-  test tests/test_install.py::InstallTest::test_installed_copies_are_executable
+  test tests/test_install.py::InstallTest::test_installed_copies_are_executable,
+  test tests/test_install.py::InstallTest::test_copied_scripts_tell_strict_linters_to_skip_them
 - **Recurrences:**
   - 2026-10-24, acceptance trial: adopting turned a repo's `ruff check .` red on the copied scripts (not
     executable, linted as the repo's own code). The plug covered hooks only; the copies now carry skip headers
     and are executable, and SKILL.md says how to exclude them from formatters.
+  - 2026-10-25, roadmap item: `ruff check --select ALL` still failed on the copies, since ruff 0.11+ flags their
+    blanket `# ruff: noqa` and `# flake8: noqa` (PGH004). The plug was tried with ruff's default rules only; the
+    headers now exempt PGH004 too, checked on ruff 0.1.15 to 0.17.2.
 
 ## I5. A setup tool runs a one-way door it should only list
 
