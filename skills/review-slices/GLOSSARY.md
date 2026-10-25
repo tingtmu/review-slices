@@ -85,6 +85,11 @@ _Avoid_: comment, issue, finding (unqualified)
 A reviewer with fresh context told to assume the change is wrong and to show how it fails.
 _Avoid_: red team, devil's advocate
 
+**Merged reviewer**:
+One reviewer who takes the adversarial, Standards and Spec lenses in turn, for an Important push small enough
+that `status` allows it. Never at Critical, on a raised level, a floor path or a merge with changes of its own.
+_Avoid_: light review, quick review
+
 **Review meeting**:
 A multi-agent decision meeting limited to disputed review findings, held only with the user's go-ahead.
 _Avoid_: verifier voting, voting panel

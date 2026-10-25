@@ -16,17 +16,11 @@ import importlib.util
 import math
 import os
 import re
-import subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 os.environ["GIT_NO_LAZY_FETCH"] = "1"  # git 2.44+: never fetch a missing object into the repo being calibrated
-LINE_WIDTH = 100  # characters a weighted line holds: a minified line cannot pass as one
 LINE_CAPS, FILE_CAPS = (10, 20, 40, 80), (1, 3, 5)
 TOP_GLOBS, LISTED = 8, 3
-# Read a commit's own change line by line, whatever the user's diff settings say.
-PATCH_ARGS = ("--patch", "-U0", "--inter-hunk-context=0", "--no-renames", "--no-ext-diff", "--no-textconv",
-              "--no-color", "--submodule=short", "--ignore-submodules=none", "--no-relative", "--src-prefix=a/",
-              "--dst-prefix=b/")
 # Never -w: it hides indentation, which is code in Python, YAML and Makefiles.
 QUIET_ARGS = ("--ignore-space-at-eol", "--ignore-blank-lines")
 PROSE = (".md", ".txt", ".rst")  # in this skill prose is the instructions: never a quiet change
@@ -35,7 +29,6 @@ MARKERS = dict([(ext, ("#",)) for ext in (".py", ".sh", ".yml", ".yaml", ".toml"
                + [(".sql", ("--",))])
 PRAGMAS = ("noqa", "type: ignore", "pylint:", "ruff:", "flake8:", "mypy:", "isort:", "eslint-", "@ts-", "go:", "#!",
            "coding")
-HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
 # GitHub's and GitLab's merge subjects; git's own for the base branch merged into a branch never match.
 FORGE_MERGE = re.compile(r"^Merge (pull request #\d+\b|branch '[^']+' into ')")
 SQUASH = re.compile(r" \(#\d+\)$")  # GitHub's squash-merge subject
@@ -162,7 +155,7 @@ def parse_patch(text):
         elif not files:
             continue
         elif line.startswith("@@ "):
-            match = HUNK.match(line)
+            match = guard.HUNK.match(line)
             old, new = (int(count) if count is not None else 1 for count in match.groups()) if match else (0, 0)
         elif line.startswith("+++ b/") or (line.startswith("--- a/") and files[-1]["path"] is None):
             files[-1]["path"] = line[6:].strip('"')
@@ -173,38 +166,19 @@ def parse_patch(text):
     return [FileDiff(item["key"], item["path"], item["binary"], item["mode"], tuple(item["lines"])) for item in files]
 
 
-def size_of(files):
-    """Size of parsed FILES: each added or deleted line counts ceil(characters / 100), at least 1; distinct files."""
-    lines = sum(max(1, math.ceil(len(line[1:]) / float(LINE_WIDTH))) for item in files for line in item.lines)
-    return Size(lines, len({item.key for item in files}), any(item.binary for item in files))
-
-
-def patch(*args):
-    """git's patch output, read as bytes: Python's newline translation would split a line at a lone CR."""
-    done = subprocess.run(("git",) + guard.GIT_SETTINGS + args, capture_output=True)
-    if done.returncode != 0:
-        raise guard.GuardError("git %s failed: %s" % (args[0], done.stderr.decode("utf-8", "replace").strip()))
-    return done.stdout.decode("utf-8", "surrogateescape")
-
-
 def log_patch(shas, extra=()):
-    """The patch of SHAS' own changes, merges left out; empty for no SHAS."""
+    """The patch of SHAS' own changes, merges left out, read as the guard's change_size reads it."""
     if not shas:
         return ""
-    return patch("log", "--no-walk=unsorted", "--no-merges", "--root", "--format=", *(PATCH_ARGS + extra), *shas)
-
-
-def change_size(shas):
-    """Size of the commits SHAS' own changes, per commit then summed (a line edited twice counts twice); merges are
-    left out, so a clean merge of the base branch adds nothing."""
-    return size_of(parse_patch(log_patch(shas)))
+    return guard.read_patch("log", "--no-walk=unsorted", "--no-merges", "--root", "--format=",
+                            *(guard.PATCH_ARGS + extra), *shas)
 
 
 def unit_patch(unit, extra=()):
     """A pull request's unit is its merge's first-parent change; any other unit is its commits' own changes."""
     if unit.pull:
         merge = unit.commits[0]
-        return patch("diff", *(PATCH_ARGS + extra), merge.parent, merge.sha)
+        return guard.read_patch("diff", *(guard.PATCH_ARGS + extra), merge.parent, merge.sha)
     return log_patch([commit.sha for commit in unit.commits], extra)
 
 
@@ -244,8 +218,8 @@ def measure(config, units):
             continue
         paths = unit_paths(unit)
         level, rows = guard.range_level(config, paths)
-        files = parse_patch(unit_patch(unit))
-        size = size_of(files)
+        text = unit_patch(unit)
+        files, size = parse_patch(text), Size(*guard.patch_size(text))  # the guard's measure, as status enforces it
         measured.append(Measured(unit, level, rows[0] if rows else None, paths, size,
                                  quiet(unit, paths, files, size)))
     return measured
@@ -331,7 +305,8 @@ def nearest_rank(values, share):
 
 def print_sizes(measured):
     sized = [item for item in measured if not item.size.binary]
-    print("size by level (per unit; weighted lines: ceil(characters / %d) per added or deleted line):" % LINE_WIDTH)
+    print("size by level (per unit; weighted lines: ceil(characters / %d) per added or deleted line):"
+          % guard.LINE_WIDTH)
     for level in guard.LEVELS:
         items = [item for item in sized if item.level == level]
         if items:

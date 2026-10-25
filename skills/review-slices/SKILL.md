@@ -37,14 +37,15 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    step. A secret it finds goes to [A secret turns up](#a-secret-turns-up) before any reviewer sees the diff. Fix errors in REVIEW.md that your change introduced; report the
    ones it says are in the standing rules to the user. Raise the level for planned actions REVIEW.md lists (for
    example a live cloud action); when unsure, go one higher. A raised level is the level the trailer records.
-   Never lower it. Put its output in your report.
+   Never lower it. Put its output in your report. At Important it also prints a `review:` line: whether this push
+   is small enough for one merged reviewer, or why not.
 4. **Review at that level** (briefs in [references/reviewer-briefs.md](references/reviewer-briefs.md)):
 
    | Level | Slice 2 |
    |---|---|
    | Trivial | none |
    | Simple | 1–2 adversarial reviewers |
-   | Important | a Standards, a Spec and an adversarial reviewer, all in parallel |
+   | Important | a Standards, a Spec and an adversarial reviewer, all in parallel; or one merged reviewer where `status` prints `review: merged lens allowed` and you raised no level |
    | Critical | Important's three; then the user's go-ahead for the one-way door, given with the review findings. A [review meeting](references/review-meeting.md) only for a disputed review finding, only if the user says yes |
 
    Reviewers read `git diff <base>..HEAD`, with `<base>` from the trailer line `status` printed. They are
@@ -68,7 +69,9 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
      raised it.
    Fix a review finding's whole class at once, not only the line quoted. Fixes are new commits, except a secret
    in unpushed commits, which is removed by rewriting them ([A secret turns up](#a-secret-turns-up)).
-6. **Converge.** One review round, then at most one second round on the new commits only
+6. **Converge.** After a merged review, run `status` again before a second round: if it no longer prints
+   `review: merged lens allowed`, the second round is the three reviewers on `git diff <base>..HEAD`. One review
+   round, then at most one second round on the new commits only
    (`git diff <old head>..HEAD`), resuming the same reviewers. Never re-raise a review finding already settled.
    Still split after that: escalate to the user.
 7. **Add the trailer** `status` printed to the last commit the review covered, with exactly
@@ -131,6 +134,8 @@ find one, in your own work or another agent's:
    happened, the slice that should have caught it and why it did not, the failure class, the fix, the plug.
 2. If an earlier incident has the same failure class, add this one under its Recurrences instead. A recurrence
    means the earlier plug is weak: say so.
+3. If the slice that should have caught it was a merged reviewer, say so in the entry and tell the user: the
+   merged-lens thresholds (`MERGED_LINES`, `MERGED_FILES` in the guard) are a candidate to narrow.
 3. Choose the plug in this order: a test or guard that fails on the class; else a rule in REVIEW.md's "Failure
    looks like" list. An incident stays open until its plug exists.
 4. A new failure class gets a one-line entry in REVIEW.md's "Failure looks like" list, linked to the incident.

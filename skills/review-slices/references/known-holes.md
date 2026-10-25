@@ -4,6 +4,9 @@ The guard is a hard stop for honest mistakes, not a lock against an agent set on
 are known; reviewers and the user cover them.
 
 - A review trailer proves a level was declared, not that a review ran. The agent writes its own trailer.
+- Whether one merged reviewer or three ran is invisible too: `status` only says when one may. Its measure counts
+  lines and files, not what they do: a one-line change to something every adopter depends on fits, so the author
+  raises the level for planned actions and the reviewer's Blocker rule backs that up.
 - The trailer's base SHA is informational; rebases change it and the guard does not check it.
 - The pass stamp covers the tree `git add -A` would commit; committing only some of the files means running the
   suite again.

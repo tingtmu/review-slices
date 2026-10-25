@@ -78,6 +78,25 @@ shown output would prove it).
 <the rules every brief carries>
 ```
 
+## Merged reviewer (Important, only where `status` prints `review: merged lens allowed`)
+
+One reviewer takes the three lenses, in this order. Use it only on the `status` line that allows it, never on a
+level you raised for a planned action. Before a second round, run `status` again: once fixes make the push too big,
+the second round is the three reviewers on the whole unit.
+
+```
+Review this change three ways, in order, and keep the three parts of your report apart.
+
+Change: `git diff <base>..HEAD` in <repo path>; commits `git log --oneline <base>..HEAD`.
+Review level output: <paste the `level` output>. Spec: <spec path>.
+1. Adversarial: <the adversarial brief from "Assume this change is wrong" through its lenses>.
+2. Standards: <the Standards brief from "Check this change against the standards" through its last line>.
+3. Spec: <the Spec brief from "Check that this change does what was asked" through its last line>.
+Finish all three even if the first finds a Blocker. If the change looks bigger or riskier than one reviewer
+should take, say so at the top: the author then runs the three reviewers instead.
+<the rules every brief carries>
+```
+
 The `code-review` skill (mattpocock/skills) can stand in for the Standards and Spec reviewers if it is installed.
 Invoke it with the fixed point and the spec as arguments, so its issue-tracker step never runs
 (`fixed point: <base sha>; spec: <path>`), hand its reviewers the rules every brief carries, and start the

@@ -29,7 +29,8 @@ A path takes its highest matching level; REVIEW.md, .githooks/* and .gitleaks* a
 judged by its new commits (neither the target ref nor the base branch has them), a merge only where it differs
 from git's own merge. A trailer covers the new commits in its history no earlier trailer reaches, at their level
 or higher. The standing rules (REVIEW.md where the branch left the base branch) judge a change, so it cannot lower
-its own levels; a suite change is reported, not blocked. `status`, `pre-push` and `ci` hand off to the base
+its own levels; a suite change is reported, not blocked. `status` says when an Important push is small enough for
+one merged reviewer (MERGED_LINES, MERGED_FILES). `status`, `pre-push` and `ci` hand off to the base
 branch's guard when this copy differs from it. Standard library only, Python 3.8+, git 2.32+.
 """
 import collections
@@ -54,6 +55,15 @@ HANDOFF = "REVIEW_SLICES_HANDOFF"
 # The first guard version that has each command; the base branch's guard runs a command only if it has it.
 SINCE = {"level": (0, 1, 0), "run-suite": (0, 1, 0), "pre-push": (0, 1, 0), "check": (0, 2, 0),
          "status": (0, 3, 0), "ci": (0, 4, 0)}
+# The largest push one merged reviewer may take, in weighted lines (ceil(characters / LINE_WIDTH) per added or
+# deleted line, so a minified line cannot pass as one) and files; chosen from calibrate.py's data (2026-10-25).
+MERGED_LINES, MERGED_FILES, LINE_WIDTH = 40, 3, 100
+MERGED = ("one merged reviewer (the adversarial, Standards and Spec lenses), or a Standards, a Spec and an "
+          "adversarial reviewer")
+PATCH_ARGS = ("--patch", "-U0", "--inter-hunk-context=0", "--no-renames", "--no-ext-diff", "--no-textconv",
+              "--no-color", "--submodule=short", "--ignore-submodules=none", "--no-relative", "--src-prefix=a/",
+              "--dst-prefix=b/")
+HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
 SLICE2 = {"trivial": "no review",
           "simple": "1-2 adversarial reviewers",
           "important": "a Standards, a Spec and an adversarial reviewer",
@@ -489,6 +499,68 @@ def print_lint(config, where):
     return errors, warnings
 
 
+def read_patch(*args):
+    """git's patch output, read as bytes: Python's newline translation would split a line at a lone CR."""
+    done = subprocess.run(("git",) + GIT_SETTINGS + args, capture_output=True)
+    if done.returncode != 0:
+        raise GuardError("git %s failed: %s" % (args[0], done.stderr.decode("utf-8", "replace").strip()))
+    return done.stdout.decode("utf-8", "surrogateescape")
+
+
+def patch_size(text):
+    """(weighted lines, files, binary) of a `--patch -U0` listing. Hunk lengths come from the hunk headers, so a
+    deleted line that starts with `--` is never taken for a header."""
+    lines, files, binary, old, new = 0, set(), False, 0, 0
+    for line in text.split("\n"):
+        if old > 0 or new > 0:
+            if not line.startswith("\\"):  # "\ No newline at end of file"
+                old, new = old - (not line.startswith("+")), new - (not line.startswith("-"))
+                lines += max(1, -(-(len(line) - 1) // LINE_WIDTH)) if line.startswith(("+", "-")) else 0
+        elif line.startswith("diff --git "):
+            files.add(line)
+        elif line.startswith("@@ "):
+            match = HUNK.match(line)
+            old, new = (int(count) if count is not None else 1 for count in match.groups()) if match else (0, 0)
+        elif line.startswith("Binary files ") and line.endswith(" differ"):
+            binary = True
+    return lines, len(files), binary
+
+
+def change_size(commits):
+    """(weighted lines, files, binary) of COMMITS' own changes, per commit then summed; merges are left out."""
+    if not commits:
+        return 0, 0, False
+    return patch_size(read_patch("log", "--no-walk=unsorted", "--no-merges", "--root", "--format=", *PATCH_ARGS,
+                                 *commits))
+
+
+def merged_lens(commits, uncommitted, tips):
+    """(allowed, why): may one merged reviewer take this Important push? Measured over every commit the push adds,
+    so several small units add up; never with uncommitted work, an unfetched base branch, a floor path (so no suite
+    change), a merge with changes of its own, a submodule update or a binary file, whose size it cannot see."""
+    if uncommitted:
+        return False, "uncommitted work"
+    if not base_tip()[1]:
+        return False, "the base branch is not fetched"
+    floor = [path for path in paths_of(commits) if any(fnmatch.fnmatchcase(path, glob) for glob, _level in FLOOR)]
+    merges = git("rev-list", "--merges", "HEAD", *(("--not",) + tuple(tips) if tips else ())).split()
+    if floor:
+        return False, "%s is always at least important" % floor[0]
+    for merge in merges:
+        if commit_paths(merge):
+            return False, "merge %s has changes of its own" % merge[:12]
+    raw = git("log", "--no-walk=unsorted", "--no-merges", "--root", "--format=", "--raw", "--no-abbrev", *commits)
+    if any("160000" in line[1:].split()[:2] for line in raw.splitlines() if line.startswith(":")):
+        return False, "a submodule update"
+    lines, files, binary = change_size(commits)
+    if binary:
+        return False, "a binary file"
+    size = "%d weighted line(s), %d file(s) in %d new commit(s)" % (lines, files, len(commits))
+    if lines > MERGED_LINES or files > MERGED_FILES:
+        return False, "%s: over %d or %d" % (size, MERGED_LINES, MERGED_FILES)
+    return True, size
+
+
 def last_trailer(commits):
     """The last of COMMITS that carries a review trailer, or None."""
     return next((commit for commit in reversed(commits) if trailer_level(commit)), None)
@@ -498,7 +570,7 @@ def listed(paths, limit=5):
     return ", ".join(paths[:limit]) + (" and %d more" % (len(paths) - limit) if len(paths) > limit else "")
 
 
-def next_step(config, level, start, commits, uncommitted, tips):
+def next_step(config, level, start, commits, uncommitted, tips, merged=False):
     if uncommitted:
         edited = sorted(set(changed_paths("HEAD")))
         new = [path for path in uncommitted if path not in edited]
@@ -509,7 +581,7 @@ def next_step(config, level, start, commits, uncommitted, tips):
     if level != "trivial":
         return ("review at %s: %s, on `git diff %s..HEAD`; then add the trailer to the last commit with "
                 "`git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer \"Review: %s %s\"`"
-                % (level, SLICE2[level], start[:12], level, start[:12]))
+                % (level, MERGED if merged else SLICE2[level], start[:12], level, start[:12]))
     problems = review_problems(config, commits, tips)
     if problems:
         return "fix the trailers: " + problems[0]
@@ -556,6 +628,12 @@ def cmd_status(args):
     for row in rows[:20]:
         print("  %s  (%s)" % (row.path, row.pattern))
     print("trailer: Review: %s %s" % (level, start[:12]))
+    uncommitted = sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
+    merged = ((False, "a BASE was given, so the push is not measured whole") if args
+              else merged_lens(commits, uncommitted, tips)) if level == "important" else None
+    if merged:
+        print("review: %s (%s)" % ("merged lens allowed: one reviewer for the adversarial, Standards and Spec lenses"
+                                   if merged[0] else "three reviewers", merged[1]))
     print("new commits: %d not yet on %s or this branch's remote" % (len(commits), tip_name))
     print("standing rules: %s" % ("REVIEW.md at %s, where this branch left %s" % (standing[:12], tip_name)
                                   if standing and rules_at(standing) else "this branch's own REVIEW.md (%s not fetched "
@@ -576,9 +654,8 @@ def cmd_status(args):
     secret, notes = secret_scan(config, base_tip()[1], "HEAD", tips) if commits else ([], [])
     print("secrets: " + ("\n  ".join(secret + notes) or ("no new commits to scan" if config.get("secrets") else
                                                        "not scanned (REVIEW.md has no secrets: line)")))
-    uncommitted = sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
     print("next: " + ("deal with the secret scan before review: " + secret[0].splitlines()[0] if secret else
-                      next_step(config, level, start, commits, uncommitted, tips)))
+                      next_step(config, level, start, commits, uncommitted, tips, bool(merged and merged[0]))))
     return 0
 
 
