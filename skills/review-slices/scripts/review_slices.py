@@ -30,7 +30,7 @@ judged by its new commits (neither the target ref nor the base branch has them),
 from git's own merge. A trailer covers the new commits in its history no earlier trailer reaches, at their level
 or higher. The standing rules (REVIEW.md where the branch left the base branch) judge a change, so it cannot lower
 its own levels; a suite change is reported, not blocked. `status` says when an Important push is small enough for
-one merged reviewer (MERGED_LINES, MERGED_FILES). `status`, `pre-push` and `ci` hand off to the base
+one merged reviewer (.githooks/merged_reviewer.py). `status`, `pre-push` and `ci` hand off to the base
 branch's guard when this copy differs from it. Standard library only, Python 3.8+, git 2.32+.
 """
 import collections
@@ -51,20 +51,13 @@ LEVELS = ("trivial", "simple", "important", "critical")
 FLOOR = (("REVIEW.md", "important"), (".githooks/*", "important"), (".gitleaks*", "important"))
 GUARD_PATH = ".githooks/review_slices.py"
 SCANNER_PATH = ".githooks/secret_scan.py"
+MERGED_PATH = ".githooks/merged_reviewer.py"
 HANDOFF = "REVIEW_SLICES_HANDOFF"
 # The first guard version that has each command; the base branch's guard runs a command only if it has it.
 SINCE = {"level": (0, 1, 0), "run-suite": (0, 1, 0), "pre-push": (0, 1, 0), "check": (0, 2, 0),
          "status": (0, 3, 0), "ci": (0, 4, 0)}
-# The largest push one merged reviewer may take, in weighted lines (ceil(characters / LINE_WIDTH) per added or
-# deleted line, so a minified line cannot pass as one) and files; chosen from calibrate.py's data (2026-10-25).
-MERGED_LINES, MERGED_FILES, LINE_WIDTH = 40, 3, 100
 MERGED = ("one merged reviewer (the adversarial, Standards and Spec lenses), or a Standards, a Spec and an "
           "adversarial reviewer")
-PATCH_ARGS = ("--patch", "-U0", "--inter-hunk-context=0", "--no-renames", "--no-ext-diff", "--no-textconv",
-              "--no-color", "--submodule=short", "--ignore-submodules=none", "--no-relative", "--src-prefix=a/",
-              "--dst-prefix=b/")
-LFS_POINTER = "version https://git-lfs.github.com/spec/"
-HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
 SLICE2 = {"trivial": "no review",
           "simple": "1-2 adversarial reviewers",
           "important": "a Standards, a Spec and an adversarial reviewer",
@@ -324,15 +317,20 @@ def suite_change(old, new):
     return "this change edits the suite; reviewers must confirm it is not weaker:\n" + "\n".join(lines or ["  (order)"])
 
 
-def secret_scan(config, judge, head, tips):
-    """(problems, notes) from the secret scan of the commits HEAD adds over TIPS, when the rules declare one. The
-    scanner comes from where the judging guard does: JUDGE, or the base branch's last commit with a guard if it
-    lost it; HEAD's own copy only where the base branch never had a guard."""
-    if not config.get("secrets"):
-        return [], []
+def vendored(judge, head, path):
+    """(at, source): PATH as committed where the judging guard comes from: JUDGE, or the base branch's last commit
+    with a guard if it lost it; HEAD's own copy only where the base branch never had a guard. SOURCE is None if
+    PATH is not there."""
     removed = judge and git("log", "-1", "--format=%H", "--diff-filter=D", judge, "--", GUARD_PATH, check=False)
     at = (judge if judge and git_raw("show", "%s:%s" % (judge, GUARD_PATH)) else removed and removed + "^") or head
-    source = git_raw("show", "%s:%s" % (at, SCANNER_PATH))
+    return at, git_raw("show", "%s:%s" % (at, path))
+
+
+def secret_scan(config, judge, head, tips):
+    """(problems, notes) from the secret scan of the commits HEAD adds over TIPS, when the rules declare one."""
+    if not config.get("secrets"):
+        return [], []
+    at, source = vendored(judge, head, SCANNER_PATH)
     if not source:
         return ["the rules say `secrets:` but %s has no %s: %s" % (at[:12], SCANNER_PATH, "run the skill's "
                 "setup_tools.py upgrade --apply and commit it" if at == head else "no push through the hook can add "
@@ -500,64 +498,18 @@ def print_lint(config, where):
     return errors, warnings
 
 
-def read_patch(*args):
-    """git's patch output, read as bytes: Python's newline translation would split a line at a lone CR."""
-    done = subprocess.run(("git",) + GIT_SETTINGS + args, capture_output=True)
-    if done.returncode != 0:
-        raise GuardError("git %s failed: %s" % (args[0], done.stderr.decode("utf-8", "replace").strip()))
-    return done.stdout.decode("utf-8", "surrogateescape")
-
-
-def patch_size(text):
-    """(weighted lines, files, binary) of a `--patch -U0` listing; a Git LFS pointer counts as binary. Hunk lengths
-    come from the hunk headers, so a deleted line that starts with `--` is never taken for a header."""
-    lines, files, binary, old, new = 0, set(), False, 0, 0
-    for line in text.split("\n"):
-        if old > 0 or new > 0:
-            if not line.startswith("\\"):  # "\ No newline at end of file"
-                old, new = old - (not line.startswith("+")), new - (not line.startswith("-"))
-                lines += max(1, -(-(len(line) - 1) // LINE_WIDTH)) if line.startswith(("+", "-")) else 0
-                binary = binary or line[1:].startswith(LFS_POINTER)  # the file's size is not in the patch
-        elif line.startswith("diff --git "):
-            files.add(line)
-        elif line.startswith("@@ "):
-            match = HUNK.match(line)
-            if not match:
-                raise GuardError("unexpected hunk header in git's patch: %r" % line[:80])
-            old, new = (int(count) if count is not None else 1 for count in match.groups())
-        elif line.startswith("Binary files ") and line.endswith(" differ"):
-            binary = True
-    return lines, len(files), binary
-
-
 def merged_reviewer(commits, uncommitted, tips):
-    """(allowed, why): may one merged reviewer take this Important push? Measured over every commit the push adds
-    (per commit then summed, merges left out), so several small units add up; never with uncommitted work, an
-    unfetched base branch, a floor path (so no suite change), a merge with changes of its own, a submodule update
-    or a binary file, whose size it cannot see."""
-    if uncommitted or not commits:
-        return False, "uncommitted work" if uncommitted else "no new commits"
-    if not base_tip()[1]:
-        return False, "the base branch is not fetched"
-    floor = [path for path in paths_of(commits) if any(fnmatch.fnmatchcase(path, glob) for glob, _level in FLOOR)]
-    merges = git("rev-list", "--merges", "HEAD", *(("--not",) + tuple(tips) if tips else ())).split()
-    if floor:
-        return False, "%s is always at least important" % floor[0]
-    for merge in merges:
-        if commit_paths(merge):
-            return False, "merge %s has changes of its own" % merge[:12]
-    raw = git("log", "--no-walk=unsorted", "--no-merges", "--root", "--format=", "--raw", "--no-abbrev",
-              "--no-renames", "--ignore-submodules=none", *commits)  # whatever .gitmodules or the user's config say
-    if any("160000" in line[1:].split()[:2] for line in raw.splitlines() if line.startswith(":")):
-        return False, "a submodule update"
-    lines, files, binary = patch_size(read_patch("log", "--no-walk=unsorted", "--no-merges", "--root", "--format=",
-                                                 *PATCH_ARGS, *commits))
-    if binary:
-        return False, "a binary file"
-    size = "%d weighted line(s), %d file(s) in %d new commit(s)" % (lines, files, len(commits))
-    if lines > MERGED_LINES or files > MERGED_FILES:
-        return False, "%s: over %d or %d" % (size, MERGED_LINES, MERGED_FILES)
-    return True, size
+    """(allowed, why) from .githooks/merged_reviewer.py, loaded as the secret scanner is; without it, or if it
+    fails, three reviewers."""
+    at, source = vendored(base_tip()[1], "HEAD", MERGED_PATH)
+    if not source:
+        return False, "%s has no %s: run the skill's setup_tools.py upgrade" % (at[:12], MERGED_PATH)
+    module = types.ModuleType("merged_reviewer")
+    try:
+        exec(compile(source, MERGED_PATH, "exec"), module.__dict__)
+        return module.allowed(types.SimpleNamespace(**globals()), commits, uncommitted, tips)
+    except Exception as error:  # a broken measure means three reviewers, not a traceback
+        return False, "%s at %s did not run: %r" % (MERGED_PATH, at[:12], error)
 
 
 def last_trailer(commits):

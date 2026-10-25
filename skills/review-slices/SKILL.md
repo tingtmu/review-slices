@@ -135,7 +135,8 @@ find one, in your own work or another agent's:
 2. If an earlier incident has the same failure class, add this one under its Recurrences instead. A recurrence
    means the earlier plug is weak: say so.
 3. If the slice that should have caught it was a merged reviewer, say so in the entry and tell the user: it
-   narrows the merged-reviewer thresholds (`MERGED_LINES`, `MERGED_FILES` in the guard), a guard release.
+   narrows the merged-reviewer thresholds (`MERGED_LINES`, `MERGED_FILES` in `.githooks/merged_reviewer.py`), a
+   guard release.
 4. Choose the plug in this order: a test or guard that fails on the class; else a rule in REVIEW.md's "Failure
    looks like" list. An incident stays open until its plug exists.
 5. A new failure class gets a one-line entry in REVIEW.md's "Failure looks like" list, linked to the incident.
@@ -205,6 +206,7 @@ reviewed change. What gets installed:
 <repo>/.githooks/review_slices.py      the guard; the base branch's copy   committed
                                        judges every push
 <repo>/.githooks/agent_hook.py         blocks an agent's overrides         committed
+<repo>/.githooks/merged_reviewer.py    when one reviewer may do            committed
 <repo>/.githooks/secret_scan.py        the secret scan (with secrets:)     committed
 <repo>/.claude/settings.json           runs the agent hook (Claude Code)   committed
 <repo>/.codex/hooks.json               runs the agent hook (Codex)         committed

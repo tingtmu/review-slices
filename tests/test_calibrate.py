@@ -58,7 +58,7 @@ class CalibrateTest(unittest.TestCase):
         repo = Repo(self)
         out = self.run_ok(repo, "--count", "1")
         self.assertShare(out, "important", 1, 100)
-        self.assertIn("init  .githooks/review_slices.py  (always at least important)", out)
+        self.assertIn("init  .githooks/merged_reviewer.py  (always at least important)", out)
 
     def test_a_merge_is_judged_by_its_first_parent_change(self):
         repo = Repo(self)

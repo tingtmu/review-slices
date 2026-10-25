@@ -3,9 +3,10 @@ import unittest
 
 import os
 
-from support import RULES, Repo, load_guard
+from support import MERGED, RULES, Repo, load_guard, load_script
 
 GUARD = load_guard()
+SIZER = load_script("merged_reviewer", MERGED)
 LIB_RULES = RULES + "important: lib/*\n"
 
 
@@ -43,12 +44,34 @@ class MergedReviewerTest(unittest.TestCase):
         self.assertNotIn("merged", step)
 
     def test_the_thresholds(self):
-        self.assertEqual((GUARD.MERGED_LINES, GUARD.MERGED_FILES), (40, 3))
+        self.assertEqual((SIZER.MERGED_LINES, SIZER.MERGED_FILES), (40, 3))
 
     def test_a_hunk_header_it_cannot_read_is_an_error(self):  # review: it counted nothing after it (I2)
-        self.assertEqual(GUARD.patch_size("diff --git a/x b/x\n@@ -1 +1 @@\n-a\n+b\n"), (2, 1, False))
+        self.assertEqual(SIZER.patch_size(GUARD, "diff --git a/x b/x\n@@ -1 +1 @@\n-a\n+b\n"), (2, 1, False))
         with self.assertRaises(GUARD.GuardError):
-            GUARD.patch_size("diff --git a/x b/x\n@@ -1 +1,2 xx @@\n+a\n+b\n")
+            SIZER.patch_size(GUARD, "diff --git a/x b/x\n@@ -1 +1,2 xx @@\n+a\n+b\n")
+
+    def test_without_the_base_branch_s_measure_it_is_three_reviewers(self):  # loaded as the secret scanner is
+        base = self.repo.out("rev-parse", "origin/main")
+        self.repo.remove(".githooks/merged_reviewer.py")
+        self.on_main({}, "drop the measure")
+        self.change({"lib/a.py": "a\n"})
+        self.assertThree("%s has no .githooks/merged_reviewer.py: run the skill's setup_tools.py upgrade"
+                         % self.repo.out("rev-parse", "origin/main")[:12])
+        self.assertNotEqual(base, self.repo.out("rev-parse", "origin/main"))
+
+    def test_a_broken_measure_on_the_base_branch_is_three_reviewers(self):
+        self.on_main({".githooks/merged_reviewer.py": "def allowed(*args):\n    raise ValueError('broken')\n"},
+                     "break the measure")
+        self.change({"lib/a.py": "a\n"})
+        review = self.review()[0]
+        self.assertTrue(review.startswith("review: three reviewers (.githooks/merged_reviewer.py at "), review)
+        self.assertIn("did not run: ValueError('broken')", review)
+
+    def test_the_branch_s_own_measure_never_judges_it(self):  # I1: an edited copy that always allows
+        self.change({".githooks/merged_reviewer.py": "def allowed(*args):\n    return True, 'edited'\n",
+                     "lib/a.py": "a\n" * 100})
+        self.assertNotIn("edited", self.review()[0])
 
     def test_a_small_important_push_is_allowed_up_to_the_thresholds(self):
         self.change({"lib/a.py": "a\n" * 38, "lib/b.py": "b\n", "lib/c.py": "c\n"})

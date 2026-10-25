@@ -121,7 +121,7 @@ class InstallTest(unittest.TestCase):
         # `ruff check --select ALL` flags a blanket `# ruff: noqa` or `# flake8: noqa` (PGH004) unless it is exempted
         header = ["# ruff: noqa", "# flake8: noqa", "# ruff: noqa: PGH004", "# pylint: skip-file",
                   "# mypy: ignore-errors", "# isort: skip_file"]
-        for name in ("review_slices.py", "agent_hook.py", "incidents.py", "secret_scan.py"):
+        for name in ("review_slices.py", "agent_hook.py", "incidents.py", "secret_scan.py", "merged_reviewer.py"):
             with open(os.path.join(SCRIPTS, name), encoding="utf-8") as handle:
                 self.assertEqual(handle.read().splitlines()[2:8], header, name)
 
@@ -368,6 +368,20 @@ class UpgradeAndDoctorTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stdout)
         with open(os.path.join(SCRIPTS, "secret_scan.py"), encoding="utf-8") as skill, \
                 open(os.path.join(repo.path, ".githooks", "secret_scan.py"), encoding="utf-8") as copy:
+            self.assertEqual(copy.read(), skill.read())
+
+    def test_install_and_upgrade_add_the_merged_reviewer_beside_the_guard(self):
+        repo = Repo(self, guard=False)
+        self.assertEqual(repo.setup("install", "--apply").returncode, 0)
+        self.assertTrue(os.access(os.path.join(repo.path, ".githooks", "merged_reviewer.py"), os.X_OK))
+        repo = Repo(self)  # a repo from before 0.8.0: the guard, no merged reviewer
+        repo.remove(".githooks/merged_reviewer.py")
+        repo.commit("an older install")
+        self.assertIn("no .githooks/merged_reviewer.py", repo.setup("doctor").stdout)
+        done = repo.setup("upgrade", "--apply")
+        self.assertEqual(done.returncode, 0, done.stdout)
+        with open(os.path.join(SCRIPTS, "merged_reviewer.py"), encoding="utf-8") as skill, \
+                open(os.path.join(repo.path, ".githooks", "merged_reviewer.py"), encoding="utf-8") as copy:
             self.assertEqual(copy.read(), skill.read())
 
     def test_doctor_names_a_missing_gitleaks_where_review_md_asks_for_it(self):

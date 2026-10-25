@@ -26,10 +26,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_GUARD = os.path.join(HERE, "review_slices.py")
 SKILL_AGENT_HOOK = os.path.join(HERE, "agent_hook.py")
 SKILL_SCANNER = os.path.join(HERE, "secret_scan.py")
+SKILL_MERGED = os.path.join(HERE, "merged_reviewer.py")
 AGENT_HOOK_PATH = ".githooks/agent_hook.py"
-# Scripts a repo keeps copies of in .githooks/; upgrade refreshes the ones it has, and adds the secret scan when
-# REVIEW.md asks for it.
-COPIED = (SKILL_GUARD, SKILL_AGENT_HOOK, os.path.join(HERE, "incidents.py"), SKILL_SCANNER)
+# Scripts a repo keeps copies of in .githooks/; upgrade refreshes the ones it has, and adds the merged reviewer, and
+# the secret scan when REVIEW.md asks for it.
+COPIED = (SKILL_GUARD, SKILL_AGENT_HOOK, os.path.join(HERE, "incidents.py"), SKILL_SCANNER, SKILL_MERGED)
 # Runs the agent hook committed on the base branch (the checkout's copy only before it is there), so an edited
 # copy never decides; a clone that never ran install has no review-slices.base, and any error allows the action.
 AGENT_COMMAND = ("sh -c 'top=$(git -C \"${CLAUDE_PROJECT_DIR:-.}\" rev-parse --show-toplevel 2>/dev/null) && "
@@ -290,6 +291,9 @@ def install_steps(config_hook=False, agent_hooks=False):
     if not os.path.exists(os.path.join(root, guard.GUARD_PATH)):
         steps.append(("copy the skill's guard %s to %s; commit it as a reviewed change" % (guard.VERSION,
                       guard.GUARD_PATH), lambda: write(os.path.join(root, guard.GUARD_PATH), read(SKILL_GUARD), 0o755)))
+    if not os.path.exists(os.path.join(root, guard.MERGED_PATH)):
+        steps.append(("copy the skill's merged-reviewer measure to %s; commit it with the guard" % guard.MERGED_PATH,
+                      lambda: write(os.path.join(root, guard.MERGED_PATH), read(SKILL_MERGED), 0o755)))
     if wants_scanner(root) and not os.path.exists(os.path.join(root, guard.SCANNER_PATH)):
         steps.append(("copy the skill's secret scan to %s (REVIEW.md says secrets:); commit it with the guard"
                       % guard.SCANNER_PATH, lambda: write(os.path.join(root, guard.SCANNER_PATH), read(SKILL_SCANNER),
@@ -363,7 +367,7 @@ def cmd_upgrade(args):
         return 1
     copies = [(source, os.path.join(root, ".githooks", os.path.basename(source))) for source in COPIED]
     stale = [(source, copy) for source, copy in copies if read(copy) not in (None, read(source))
-             or (read(copy) is None and source == SKILL_SCANNER and wants_scanner(root))]
+             or (read(copy) is None and (source == SKILL_MERGED or source == SKILL_SCANNER and wants_scanner(root)))]
     if not stale:
         print("the repo's copies are this skill's (%s)" % guard.VERSION)
         return 0
@@ -383,7 +387,8 @@ def cmd_upgrade(args):
 def tree_lines(root, bootstrap, base_has_guard):
     committed = (("REVIEW.md", "the rules"), ("docs/INCIDENTS.md", "incidents and their plugs"),
                  (guard.GUARD_PATH, "the guard; " + ("the base branch's copy judges pushes" if base_has_guard
-                                                     else "the base branch has none yet, so this checkout's runs")))
+                                                     else "the base branch has none yet, so this checkout's runs")),
+                 (guard.MERGED_PATH, "when one merged reviewer may take an Important push"))
     if wants_scanner(root):
         committed += ((guard.SCANNER_PATH, "the secret scan the guard runs (REVIEW.md says secrets:)"),)
     lines = []
@@ -431,6 +436,8 @@ def cmd_doctor(_args):
     copy = read(os.path.join(root, guard.GUARD_PATH))
     if copy is None:
         problems.append("no %s: run install" % guard.GUARD_PATH)
+    if not os.path.exists(os.path.join(root, guard.MERGED_PATH)):
+        notes.append("no %s, so status always says three reviewers at important: run upgrade" % guard.MERGED_PATH)
     elif guard.source_version(copy) < guard.version_tuple(guard.VERSION):
         notes.append("the repo's guard is older than this skill's %s: run upgrade" % guard.VERSION)
     name, tip = guard.base_tip()

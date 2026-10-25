@@ -1,7 +1,8 @@
 """review-slices calibrate: what a level costs and why, by review unit.
 
 Imported by calibrate.py from its own directory; it stays in the skill and is never copied into a repo. It loads the
-guard, so calibrate.py and these sections judge with the same one.
+guard, so calibrate.py and these sections judge with the same one, and merged_reviewer.py, so they size a change as
+`status` does.
 
 A review unit is what gets one review: a first-parent commit carrying a `Review:` trailer, with the first-parent
 commits since the previous unit closed. A pull request a forge merged, or a squash, is a unit of its own. Any other
@@ -40,14 +41,15 @@ Size = collections.namedtuple("Size", "lines files binary")
 Measured = collections.namedtuple("Measured", "unit level row paths size quiet")
 
 
-def load_guard():
-    spec = importlib.util.spec_from_file_location("review_slices", os.path.join(HERE, "review_slices.py"))
+def load(name):
+    spec = importlib.util.spec_from_file_location(name, os.path.join(HERE, name + ".py"))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-guard = load_guard()
+guard = load("review_slices")
+sizer = load("merged_reviewer")  # the measure `status` enforces the merged reviewer's thresholds with
 git = guard.git
 
 
@@ -158,7 +160,7 @@ def parse_patch(text):
         elif not files:
             continue
         elif line.startswith("@@ "):
-            match = guard.HUNK.match(line)
+            match = sizer.HUNK.match(line)
             if not match:
                 raise guard.GuardError("unexpected hunk header in git's patch: %r" % line[:80])
             old, new = (int(count) if count is not None else 1 for count in match.groups())
@@ -172,18 +174,18 @@ def parse_patch(text):
 
 
 def log_patch(shas, extra=()):
-    """The patch of SHAS' own changes, merges left out, read as the guard's merged_reviewer reads it."""
+    """The patch of SHAS' own changes, merges left out, read as merged_reviewer.py reads it."""
     if not shas:
         return ""
-    return guard.read_patch("log", "--no-walk=unsorted", "--no-merges", "--root", "--format=",
-                            *(guard.PATCH_ARGS + extra), *shas)
+    return sizer.read_patch(guard, "log", "--no-walk=unsorted", "--no-merges", "--root", "--format=",
+                            *(sizer.PATCH_ARGS + extra), *shas)
 
 
 def unit_patch(unit, extra=()):
     """A pull request's unit is its merge's first-parent change; any other unit is its commits' own changes."""
     if unit.pull:
         merge = unit.commits[0]
-        return guard.read_patch("diff", *(guard.PATCH_ARGS + extra), merge.parent, merge.sha)
+        return sizer.read_patch(guard, "diff", *(sizer.PATCH_ARGS + extra), merge.parent, merge.sha)
     return log_patch([commit.sha for commit in unit.commits], extra)
 
 
@@ -224,7 +226,7 @@ def measure(config, units):
         paths = unit_paths(unit)
         level, rows = guard.range_level(config, paths)
         text = unit_patch(unit)
-        files, size = parse_patch(text), Size(*guard.patch_size(text))  # the guard's measure, as status enforces it
+        files, size = parse_patch(text), Size(*sizer.patch_size(guard, text))  # status's own measure
         measured.append(Measured(unit, level, rows[0] if rows else None, paths, size,
                                  quiet(unit, paths, files, size)))
     return measured
@@ -311,7 +313,7 @@ def nearest_rank(values, share):
 def print_sizes(measured):
     sized = [item for item in measured if not item.size.binary]
     print("size by level (per unit; weighted lines: ceil(characters / %d) per added or deleted line):"
-          % guard.LINE_WIDTH)
+          % sizer.LINE_WIDTH)
     for level in guard.LEVELS:
         items = [item for item in sized if item.level == level]
         if items:
