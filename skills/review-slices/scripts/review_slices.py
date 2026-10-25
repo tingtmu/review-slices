@@ -532,8 +532,9 @@ def patch_size(text):
 
 def merged_reviewer(commits, uncommitted, tips):
     """(allowed, why): may one merged reviewer take this Important push? Measured over every commit the push adds
-    (per commit then summed, merges left out), so several small units add up; never with uncommitted work, an unfetched base branch, a floor path (so no suite
-    change), a merge with changes of its own, a submodule update or a binary file, whose size it cannot see."""
+    (per commit then summed, merges left out), so several small units add up; never with uncommitted work, an
+    unfetched base branch, a floor path (so no suite change), a merge with changes of its own, a submodule update
+    or a binary file, whose size it cannot see."""
     if uncommitted or not commits:
         return False, "uncommitted work" if uncommitted else "no new commits"
     if not base_tip()[1]:
@@ -630,8 +631,8 @@ def cmd_status(args):
     merged = ((False, "a BASE was given, so the push is not measured whole") if args
               else merged_reviewer(commits, uncommitted, tips)) if level == "important" else None
     if merged:
-        print("review: %s (%s)" % ("merged reviewer allowed: one reviewer for the adversarial, Standards and Spec lenses"
-                                   if merged[0] else "three reviewers", merged[1]))
+        print("review: %s (%s)" % ("merged reviewer allowed: one reviewer for the adversarial, Standards and Spec "
+                                   "lenses" if merged[0] else "three reviewers", merged[1]))
     print("new commits: %d not yet on %s or this branch's remote" % (len(commits), tip_name))
     print("standing rules: %s" % ("REVIEW.md at %s, where this branch left %s" % (standing[:12], tip_name)
                                   if standing and rules_at(standing) else "this branch's own REVIEW.md (%s not fetched "

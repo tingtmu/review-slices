@@ -339,8 +339,8 @@ def candidates(measured):
 def print_candidates(measured, listing):
     found = candidates(measured)
     important = sum(1 for item in measured if item.level == "important")
-    print("merged-reviewer candidates: %d of %d important unit(s) (per review unit; a push of several units adds them up, "
-          "so this overstates pushes that carry several):" % (len(found), important))
+    print("merged-reviewer candidates: %d of %d important unit(s) (per review unit; a push of several units adds "
+          "them up, so this overstates pushes that carry several):" % (len(found), important))
     print("  %-10s" % "lines" + "".join("  files <=%-6d" % files for files in FILE_CAPS))
     for lines in LINE_CAPS:
         cells = [sum(1 for item in found if item.size.lines <= lines and item.size.files <= files)

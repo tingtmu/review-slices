@@ -9,7 +9,7 @@ GUARD = load_guard()
 LIB_RULES = RULES + "important: lib/*\n"
 
 
-class MergedLensTest(unittest.TestCase):
+class MergedReviewerTest(unittest.TestCase):
     def setUp(self):
         self.repo = Repo(self, rules=LIB_RULES)
         self.repo.install()
@@ -32,8 +32,8 @@ class MergedLensTest(unittest.TestCase):
 
     def assertAllowed(self, size):
         review, step = self.review()
-        self.assertEqual(review, "review: merged reviewer allowed: one reviewer for the adversarial, Standards and Spec "
-                                 "lenses (%s)" % size)
+        self.assertEqual(review, "review: merged reviewer allowed: one reviewer for the adversarial, Standards and "
+                                 "Spec lenses (%s)" % size)
         self.assertIn("review at important: one merged reviewer", step)
 
     def assertThree(self, why):

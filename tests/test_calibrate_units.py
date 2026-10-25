@@ -214,7 +214,8 @@ class UnitsTest(unittest.TestCase):
         self.change({"lib/t.py": "t\n"}, "first trailer", "important")
         self.change({"lib/a.py": "a\n"}, "before the squash")
         self.change({"lib/s1.py": "1\n", "lib/s2.py": "2\n"},
-                    "Squash (#2)\n\n* part\n\nReview: important 0123456789ab\n\n* more\n\nCo-authored-by: X <x@example.com>")
+                    "Squash (#2)\n\n* part\n\nReview: important 0123456789ab\n\n* more\n\n"
+                    "Co-authored-by: X <x@example.com>")
         self.change({"lib/c.py": "c\n"}, "after the squash", "important")
         out = self.run_ok("--list-candidates", "100", "5")
         self.assertIn("review units: 5 (2 with no declared level", out)  # init and the commit before the squash
