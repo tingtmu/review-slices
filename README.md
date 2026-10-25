@@ -52,10 +52,12 @@ what each level costs in size, and which small important units one merged review
 skill's `scripts/`; `incidents.py` can also be copied into `.githooks/` to run in a repo's suite, and `upgrade`
 keeps it current.
 
-At important, `status` says whether one merged reviewer may take the push (at most 40 weighted lines and 3 files,
-with no floor path, merge changes of its own, submodule update or binary file) or why it needs three. That measure,
-`.githooks/merged_reviewer.py`, is copied by `install`, added by `upgrade`, and loaded from the base branch like the
-guard; without it `status` always says three reviewers.
+At important, `status` says whether one merged reviewer may take the push or why it needs three. It may take at
+most 40 weighted lines and 3 files, all committed, against a fetched base branch, with no floor path, merge changes
+of its own, submodule update, or binary or Git LFS file; never with `status BASE`, and never on a level the author
+raised for a planned action, which `status` cannot see. That measure, `.githooks/merged_reviewer.py`, is copied by
+`install`, added by `upgrade`, and loaded from the base branch like the guard; without it there, `status` always
+says three reviewers.
 
 `install --agent-hooks` also adds a PreToolUse hook for Claude Code (`.claude/settings.json`) and Codex
 (`.codex/hooks.json`, shell commands only, once its hooks feature is on and the user trusts the hook; a refused
@@ -131,7 +133,10 @@ in N commit(s) scanned" in pre-push, `ci` and `status`, which labels it once.
 `0.8.0`: at important, `status` says whether one merged reviewer may take a small push (at most 40 weighted lines
 and 3 files) or why it needs three; the measure is a new vendored `.githooks/merged_reviewer.py`, loaded from the
 base branch like the guard, which `upgrade` adds. Reviewers add a level note when a level looks higher than the
-change needs and read REVIEW.md and the agent instruction files as committed at the standing rules; a change to
-those files, `.claude/` or `.codex/` gets a CLI reviewer started in an empty directory. `calibrate.py` adds, by
-review unit, which globs set the levels, declared vs computed levels, size by level, and the merged-reviewer
-candidates (`--list-candidates LINES FILES`). The vendored copies no longer trip ruff's PGH004 under `--select ALL`.
+change needs and read REVIEW.md and the agent instruction files as committed at the standing rules' commit; a
+change to those files, `.claude/` or `.codex/` gets a CLI reviewer started in an empty directory. `calibrate.py`
+adds, by review unit, which globs set the levels, declared vs computed levels, size by level, an estimate of
+whitespace- or comment-only units, and the merged-reviewer candidates (`--list-candidates LINES FILES`); in a
+partial clone it runs only the first section and fetches nothing. The vendored copies no longer trip ruff's PGH004
+under `--select ALL`. The agent hook is checked live with Codex 0.164.0, which shows it shell commands only, so
+`apply_patch` edits are a known hole.
