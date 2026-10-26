@@ -112,8 +112,9 @@ _Avoid_: red team, devil's advocate
 
 **Merged reviewer**:
 One reviewer who takes the adversarial, Standards and Spec lenses in turn: the review load of an Important change
-in the small band. Never at Critical, on a raised level, a floor path or a merge with changes of its own, unless
-REVIEW.md as committed on the base branch names the case as an exception.
+in the small band. Never on a merge with changes of its own, and never at Critical, on a raised level or a floor
+path, except for a release whose only changes outside README.md swap the version, where the base branch's REVIEW.md
+names it as an exception.
 _Avoid_: light review, quick review
 
 **Conformance reviewer**:
@@ -123,7 +124,7 @@ _Avoid_: merged reviewer (that one takes all three lenses), compliance reviewer
 
 **Escalation**:
 Moving a review unit to the three reviewers on the whole unit because a reduced load's round flagged something
-(SKILL.md step 5). Never the reverse.
+(SKILL.md step 5), or because the load `status` prints rose (step 6). Never the reverse.
 _Avoid_: upgrade, bump
 
 **Review meeting**:

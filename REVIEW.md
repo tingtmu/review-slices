@@ -34,9 +34,10 @@ release commit whose only changed lines outside README.md swap the version for a
 `(skill version x)`) takes one merged reviewer, and its second round stays one merged reviewer while the fix commits
 touch only README.md. It applies only as written in `git show <base>:REVIEW.md`, never as a branch edits it, and
 only after the author shows, with OLD and NEW the versions (dots escaped for OLD), that
-`for f in $(git diff --no-renames --name-only <base> HEAD -- ':!README.md'); do git show <base>:"$f" | sed
-'s/OLD/NEW/g' | cmp -s - <(git show HEAD:"$f") || echo "differs: $f"; done` prints nothing (each file is its base
-copy with the version swapped, byte for byte, whitespace included), and that
+`for f in $(git diff --no-renames --name-only <base> HEAD -- ':!README.md'); do git show <base>:"$f" | sed -e
+'s/^VERSION = "OLD"$/VERSION = "NEW"/' -e 's/(skill version OLD)/(skill version NEW)/g' | cmp -s - <(git show
+HEAD:"$f") || echo "differs: $f"; done` prints nothing in bash (each file is its base copy with only those two forms
+swapped, byte for byte, whitespace included), and that
 `git diff --no-renames --name-status --summary <base> HEAD -- ':!README.md'` lists every entry `M` with no
 `mode change` line. The merged reviewer's adversarial part re-runs both and checks that OLD is the base branch
 guard's `VERSION`, NEW is higher, and it is the same everywhere. The user's go-ahead, the pull request and green CI

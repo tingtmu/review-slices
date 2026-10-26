@@ -53,9 +53,9 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    The load is the least review the change needs; more is always allowed. In the adversarial + conformance pair,
    the adversarial reviewer's brief also ends with the report for a reduced load. A level you raised for a planned
    action takes the three reviewers whatever `status` prints for the computed level, and a floor path makes
-   `status` print three. The only way below that: REVIEW.md as committed on the base branch
-   (`git show <base>:REVIEW.md`) names the case as an exception beside its planned actions, with the shown output
-   it requires; wording that exists only on your branch never applies. A guard before 0.9.0, or no `review:` line:
+   `status` print three. The one exception: a release whose only changes outside README.md swap the version takes
+   one merged reviewer where REVIEW.md as committed on the base branch (`git show <base>:REVIEW.md`) says so beside
+   its planned actions, with the shown output it requires; wording that exists only on your branch never applies. A guard before 0.9.0, or no `review:` line:
    the three reviewers, except one merged reviewer where `status` prints `review: merged reviewer allowed` at
    Important.
 

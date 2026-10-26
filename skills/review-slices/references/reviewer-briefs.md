@@ -94,8 +94,8 @@ If the change looks bigger or riskier than this load should take, say so at the 
 ## Merged reviewer (Important, where `status` prints `review: one merged reviewer`)
 
 One reviewer takes the three lenses, in this order. Use it only on the `status` line that names it, never on a
-level you raised for a planned action, unless REVIEW.md as committed on the base branch names that action as an
-exception (SKILL.md step 4).
+level you raised for a planned action, except a version-swap release where REVIEW.md as committed on the base
+branch says so (SKILL.md step 4).
 
 ```
 Review this change three ways, in order, and keep the three parts of your report apart.
