@@ -76,7 +76,7 @@ _Avoid_: tier, risk level, priority
 The reviewers a review unit gets at its review level, computed by `status` from the level, the size band and the
 glob kind of the paths that set the level. Never chosen by the agent; never recorded in the trailer. A unit's load is
 the highest one `status` printed since the unit began; after rewriting history inside a unit (amend, squash,
-rebase) it is the three reviewers.
+rebase) it is the three reviewers. `status` holds both through the clone's review log.
 _Avoid_: sub-level, subgrade, tier, light review
 
 **Size band**:

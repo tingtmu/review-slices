@@ -33,9 +33,9 @@ judged by its new commits (neither the target ref nor the base branch has them),
 git's own merge. A trailer covers the new commits in its history no earlier trailer reaches, at their level or
 higher. The standing rules (REVIEW.md where the branch left the base branch) judge a change, so it cannot lower its
 own levels; a suite change is reported, not blocked. `status` names the review load of an Important or Critical
-change (.githooks/merged_reviewer.py). `status`, `pre-push` and `ci` hand off to the base branch's guard
-when this copy differs from it; `run-suite` runs the .githooks/run_suite.py beside this copy. Standard library only,
-Python 3.8+, git 2.32+.
+change (.githooks/merged_reviewer.py), held per review unit in <git-common-dir>/review-slices/review-log. `status`,
+`pre-push` and `ci` hand off to the base branch's guard when this copy differs from it; `run-suite` runs the
+.githooks/run_suite.py beside this copy. Standard library only, Python 3.8+, git 2.32+.
 """
 import collections
 import fnmatch
@@ -502,11 +502,12 @@ def print_lint(config, where):
     return errors, warnings
 
 
-def review_load(rules, level, rows, uncommitted):
+def review_load(rules, level, rows, uncommitted, start):
     """(load, why) from .githooks/merged_reviewer.py, loaded as the secret scanner is, over every commit this
     branch adds to the base branch, with the bands and kinds of the standing RULES only (None: the defaults), so a
-    change cannot lighten its own review. Without the measure, or if it fails, three reviewers; a 0.8.0 measure
-    has no load(), so it judges Important pushes only."""
+    change cannot lighten its own review; its hold() then keeps the unit at the highest load printed since START
+    (the review log). Without the measure, or if it fails, three reviewers; a 0.8.0 measure has no load(), so it
+    judges Important pushes only."""
     tip = base_tip()[1]
     if not tip:  # vendored() would fall back to this branch's own copy
         return "three reviewers", "the base branch is not fetched"
@@ -520,7 +521,8 @@ def review_load(rules, level, rows, uncommitted):
     try:
         exec(compile(source, MERGED_PATH, "exec"), module.__dict__)
         if hasattr(module, "load"):
-            return module.load(guard, rules, level, rows, commits, uncommitted, (tip,))
+            found = module.load(guard, rules, level, rows, commits, uncommitted, (tip,))
+            return module.hold(guard, start, level, found) if hasattr(module, "hold") and not uncommitted else found
         allowed, why = module.allowed(guard, commits, uncommitted, (tip,)) if level == "important" and not (
             rules or {}).get("small") else (False, "%s at %s has no load(): it measures Important changes, under "
                                                    "no small: line, only" % (MERGED_PATH, at[:12]))
@@ -600,7 +602,7 @@ def cmd_status(args):
     print("trailer: Review: %s %s" % (level, start[:12]))
     uncommitted = sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
     load = (("three reviewers", "a BASE was given, so the branch is not measured whole") if args else review_load(
-        rules, level, rows, uncommitted)) if level in ("important", "critical") else None
+        rules, level, rows, uncommitted, start)) if level in ("important", "critical") else None
     if load:
         print("review: %s (%s)" % load)
     print("new commits: %d not yet on %s or this branch's remote" % (len(commits), tip_name))

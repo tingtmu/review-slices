@@ -9,13 +9,17 @@
 """review-slices review load (skill version 0.9.1): which reviewers an Important or Critical change gets.
 
 The guard loads this file from the commit its own copy comes from (the base branch) and calls load() from `status`
-at Important and Critical; it is not run on its own. Without it, or if it fails, `status` says three reviewers.
+at Important and Critical, then hold(), which keeps the load per review unit in the review log; it is not run on its
+own. Without it, or if it fails, `status` says three reviewers.
 calibrate.py measures with the skill's copy, so the bands are chosen and enforced by one measure. The guard parses
 REVIEW.md's `small:`, `medium:` and `critical code:` lines; the defaults below apply where they are absent.
 """
+import collections
 import fnmatch
+import os
 import re
 import subprocess
+import time
 
 VERSION = "0.9.1"
 # The default small band, in weighted lines (ceil(characters / LINE_WIDTH) per added or deleted line, so a minified
@@ -31,6 +35,10 @@ PATCH_ARGS = ("--patch", "-U0", "--inter-hunk-context=0", "--no-renames", "--no-
               "--dst-prefix=b/")
 LFS_POINTER = "version https://git-lfs.github.com/spec/"
 HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
+RANK = {MERGED: 0, PAIR: 1, THREE: 2}
+SHA = re.compile(r"^[0-9a-f]{40}([0-9a-f]{24})?$")
+# A line of the review log: what `status` printed for the unit that starts at START on REF, at HEAD.
+Entry = collections.namedtuple("Entry", "time ref start head level load why")
 
 
 def read_patch(guard, *args):
@@ -145,3 +153,53 @@ def allowed(guard, commits, uncommitted, tips):
     push under the default bands?"""
     name, why = band(guard, None, commits, uncommitted, tips)
     return name == "small", why
+
+
+def log_path(guard):
+    """The review log, beside the pass stamps: one line per load `status` printed for committed work."""
+    return os.path.join(os.path.dirname(guard.stamp_path()), "review-log")
+
+
+def unit_ref(guard):
+    """The branch HEAD is on, or on a detached HEAD this worktree's git dir: with its start, a unit's key, since
+    every branch cut from one base commit starts there and worktrees share the log."""
+    return guard.git("symbolic-ref", "-q", "HEAD", check=False) or guard.git("rev-parse", "--absolute-git-dir")
+
+
+def read_log(guard, path):
+    """[Entry] of the review log at PATH; a line it cannot read is an error, never skipped (I2)."""
+    try:
+        with open(path, encoding="utf-8", errors="surrogateescape") as handle:
+            lines = handle.read().splitlines()
+    except FileNotFoundError:
+        return []
+    entries = []
+    for number, line in enumerate(lines, 1):
+        fields = line.split("\t")
+        entry = Entry(*fields) if len(fields) == len(Entry._fields) else None
+        if not entry or not SHA.match(entry.start) or not SHA.match(entry.head) or entry.load not in RANK:
+            raise guard.GuardError("%s line %d is not a review log line: fix or delete it" % (path, number))
+        entries.append(entry)
+    return entries
+
+
+def hold(guard, start, level, found):
+    """(load, why): FOUND, the load measured for the unit that starts at START, or what the review log holds for
+    it: the highest load `status` printed since the unit began, and three reviewers once a commit one was printed
+    at has left HEAD's history (amend, squash, rebase). Logs what it returns when it differs from the last line."""
+    path, ref, head = log_path(guard), unit_ref(guard), guard.git("rev-parse", "HEAD")
+    mine = [entry for entry in read_log(guard, path) if (entry.ref, entry.start) == (ref, start)]
+    gone = next((entry for entry in mine if guard.git("merge-base", "--is-ancestor", entry.head, "HEAD",
+                                                      check=False) is None), None)
+    top = max(mine, key=lambda entry: RANK[entry.load], default=None)  # the first printed, if several
+    if gone:
+        found = THREE, "history inside the unit was rewritten after status printed %s at %s" % (gone.load,
+                                                                                              gone.head[:12])
+    elif top and RANK[top.load] > RANK[found[0]]:
+        found = top.load, "held: status printed it for this unit at %s (%s); now %s" % (top.time, top.why, found[1])
+    if not mine or (mine[-1].head, mine[-1].load) != (head, found[0]):
+        fields = (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), ref, start, head, level) + tuple(found)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8", errors="surrogateescape") as handle:
+            handle.write("\t".join(re.sub(r"[\t\r\n]", " ", field) for field in fields) + "\n")
+    return found

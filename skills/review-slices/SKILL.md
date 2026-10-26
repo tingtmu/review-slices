@@ -89,9 +89,11 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
 6. **Converge.** Run `status` again before a second round. If the load rose (the unit grew a band, or a floor
    path came in), that is escalation: the three reviewers on the whole unit, `git diff <base>..HEAD`. A unit's
    load is the highest `status` printed since the unit began, and the three reviewers once history inside the unit
-   was rewritten; a lower load printed later changes nothing. Otherwise: one review round, then at most one second
-   round on the new commits only (`git diff <old head>..HEAD`), resuming the same reviewers, so they keep their
-   model and context. At Important, resume only the reviewers whose review finding was fixed or rejected (a rejected
+   was rewritten; a lower load printed later changes nothing. `status` keeps this itself, in the clone's review log
+   (`held:` or `history inside the unit was rewritten` in its `review:` line), but a rebase onto a moved base
+   branch moves the unit's start and starts the log over: after one, take the three reviewers yourself.
+   Otherwise: one review round, then at most one second round on the new commits only (`git diff <old head>..HEAD`),
+   resuming the same reviewers, so they keep their model and context. At Important, resume only the reviewers whose review finding was fixed or rejected (a rejected
    one sees your reason), plus the adversarial or merged reviewer always, for new breakage in the fix; resume every
    reviewer when `git diff --name-only <old head>..HEAD` lists a file no review finding cited, or a floor path. At
    Critical, resume every reviewer. Never re-raise a review finding already settled. Still split after that:
@@ -248,6 +250,7 @@ reviewed change. What gets installed:
 <git-common-dir>/review-slices/        per clone, never committed:
     bootstrap.py                       runs the base branch's guard on pre-push
     suite-pass                         pass stamps
+    review-log                         the review load `status` printed, per review unit
 <git-common-dir>/hooks/pre-push        per clone: runs the bootstrap, then any hook that was there
 git config (per clone)                 review-slices.base; hook.review-slices.* only beside a foreign core.hooksPath
 ```

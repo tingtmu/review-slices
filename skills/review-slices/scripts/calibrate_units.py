@@ -277,7 +277,7 @@ def print_attribution(config, judged):
         print("  (no glob or floor set a level)")
 
 
-# Sections 2-6: review units
+# Sections 2-7: review units
 
 def subject(measured):
     commit = measured.unit.commits[-1]
@@ -413,6 +413,57 @@ def print_load(config, measured, listing):
                                                     "code" if not found[2] else "content: " + found[2]))
 
 
+def trailer_start(sha):
+    """The base sha a commit's last `Review:` trailer names (12 or more hex digits), or None."""
+    value = git("log", "-1", "--no-show-signature", "--format=%(trailers:key=Review,valueonly,unfold)", sha)
+    words = value.splitlines()[-1].split() if value else []
+    return words[1].lower() if len(words) > 1 and re.match(r"^[0-9a-fA-F]{12,40}$", words[1]) else None
+
+
+def logged_load(logged, sha):
+    """The last line of the logged unit a trailer commit SHA closed, or None: the unit whose start its trailer names
+    and whose last logged head is in its history or has its tree (the trailer amend keeps the tree), so a branch
+    cut from the same base commit is never taken for it."""
+    start, tree = trailer_start(sha), git("rev-parse", sha + "^{tree}")
+    for (_ref, logged_start), entries in logged.items():
+        head = entries[-1].head
+        if start and logged_start.startswith(start) and (
+                git("merge-base", "--is-ancestor", head, sha, check=False) is not None
+                or git("rev-parse", "--verify", "--quiet", head + "^{tree}", check=False) == tree):
+            return entries[-1]
+    return None
+
+
+def print_logged(measured):
+    """Section 7: the load `status` printed for each Important and Critical unit, from this clone's review log."""
+    try:
+        entries = sizer.read_log(guard, sizer.log_path(guard))
+    except guard.GuardError as error:
+        print("logged loads: skipped: %s" % error)
+        return
+    logged = collections.defaultdict(list)
+    for entry in entries:
+        logged[(entry.ref, entry.start)].append(entry)
+    print("logged loads (what `status` printed in this clone; a unit counts when every trailer in it is logged):")
+    for level in sizer.TABLE:
+        mine = [item for item in measured if item.level == level]
+        found = []
+        for item in mine:
+            closing = item.unit.commits[-1]
+            shas = [sha for sha in side_commits(closing) if guard.trailer_level(sha)] if item.unit.pull else (
+                [closing.sha] if guard.trailer_level(closing.sha) else [])  # a squash's trailer commits are gone
+            lines = [logged_load(logged, sha) for sha in shas]
+            if lines and all(lines):
+                found.append(max(lines, key=lambda line: sizer.RANK[line.load]))
+        if not mine:
+            continue
+        given = collections.Counter(line.load for line in found)
+        print("  %-9s  %3d unit(s), %d logged: %s; held %d, history rewritten %d" % (
+            level, len(mine), len(found), ", ".join("%s %d" % (load, given[load]) for load in sizer.RANK),
+            sum(1 for line in found if line.why.startswith("held: ")),
+            sum(1 for line in found if line.why.startswith("history inside the unit was rewritten"))))
+
+
 def partial_clone():
     """True if a remote of this clone is a promisor (`clone --filter` marks it so; older git also sets
     extensions.partialClone): reading a file's contents may fetch it."""
@@ -422,7 +473,7 @@ def partial_clone():
 
 
 def print_sections(config, judged, listing=None):
-    """Sections 1-6 after calibrate's own output: JUDGED is its first-parent commits, newest first."""
+    """Sections 1-7 after calibrate's own output: JUDGED is its first-parent commits, newest first."""
     print_attribution(config, judged)
     if partial_clone():
         print("note: this is a partial clone, so the review unit sections were skipped: they read file contents, "
@@ -436,3 +487,4 @@ def print_sections(config, judged, listing=None):
     print_quiet(measured)
     print_candidates(measured, listing)
     print_load(config, measured, listing)
+    print_logged(measured)

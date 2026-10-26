@@ -21,6 +21,8 @@ that matched nothing. Then, to show what a level costs and why:
    --list-candidates LINES FILES lists those within LINES weighted lines and FILES files;
 6. review load: the reviewers each Important and Critical unit would get under the rules' `small:`, `medium:` and
    `critical code:` lines (or the defaults), and the small critical units (listed with --list-candidates).
+7. logged loads: the load `status` printed for each of those units in this clone, from its review log
+   (`<git-common-dir>/review-slices/review-log`): how many got each load, were held or had history rewritten.
 A review unit is what gets one review (see calibrate_units.py). Run it again as reviewers' level notes build up.
 Standard library only, Python 3.8+, git 2.31+.
 """

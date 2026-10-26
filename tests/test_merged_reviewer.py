@@ -92,7 +92,7 @@ class MergedReviewerTest(unittest.TestCase):
     def test_one_weighted_line_or_one_file_over_is_three_reviewers(self):
         self.change({"lib/a.py": "a\n" * 41})
         self.assertThree("large: 41 weighted line(s), 1 file(s) in 1 commit(s): over every band")
-        self.repo.git("reset", "-q", "--hard", "origin/main")
+        self.repo.git("switch", "-q", "-c", "files", "origin/main")  # a new unit: a reset is a rewrite
         self.change({"lib/%d.py" % number: "x\n" for number in range(4)})
         self.assertThree("large: 4 weighted line(s), 4 file(s) in 1 commit(s): over every band")
 
@@ -284,7 +284,7 @@ class ReviewLoadTest(unittest.TestCase):
             "medium: 100 lines", "medium: 400 lines").replace("critical: core/*", "critical code: core/*"),
             "lib/a.py": "a\n" * 150})
         self.assertLoad("three reviewers", "large: REVIEW.md is a floor path")
-        self.repo.git("reset", "-q", "--hard", "origin/main")
+        self.repo.git("switch", "-q", "-c", "core", "origin/main")  # a new unit: a reset is a rewrite
         self.change({"core/x.py": "x\n"})
         self.assertLoad("three reviewers", "core/x.py is not in `critical code:` globs alone")
 
