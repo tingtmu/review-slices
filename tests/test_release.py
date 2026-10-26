@@ -49,12 +49,13 @@ class ReleaseCheckTest(unittest.TestCase):
         self.repo.write(".githooks/helper.py", 'VERSION = "%s"\nVERSION = "1.2.0" # not the line form\n' % new)
         self.repo.write("README.md", "start\n`%s`: notes\n" % new)
 
-    def check(self, *args, stdin=None):
+    def check(self, *args, stdin=None, cwd=None):
         command = (sys.executable, "-I", "-" if stdin else CHECK, "--base", self.base) + args
-        return subprocess.run(command, cwd=self.repo.path, capture_output=True, text=True, input=stdin, env=ENV)
+        return subprocess.run(command, cwd=cwd or self.repo.path, capture_output=True, text=True, input=stdin,
+                              env=ENV)
 
-    def problems(self):
-        done = self.check()
+    def problems(self, cwd=None):
+        done = self.check(cwd=cwd)
         self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
         return done.stdout.splitlines()
 
@@ -90,6 +91,16 @@ class ReleaseCheckTest(unittest.TestCase):
         self.assertIn("entry: A 000000 -> 100644 new.txt", found)
         self.assertIn("entry: D 100644 -> 000000 docs/notes.md", found)
         self.assertIn("entry: M 100644 -> 100755 .githooks/helper.py", found)
+
+    def test_a_subdirectory_still_checks_the_whole_tree(self):
+        self.release()
+        self.repo.write("docs/README.md", "not the root README\n")
+        self.repo.write(".githooks/helper.py", read_text(os.path.join(self.repo.path, ".githooks/helper.py"))
+                        .replace('"1.10.0"', '"1.2.0"'))
+        self.repo.commit("release")
+        found = self.problems(cwd=os.path.join(self.repo.path, "docs"))
+        self.assertIn("differs: docs/README.md", found)
+        self.assertIn("still 1.2.0: .githooks/helper.py:1", found)
 
     def test_the_version_must_rise(self):
         self.release(new="1.1.9")

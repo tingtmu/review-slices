@@ -11,6 +11,7 @@ mode change line); and no file outside README.md may still hold either OLD form.
 prints one OK line and exits 0. Exit 2: git failed or an argument is wrong.
 """
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -91,6 +92,7 @@ def main(argv=None):
     parser.add_argument("--base", required=True, help="the review trailer's base commit")
     parser.add_argument("--head", default="HEAD", help="the release commit (default HEAD)")
     args = parser.parse_args(argv)
+    os.chdir(git("rev-parse", "--show-toplevel").decode().rstrip("\n"))  # pathspecs and git grep follow the cwd
     base = git("rev-parse", "--verify", args.base + "^{commit}").decode().strip()
     head = git("rev-parse", "--verify", args.head + "^{commit}").decode().strip()
     old, new = guard_version(base), guard_version(head)
