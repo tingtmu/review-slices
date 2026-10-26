@@ -46,6 +46,9 @@ COMMIT_VALUE_SHORTS = "mFCct"
 CONFIG_READS = {"--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list", "-l", "get", "list"}
 CONFIG_WRITES = {"--unset", "--unset-all", "--add", "--replace-all", "--remove-section", "--rename-section", "-e",
                  "--edit", "set", "unset", "rename-section", "remove-section", "edit"}
+# Variables that, set anywhere on a command line that pushes, choose which git, config or hooks the push runs.
+PUSH_ENV = re.compile(r"^(PATH|GIT_EXEC_PATH|GIT_DIR|GIT_COMMON_DIR|GIT_CONFIG_[A-Z0-9_]*)=")
+ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 SKIPS_HOOKS = re.compile(r"(^|\s)(--no-verify|-n)(\s|$)")
 FALLBACK = (re.compile(r"\bgit\b[^\n;&|]*\b(push|commit)\b[^\n;&|]*--no-verify"),
             re.compile(r"(>|\btee\b|\brm\b|\bmv\b|\bcp\b)[^\n;&|]*review-slices/(suite-pass|bootstrap\.py)"))
@@ -109,7 +112,7 @@ def command_words(tokens):
     index = 0
     while index < len(tokens):
         name = os.path.basename(tokens[index])
-        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[index]):
+        if ASSIGNMENT.match(tokens[index]):
             index += 1
             continue
         if name not in WRAPPERS:
@@ -238,12 +241,29 @@ def words_reason(words, guarded, cwd):
     return None
 
 
+def env_reason(found):
+    """Why variables set on this command line take an override: a GIT_CONFIG_KEY_<n> sets a protected key, or a
+    line that pushes also sets PATH or git's own variables (inline, through env, or in an earlier statement)."""
+    tokens = [token for words in found for token in words]
+    env = dict(token.split("=", 1) for token in tokens if ASSIGNMENT.match(token))
+    for key, value in env.items():
+        number = re.match(r"^GIT_CONFIG_KEY_(\d+)$", key)
+        reason = number and setting_reason(value, env.get("GIT_CONFIG_VALUE_" + number.group(1), ""))
+        if reason:
+            return reason
+    commands = [command_words(words) for words in found]
+    pushes = any(words and os.path.basename(words[0]) == "git" and git_parts(words)[2] == "push" for words in commands)
+    risky = [token.split("=", 1)[0] for token in tokens if PUSH_ENV.match(token)]
+    return "`%s` set on a push changes which git, config or hooks it runs" % risky[0] if pushes and risky else None
+
+
 def command_reason(command, guarded, cwd):
     try:
         found = segments(command)
     except ValueError:
         return "this command matches an override pattern" if any(p.search(command) for p in FALLBACK) else None
-    return next((reason for reason in (words_reason(words, guarded, cwd) for words in found) if reason), None)
+    return env_reason(found) or next((reason for reason in (words_reason(words, guarded, cwd) for words in found)
+                                      if reason), None)
 
 
 def guarded_paths(common, cwd):

@@ -473,7 +473,7 @@ def handoff(command, args, data=None, judge=None):
         path = os.path.join(tmp, "review_slices.py")
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(source)
-        return subprocess.run((sys.executable, "-I", path, command) + tuple(args), input=data, text=True,
+        return subprocess.run((sys.executable, "-I", "-S", path, command) + tuple(args), input=data, text=True,
                               env=dict(os.environ, **{HANDOFF: "1"})).returncode
 
 

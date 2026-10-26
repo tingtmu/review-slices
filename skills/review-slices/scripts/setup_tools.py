@@ -35,12 +35,13 @@ COPIED = (SKILL_GUARD, SKILL_AGENT_HOOK, os.path.join(HERE, "incidents.py"), SKI
           SKILL_SUITE)
 # Runs the agent hook committed on the base branch (the checkout's copy only before it is there), so an edited
 # copy never decides; a clone that never ran install has no review-slices.base, and any error allows the action.
-# Every Python these hooks start runs isolated (-I), so a module the agent writes beside it is never imported.
+# Every Python these hooks start runs isolated and without site (-I -S), so neither a module the agent writes beside
+# it nor a .pth file in a virtualenv's site-packages runs. A python3 or git shim earlier on PATH still would.
 AGENT_COMMAND = ("sh -c 'top=$(git -C \"${CLAUDE_PROJECT_DIR:-.}\" rev-parse --show-toplevel 2>/dev/null) && "
                  "base=$(git -C \"$top\" config --get review-slices.base) || exit 0; "
                  "code=$(git -C \"$top\" show \"refs/remotes/$base:%s\" 2>/dev/null) || "
                  "code=$(cat \"$top/%s\" 2>/dev/null) || exit 0; "
-                 "export REVIEW_SLICES_TOP=\"$top\"; exec python3 -I -c \"$code\"' || true"
+                 "export REVIEW_SLICES_TOP=\"$top\"; exec python3 -I -S -c \"$code\"' || true"
                  % (AGENT_HOOK_PATH, AGENT_HOOK_PATH))
 AGENT_SETTINGS = ((".claude/settings.json", "Bash|Write|Edit|MultiEdit|NotebookEdit"), (".codex/hooks.json", "Bash"))
 CHAINED = "pre-push.review-slices-chained"
@@ -89,7 +90,7 @@ def find_guard():
 
 def run(path, args, data):
     env = dict(os.environ, REVIEW_SLICES_HANDOFF="1")
-    return subprocess.run([sys.executable, "-I", path] + args, input=data, env=env).returncode
+    return subprocess.run([sys.executable, "-I", "-S", path] + args, input=data, env=env).returncode
 
 
 def main(args):
@@ -121,13 +122,13 @@ def main(args):
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 '''
-PRE_PUSH = "python3 -I %s pre-push"  # the config hook's command
+PRE_PUSH = "python3 -I -S %s pre-push"  # the config hook's command
 WRAPPER = '''#!/bin/sh
 # review-slices wrapper: run the guard, then the hook that was here before it (if any), each with the full input.
 input=$(mktemp) || exit 1
 trap 'rm -f "$input"' EXIT
 cat > "$input"
-python3 -I %s pre-push "$@" < "$input" || exit $?
+python3 -I -S %s pre-push "$@" < "$input" || exit $?
 next="$(dirname "$0")/%s"
 if [ -x "$next" ]; then "$next" "$@" < "$input" || exit $?; fi
 '''
@@ -479,8 +480,8 @@ def cmd_doctor(_args):
     if wiring is None:
         problems.append("this clone's pre-push does not reach the guard: run install")
     elif stale_wiring(wiring, bootstrap):
-        problems.append("this clone's pre-push runs the bootstrap the way an older install wrote it (without -I, so a "
-                        "module beside it can stand in for the standard library): run install --apply")
+        problems.append("this clone's pre-push runs the bootstrap the way an older install wrote it (without -I -S, "
+                        "so a module beside it can stand in for the standard library): run install --apply")
     agent = []
     for relative, _matcher in AGENT_SETTINGS:
         try:
@@ -489,7 +490,8 @@ def cmd_doctor(_args):
             problems.append("%s is not valid JSON" % relative)
             continue
         agent = agent + ([relative] if has_agent_hook(entries) else [])
-        if entries != without_old_agent_hooks(entries) and not has_agent_hook(entries):
+        older = any(AGENT_HOOK_PATH in hook.get("command", "") for entry in entries for hook in entry.get("hooks", []))
+        if older and not has_agent_hook(entries):
             problems.append("%s runs an older agent hook command: run install --agent-hooks --apply and commit it"
                             % relative)
     if read(os.path.join(root, AGENT_HOOK_PATH)) not in (None, read(SKILL_AGENT_HOOK)):

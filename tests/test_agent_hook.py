@@ -1,9 +1,11 @@
 """The agent hook: block an agent's overrides in an opted-in clone, and never block anything else."""
+import glob
 import json
 import os
 import subprocess
 import sys
 import unittest
+import venv
 
 from support import ENV, SCRIPTS, SETUP, Repo, load_script
 
@@ -40,6 +42,17 @@ class AgentHookTest(unittest.TestCase):
 
     def assert_allowed(self, command):
         self.assertIsNone(self.decide({"command": command}), "blocked: %s" % command)
+
+    def test_a_push_that_picks_its_own_git_config_or_python_is_denied(self):  # review of 0.9.1 (I1)
+        for command in ("PATH=/tmp/shim:$PATH git push", "env PATH=/tmp/shim git push origin main",
+                        "export PATH=/tmp/shim; git push", "GIT_EXEC_PATH=/tmp/x git push",
+                        "GIT_CONFIG_GLOBAL=/tmp/cfg git push", "sh -c 'GIT_DIR=/tmp/other.git git push'"):
+            self.assert_denied(command, "set on a push")
+        self.assert_denied("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git status",
+                           "rewires")
+        for command in ("PATH=/tmp/bin make", "GIT_PAGER=cat git log", "GIT_TRACE=1 git push",
+                        "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=color.ui GIT_CONFIG_VALUE_0=never git status"):
+            self.assert_allowed(command)
 
     def test_overrides_are_denied(self):
         for command in ("git push --no-verify origin main",
@@ -222,6 +235,22 @@ class SettingsTest(unittest.TestCase):
         decided = subprocess.run(("sh", "-c", command), input=json.dumps(
             {"tool_name": "Bash", "tool_input": {"command": "git push --no-verify"}, "cwd": repo.path}),
             capture_output=True, text=True, cwd=repo.path, env=dict(ENV, CLAUDE_PROJECT_DIR=repo.path))
+        self.assertIn('"deny"', decided.stdout, decided.stderr)
+
+    def test_a_pth_file_in_a_virtualenv_on_path_never_runs_in_the_agent_hook(self):  # review of 0.9.1
+        repo = Repo(self)
+        self.assertEqual(repo.setup("install", "--apply", "--agent-hooks").returncode, 0)
+        env_dir = os.path.join(repo.tmp, "venv")
+        venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+        for site in glob.glob(os.path.join(env_dir, "lib", "python*", "site-packages")):
+            with open(os.path.join(site, "zz.pth"), "w", encoding="utf-8") as handle:
+                handle.write("import os; os._exit(0)\n")
+        command = load_script("setup_tools", SETUP).AGENT_COMMAND
+        decided = subprocess.run(("sh", "-c", command), input=json.dumps(
+            {"tool_name": "Bash", "tool_input": {"command": "git push --no-verify"}, "cwd": repo.path}),
+            capture_output=True, text=True, cwd=repo.path, env=dict(ENV, CLAUDE_PROJECT_DIR=repo.path,
+                                                                     PATH=os.path.join(env_dir, "bin") + os.pathsep
+                                                                     + ENV["PATH"]))
         self.assertIn('"deny"', decided.stdout, decided.stderr)
 
     def test_settings_of_the_wrong_shape_are_reported_not_crashed_on(self):

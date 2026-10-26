@@ -1,6 +1,8 @@
 """setup_tools.py: install wires a clone's pre-push to the guard on the base branch without breaking other hooks."""
+import glob
 import os
 import unittest
+import venv
 
 from support import ENV, GUARD, MERGED, RULES, SCRIPTS, SUITE, Repo, git_version, load_guard, read_text
 
@@ -441,6 +443,51 @@ class UpgradeAndDoctorTest(unittest.TestCase):
         repo.commit("an unreviewed critical change")
         self.assertNotEqual(repo.try_push().returncode, 0)
 
+    @unittest.skipUnless(CONFIG_HOOKS, "config hooks need git 2.54+")
+    def test_a_config_hook_never_imports_a_module_planted_beside_the_bootstrap(self):  # review of 0.9.1
+        repo = Repo(self)
+        self.assertEqual(repo.setup("install", "--apply", "--config-hook").returncode, 0)
+        with open(os.path.join(repo.path, ".git", "review-slices", "subprocess.py"), "w", encoding="utf-8") as handle:
+            handle.write("import sys\nsys.exit(0)\n")
+        repo.write("core/x.py", "unreviewed\n")
+        repo.commit("an unreviewed critical change")
+        self.assertNotEqual(repo.try_push().returncode, 0)
+        repo.git("config", "hook.review-slices.command",
+                 repo.out("config", "--get", "hook.review-slices.command").replace("python3 -I -S ", "python3 "))
+        done = repo.setup("doctor")
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertIn("the way an older install wrote it", done.stdout)
+        self.assertEqual(repo.setup("install", "--apply", "--config-hook").returncode, 0)
+        self.assertNotIn("older", repo.setup("doctor").stdout)
+
+    def test_the_checkout_s_guard_in_adoption_never_imports_a_module_beside_it(self):  # review of 0.9.1
+        repo = Repo(self, guard=False)  # the base branch has rules but no guard yet: the checkout's copy judges
+        self.assertEqual(repo.setup("install", "--apply").returncode, 0)
+        repo.commit("adopt the guard")
+        repo.write("core/x.py", "unreviewed\n")
+        repo.commit("an unreviewed critical change")
+        repo.write(".githooks/subprocess.py", "import sys\nsys.exit(0)\n")  # untracked, so not part of the push
+        self.assertNotEqual(repo.try_push().returncode, 0)
+
+    def test_a_pth_file_in_a_virtualenv_on_path_never_runs_in_the_hooks(self):  # review of 0.9.1: -I runs site
+        repo = Repo(self)
+        self.assertEqual(repo.setup("install", "--apply").returncode, 0)
+        env_dir = os.path.join(repo.tmp, "venv")
+        venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+        for site in glob.glob(os.path.join(env_dir, "lib", "python*", "site-packages")):
+            with open(os.path.join(site, "zz.pth"), "w", encoding="utf-8") as handle:
+                handle.write("import os; os._exit(0)\n")
+        path = dict(PATH=os.path.join(env_dir, "bin") + os.pathsep + ENV["PATH"])
+        repo.write("core/x.py", "unreviewed\n")
+        repo.commit("an unreviewed critical change")
+        self.assertNotEqual(repo.try_push(env=path).returncode, 0)
+
+    def test_doctor_does_not_take_an_empty_hook_entry_for_an_older_agent_hook(self):  # review of 0.9.1
+        repo = Repo(self)
+        repo.install()
+        repo.write(".claude/settings.json", '{"hooks": {"PreToolUse": [{"matcher": "Write", "hooks": []}]}}')
+        self.assertNotIn("older agent hook", repo.setup("doctor").stdout)
+
     def test_doctor_names_hooks_an_older_install_wrote(self):  # 0.9.1: they ran Python without -I
         repo = Repo(self)
         self.assertEqual(repo.setup("install", "--apply", "--agent-hooks").returncode, 0)
@@ -448,11 +495,11 @@ class UpgradeAndDoctorTest(unittest.TestCase):
         with open(hook, encoding="utf-8") as handle:
             text = handle.read()
         with open(hook, "w", encoding="utf-8") as handle:
-            handle.write(text.replace("python3 -I ", "python3 "))
+            handle.write(text.replace("python3 -I -S ", "python3 "))
         settings = os.path.join(repo.path, ".claude", "settings.json")
         with open(settings, encoding="utf-8") as handle:
             text = handle.read()
-        repo.write(".claude/settings.json", text.replace(" -I -c ", " -c "))
+        repo.write(".claude/settings.json", text.replace(" -I -S -c ", " -c "))
         done = repo.setup("doctor")
         self.assertEqual(done.returncode, 1, done.stdout)
         self.assertIn("the way an older install wrote it", done.stdout)
