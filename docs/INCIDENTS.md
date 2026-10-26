@@ -29,7 +29,10 @@ each failure class from getting through again. Terms: the skill's
   test tests/test_install.py::BootstrapTest::test_an_upstream_that_only_mentions_a_rules_block_has_no_rules,
   test tests/test_agent_hook.py::SettingsTest::test_a_module_planted_where_the_hook_runs_never_stands_in_for_the_standard_library,
   test tests/test_install.py::UpgradeAndDoctorTest::test_a_module_planted_beside_the_bootstrap_never_stands_in_for_the_standard_library,
-  test tests/test_install.py::UpgradeAndDoctorTest::test_a_pth_file_in_a_virtualenv_on_path_never_runs_in_the_hooks
+  test tests/test_install.py::UpgradeAndDoctorTest::test_a_pth_file_in_a_virtualenv_on_path_never_runs_in_the_hooks,
+  test tests/test_agent_hook.py::SettingsTest::test_a_pth_file_in_a_virtualenv_on_path_never_runs_in_the_agent_hook,
+  test tests/test_install.py::UpgradeAndDoctorTest::test_a_config_hook_never_imports_a_module_planted_beside_the_bootstrap,
+  test tests/test_install.py::UpgradeAndDoctorTest::test_the_checkout_s_guard_in_adoption_never_imports_a_module_beside_it
 - **Recurrences:**
   - 2026-10-24, review finding on 0.4.0: the agent hook ran the checkout's copy, which the agent can edit. The plug
     covered the guard and `ci`, not the agent hook added after it.
