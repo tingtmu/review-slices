@@ -36,6 +36,7 @@ PATCH_ARGS = ("--patch", "-U0", "--inter-hunk-context=0", "--no-renames", "--no-
 LFS_POINTER = "version https://git-lfs.github.com/spec/"
 HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
 RANK = {MERGED: 0, PAIR: 1, THREE: 2}
+REWRITTEN = "history inside the unit was rewritten"
 SHA = re.compile(r"^[0-9a-f]{40}([0-9a-f]{24})?$")
 # A line of the review log: what `status` printed for the unit that starts at START on REF, at HEAD.
 Entry = collections.namedtuple("Entry", "time ref start head level load why")
@@ -191,10 +192,10 @@ def hold(guard, start, level, found):
     mine = [entry for entry in read_log(guard, path) if (entry.ref, entry.start) == (ref, start)]
     gone = next((entry for entry in mine if guard.git("merge-base", "--is-ancestor", entry.head, "HEAD",
                                                       check=False) is None), None)
-    top = max(mine, key=lambda entry: RANK[entry.load], default=None)  # the first printed, if several
+    top = max((entry for entry in mine if not entry.why.startswith(REWRITTEN)), key=lambda entry: RANK[entry.load],
+              default=None)  # the first printed, if several; a rewrite is judged again each time, never held
     if gone:
-        found = THREE, "history inside the unit was rewritten after status printed %s at %s" % (gone.load,
-                                                                                              gone.head[:12])
+        found = THREE, "%s after status printed %s at %s" % (REWRITTEN, gone.load, gone.head[:12])
     elif top and RANK[top.load] > RANK[found[0]]:
         found = top.load, "held: status printed it for this unit at %s (%s); now %s" % (top.time, top.why, found[1])
     if not mine or (mine[-1].head, mine[-1].load) != (head, found[0]):

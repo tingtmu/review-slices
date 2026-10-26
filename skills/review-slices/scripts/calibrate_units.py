@@ -422,14 +422,13 @@ def trailer_start(sha):
 
 def logged_load(logged, sha):
     """The last line of the logged unit a trailer commit SHA closed, or None: the unit whose start its trailer names
-    and whose last logged head is in its history or has its tree (the trailer amend keeps the tree), so a branch
-    cut from the same base commit is never taken for it."""
+    and whose last logged head has its tree (the trailer amend keeps the tree), so `status` measured what was
+    reviewed. A unit with commits after its last `status` is not logged."""
     start, tree = trailer_start(sha), git("rev-parse", sha + "^{tree}")
     for (_ref, logged_start), entries in logged.items():
         head = entries[-1].head
-        if start and logged_start.startswith(start) and (
-                git("merge-base", "--is-ancestor", head, sha, check=False) is not None
-                or git("rev-parse", "--verify", "--quiet", head + "^{tree}", check=False) == tree):
+        if start and logged_start.startswith(start) and git(
+                "rev-parse", "--verify", "--quiet", head + "^{tree}", check=False) == tree:
             return entries[-1]
     return None
 
@@ -461,7 +460,7 @@ def print_logged(measured):
         print("  %-9s  %3d unit(s), %d logged: %s; held %d, history rewritten %d" % (
             level, len(mine), len(found), ", ".join("%s %d" % (load, given[load]) for load in sizer.RANK),
             sum(1 for line in found if line.why.startswith("held: ")),
-            sum(1 for line in found if line.why.startswith("history inside the unit was rewritten"))))
+            sum(1 for line in found if line.why.startswith(sizer.REWRITTEN))))
 
 
 def partial_clone():

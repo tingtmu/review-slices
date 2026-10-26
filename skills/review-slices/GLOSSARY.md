@@ -36,6 +36,11 @@ A record, made by the suite wrapper, that the suite passed on one exact tree, th
 it also covers a tree that differs from it only in paths an explicit trivial glob names.
 _Avoid_: test cache, green flag
 
+**Review log**:
+A per-clone record of the review load `status` printed for committed work, by branch and review unit, through
+which `status` holds a unit's highest load and spots a rewrite inside it. Never committed; calibrate reads it.
+_Avoid_: load history, review record
+
 **Review trailer**:
 The `Review: <level> <base-sha>` line on the last commit of a review unit. It proves a level was declared, not that
 a review ran.

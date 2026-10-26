@@ -65,6 +65,16 @@ class ReviewLogTest(unittest.TestCase):
         self.assertTrue(self.log()[-1].endswith("\tthree reviewers\thistory inside the unit was rewritten after "
                                                 "status printed one merged reviewer at %s" % old[:12]))
 
+    def test_a_step_back_and_forth_is_never_held_at_three(self):  # review: the rewrite's three was held for good
+        self.repo.git("switch", "-q", "--detach")
+        self.change({"lib/a.py": "a\n"})
+        tip = self.change({"lib/b.py": "b\n"})
+        self.status()
+        self.repo.git("switch", "-q", "--detach", "HEAD~1")
+        self.assertIn("history inside the unit was rewritten", self.review()[0])
+        self.repo.git("switch", "-q", "--detach", tip)
+        self.assertAllowed("2 weighted line(s), 2 file(s) in 2 commit(s)")
+
     def test_the_trailer_closes_the_unit(self):
         self.change({"lib/a.py": "a\n" * 50})
         self.assertThree("large: 50 weighted line(s), 1 file(s) in 1 commit(s): over every band")
@@ -131,6 +141,23 @@ class ReviewLogTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertRegex(done.stdout, r"important\s+4 unit\(s\), 2 logged: one merged reviewer 1, adversarial \+ "
                                       r"conformance 0, three reviewers 1; held 0, history rewritten 0")
+
+    def test_calibrate_never_takes_a_stacked_branch_s_unit_for_another(self):  # review: x's merged was y's load
+        self.repo.git("switch", "-q", "-c", "x")
+        self.change({"lib/x.py": "x\n"})
+        self.status()
+        self.repo.git("switch", "-q", "-c", "y")
+        self.change({"lib/y.py": "y\n" * 60})
+        self.status()
+        self.add_trailer()
+        self.change({"lib/z.py": "z\n"}, "after the last status", self.repo.trailer("important", self.repo.out(
+            "rev-parse", "HEAD")))
+        self.repo.git("switch", "-q", "main")
+        self.repo.git("merge", "-q", "--ff-only", "y")
+        done = calibrate(self.repo, "--base", "main")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertRegex(done.stdout, r"important\s+4 unit\(s\), 1 logged: one merged reviewer 0, adversarial \+ "
+                                      r"conformance 0, three reviewers 1;")
 
 
 del Helpers  # its own tests run in test_merged_reviewer
