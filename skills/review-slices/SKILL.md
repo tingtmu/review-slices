@@ -96,8 +96,8 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    resuming the same reviewers, so they keep their model and context. At Important, resume only the reviewers
    whose review finding was fixed or rejected (a rejected one sees your reason), plus the adversarial or merged
    reviewer always, for new breakage in the fix; resume every reviewer when `git diff --name-only <old head>..HEAD`
-   lists a file no review finding cited, or a floor path. At Critical, resume every reviewer. Never re-raise a review finding already settled. Still split after that:
-   escalate to the user.
+   lists a file no review finding cited, or a floor path. At Critical, resume every reviewer. Never re-raise a
+   review finding already settled. Still split after that: escalate to the user.
 7. **Add the trailer** `status` printed to the last commit the review covered, with exactly
    `git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer "Review: <level> <base-sha>"`
    (`status` prints it filled in): it keeps the message, leaves anything staged out, and replaces an earlier
