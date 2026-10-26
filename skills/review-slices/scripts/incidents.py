@@ -25,8 +25,8 @@ bullets; entries whose date is still the template's `<...>` are skipped. For a `
 Paths are relative to the repo root and stay inside it. A missing plug is a problem: the hole is open again. An
 open incident older than 30 days is a note.
 
-A miss through a reduced review load is a Slice field at 2 Review that names the load, or a mention of it in the
-Recurrences: `2 Review (merged reviewer)` (or `one merged reviewer`, as `status` prints it),
+A miss through a reduced review load is a Slice field at 2 Review, or a recurrence, that names the load in
+parentheses: `2 Review (merged reviewer)` (or `one merged reviewer`, as `status` prints it, with more after it),
 `2 Review (adversarial + conformance)` (or `and`). Two or more misses through one load are a problem until each
 incident they belong to is plugged with a distinct working test per miss, unless REVIEW.md's review-slices block
 turns off the bands the load comes from: `small: off` for the merged reviewer; `medium: off` for adversarial +
@@ -50,10 +50,10 @@ UNKNOWN_SLICE = "unknown"
 # Reduced review loads a Slice 2 miss may name, as in "2 Review (merged reviewer)"; a second miss turns them off.
 MERGED, PAIR = "merged reviewer", "adversarial + conformance"
 REDUCED_LOADS = (MERGED, PAIR)
-# A load named anywhere, in any wording SKILL.md or `status` uses ("one merged reviewer (small: ...)"): counting a
-# mention too many only makes the check stricter.
-LOAD_NAMES = {MERGED: re.compile(r"\bmerged\s+reviewers?\b", re.I),
-              PAIR: re.compile(r"\badversarial\s*(?:\+|and)\s*conformance\b", re.I)}
+# A load named in parentheses, as SKILL.md writes it or `status` prints it, with more after it: "(merged reviewer)",
+# "(one merged reviewer, small band)". A mention in prose is no miss.
+LOAD_NAMES = {MERGED: re.compile(r"\((?:one\s+)?merged\s+reviewers?\b[^()]*\)", re.I),
+              PAIR: re.compile(r"\(adversarial\s*(?:\+|and)\s*conformance\b[^()]*\)", re.I)}
 # The bands each load comes from, which a second miss turns off until a test plug exists. The pair also comes from
 # the small band at Critical while REVIEW.md has a `critical code:` line.
 LOAD_BANDS = {MERGED: ("small",), PAIR: ("medium",)}
@@ -398,7 +398,7 @@ def has_recurrences(incident):
 
 def misses(incident):
     """[load, ...]: one for each miss of INCIDENT through a reduced review load, from its Slice field at 2 Review
-    and from each mention of the load in its Recurrences."""
+    and from each recurrence that names the load in parentheses."""
     slice_text, recurrences = (incident.fields.get(label, "") for label in ("slice that should have caught it",
                                                                             "recurrences"))
     found = [load for load in REDUCED_LOADS if incident.slice == SLICES[2] and LOAD_NAMES[load].search(slice_text)]
@@ -409,8 +409,18 @@ def tested(root, incident):
     """Whether INCIDENT is plugged with a distinct working test for each of its misses, so a recurrence through a
     reduced load adds a test to the Plug field (the earlier plug did not stop it)."""
     plugs, _unread = parse_plug(incident.fields.get("plug", ""))
-    working = {(plug.path, tuple(plug.names)) for plug in plugs if plug.kind == "test" and not plug_problem(root, plug)}
+    working = {test_key(root, plug) for plug in plugs if plug.kind == "test" and not plug_problem(root, plug)}
     return incident.status == "plugged" and len(working) >= max(1, len(misses(incident)))
+
+
+def test_key(root, plug):
+    """What the working test PLUG resolves to, so one test spelled two ways (`./`, `Class.method` or the bare method)
+    counts once: its file and the line its function starts on."""
+    path = os.path.normpath(plug.path)
+    if not path.endswith(".py"):
+        return path, plug.names[-1]
+    tree = ast.parse(read_text(os.path.join(root, path)), path)
+    return path, find_function(tree, plug.names)[0].lineno
 
 
 def review_settings(root):

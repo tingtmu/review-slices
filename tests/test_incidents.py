@@ -229,11 +229,14 @@ class ReportTest(unittest.TestCase):
             self.assertEqual("and I2 has no working test plug" in done.stdout, refused, done.stdout)
 
     def test_each_miss_needs_its_own_test_in_the_plug(self):  # review: the plug that missed it covered it
-        line = "\n  - 2026-10-01, 2 Review (merged reviewer): the plug test tests/test_a.py::test_top missed it."
+        line = ("\n  - 2026-10-01, 2 Review (merged reviewer): the merged reviewer read only the diff, and the plug "
+                "test tests/test_a.py::test_top missed it.")
         top, cls, dot = ("test tests/test_a.py::test_top", "test tests/test_a.py::ATest::test_in_class",
                          "test tests/test_a.py::ATest.test_in_class")
         for plug, recurrences, refused in ((top, line, True), (top + ", " + cls, line, False),
                                            (top + ", " + cls + ", " + dot, line * 2, True),
+                                           (top + ", test ./tests/test_a.py::test_top", line, True),
+                                           (cls + ", test tests/test_a.py::test_in_class", line, True),
                                            (top + ", " + cls + ", test tests/test_a.py::test_gone", line, True),
                                            (top, "none", False)):
             done = LogRepo(self, entry(1, slice_text="2 Review (merged reviewer)", status="plugged", plug=plug,
