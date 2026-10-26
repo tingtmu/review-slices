@@ -18,7 +18,8 @@ bullets; entries whose date is still the template's `<...>` are skipped. For a `
     test <path>::<Class>::<method>   <path>::<Class>.<method>, that class defines it. Neither may be marked to never
                                      fail (expectedFailure, skip, xfail, skipTest, an always-true skipIf)
     guard <path>                     the file exists
-    rule REVIEW.md "<line>"          REVIEW.md holds that text (backticks and whitespace runs are ignored)
+    rule REVIEW.md "<line>"          REVIEW.md holds that text (backticks and whitespace runs are ignored); a
+                                     `small:` or `medium:` line must be a line of its review-slices block, not a comment
 
 Paths are relative to the repo root and stay inside it. A missing plug is a problem: the hole is open again. An
 open incident older than 30 days is a note. Standard library only, Python 3.8+.
@@ -59,6 +60,7 @@ RULE_FILE = "REVIEW.md"
 AFTER_ITEM = re.compile(r"^\s*(\([^()]*\))?\s*\.?\s*$")
 # A separator between plug items, outside quotes and parentheses.
 SEPARATOR = re.compile(r",|;|\s+and\s+|\s+or\s+")
+BAND_RULE = re.compile(r"^(small|medium)\s*:")  # a band plug: a line the guard reads, never prose or a comment
 NO_PLUG = re.compile(r"^(none|not yet)\b", re.I)
 NO_RECURRENCE = re.compile(r"^(none|no|n/a|not yet)\b|^[-—\s]*$", re.I)
 # Markers that keep a test from failing while its defect is back; skipIf and skipUnless only with a literal condition.
@@ -292,6 +294,12 @@ def flat(text):
     return " ".join(text.replace("`", "").split())
 
 
+def block_lines(text):
+    """The lines of TEXT's first review-slices block as the guard reads them: comments dropped, flattened."""
+    block = re.search(r"^```review-slices[^\n]*\n(.*?)^```", text, re.S | re.M)
+    return [flat(re.sub(r"(?:^|\s)#.*$", "", line)) for line in (block.group(1).splitlines() if block else [])]
+
+
 def broken_test(path, plug, text):
     """Why the test PLUG in the file at PATH, holding TEXT, is not a working test, or None."""
     if not plug.path.endswith(".py"):
@@ -330,6 +338,8 @@ def plug_problem(root, plug):
         return "%s cannot be read (%s)" % (plug.path, error.strerror or error)
     if plug.kind == "rule" and flat(plug.names[0]) not in flat(text):
         return "%s does not contain %r" % (plug.path, plug.names[0])
+    if plug.kind == "rule" and BAND_RULE.match(flat(plug.names[0])) and flat(plug.names[0]) not in block_lines(text):
+        return "%s's review-slices block has no line %r, so the band is not narrowed" % (plug.path, plug.names[0])
     return broken_test(path, plug, text) if plug.kind == "test" else None
 
 

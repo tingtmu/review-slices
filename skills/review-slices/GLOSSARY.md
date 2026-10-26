@@ -112,7 +112,8 @@ _Avoid_: red team, devil's advocate
 
 **Merged reviewer**:
 One reviewer who takes the adversarial, Standards and Spec lenses in turn: the review load of an Important change
-in the small band. Never at Critical, on a raised level, a floor path or a merge with changes of its own.
+in the small band. Never at Critical, on a raised level, a floor path or a merge with changes of its own, unless
+REVIEW.md as committed on the base branch names the case as an exception.
 _Avoid_: light review, quick review
 
 **Conformance reviewer**:

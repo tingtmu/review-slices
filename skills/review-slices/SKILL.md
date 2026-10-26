@@ -50,11 +50,14 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    | Important | `review: one merged reviewer` (small band); `adversarial + conformance` (medium band): an adversarial and a conformance reviewer; `three reviewers` (large): a Standards, a Spec and an adversarial reviewer. All of one round in parallel |
    | Critical | `adversarial + conformance` (small, and every path that sets the level is in `critical code:` globs alone); else the three. Then the user's go-ahead for the one-way door, given with the review findings. A [review meeting](references/review-meeting.md) only for a disputed review finding, only if the user says yes |
 
-   The load is the least review the change needs; more is always allowed. A level you raised for a planned action
-   takes the three reviewers whatever `status` prints for the computed level, unless REVIEW.md as committed on the
-   base branch (`git show <base>:REVIEW.md`) names that action as an exception in its planned-actions paragraph;
-   wording that exists only on your branch never applies. A guard before 0.9.0, or no `review:` line: the three
-   reviewers, except one merged reviewer where `status` prints `review: merged reviewer allowed` at Important.
+   The load is the least review the change needs; more is always allowed. In the adversarial + conformance pair,
+   the adversarial reviewer's brief also ends with the report for a reduced load. A level you raised for a planned
+   action takes the three reviewers whatever `status` prints for the computed level, and a floor path makes
+   `status` print three. The only way below that: REVIEW.md as committed on the base branch
+   (`git show <base>:REVIEW.md`) names the case as an exception beside its planned actions, with the shown output
+   it requires; wording that exists only on your branch never applies. A guard before 0.9.0, or no `review:` line:
+   the three reviewers, except one merged reviewer where `status` prints `review: merged reviewer allowed` at
+   Important.
 
    Reviewers read `git diff <base>..HEAD`, with `<base>` from the trailer line `status` printed. They are
    read-only, have fresh context and use the strongest model available. Give them the diff command, REVIEW.md,
@@ -84,7 +87,7 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    Fix a review finding's whole class at once, not only the line quoted. Fixes are new commits, except a secret
    in unpushed commits, which is removed by rewriting them ([A secret turns up](#a-secret-turns-up)).
 6. **Converge.** Run `status` again before a second round. If the load rose (the unit grew a band, or a floor
-   path came in), the second round is the new load's reviewers on the whole unit, `git diff <base>..HEAD`. A unit's
+   path came in), that is escalation: the three reviewers on the whole unit, `git diff <base>..HEAD`. A unit's
    load is the highest `status` printed since the unit began, and the three reviewers once history inside the unit
    was rewritten; a lower load printed later changes nothing. Otherwise: one review round, then at most one second
    round on the new commits only (`git diff <old head>..HEAD`), resuming the same reviewers, so they keep their

@@ -166,6 +166,17 @@ class ReportTest(unittest.TestCase):
                       done.stdout)
         self.assertNotIn("reduced load", LogRepo(self, entry(1)).run().stdout)
 
+    def test_a_band_plug_must_be_a_line_the_guard_reads(self):  # review: a commented-out band passed the check
+        plug = 'rule REVIEW.md "small: off"'
+        for rules, refused in (("small: off\n", False), ("small: off  # incident I1\n", False),
+                               ("# small: off\n", True), ("small: 40 lines, 3 files\n", True)):
+            log = LogRepo(self, entry(1, status="plugged", plug=plug))
+            with open(os.path.join(log.path, "REVIEW.md"), "a", encoding="utf-8") as handle:
+                handle.write("\nsmall: off, said in prose\n\n```review-slices\n%s```\n" % rules)
+            done = log.run("--check")
+            self.assertEqual(done.returncode, int(refused), rules + done.stdout)
+            self.assertEqual("review-slices block has no line 'small: off'" in done.stdout, refused, done.stdout)
+
     def test_recurrences_are_listed_as_a_weak_plug(self):
         done = LogRepo(self, entry(1, recurrences="I1 again on 2026-10-01: the rule was not read"), entry(2)).run()
         self.assertIn("recurrences (each means a weak plug):\n  I1. A failure: I1 again on 2026-10-01", done.stdout)

@@ -80,8 +80,8 @@ shown output would prove it).
 
 ## Report for a reduced load
 
-The merged and conformance reviewers end with this report, so the author can apply escalation (SKILL.md step 5)
-from what it says, not from a reading of it:
+The merged and conformance reviewers, and the adversarial reviewer beside a conformance reviewer, end with this
+report, so the author can apply escalation (SKILL.md step 5) from what it says, not from a reading of it:
 
 ```
 Report one part per lens, each with its own verdict (clean, or its review findings). Then:
@@ -94,7 +94,8 @@ If the change looks bigger or riskier than this load should take, say so at the 
 ## Merged reviewer (Important, where `status` prints `review: one merged reviewer`)
 
 One reviewer takes the three lenses, in this order. Use it only on the `status` line that names it, never on a
-level you raised for a planned action.
+level you raised for a planned action, unless REVIEW.md as committed on the base branch names that action as an
+exception (SKILL.md step 4).
 
 ```
 Review this change three ways, in order, and keep the three parts of your report apart.
@@ -111,7 +112,8 @@ Finish all three even if the first finds a Blocker.
 
 ## Conformance reviewer (where `status` prints `review: adversarial + conformance`)
 
-It takes the Standards and Spec lenses; start the adversarial reviewer (its own brief, above) in the same message.
+It takes the Standards and Spec lenses; start the adversarial reviewer in the same message, with its own brief
+(above) ending in the report for a reduced load.
 
 ```
 Review this change two ways, in order, and keep the two parts of your report apart.
@@ -132,8 +134,8 @@ adversarial reviewer in the same message.
 
 ## Second round
 
-Run `status` first: a higher load than round one's means the new load's reviewers on the whole unit (SKILL.md step
-6). Otherwise resume the same reviewers, so they keep their model and context; at Important only those SKILL.md
+Run `status` first: a higher load than round one's is escalation, the three reviewers on the whole unit (SKILL.md
+step 6). Otherwise resume the same reviewers, so they keep their model and context; at Important only those SKILL.md
 step 6 names. Brief: "Confirm whether each of your review findings is fixed, on the new commits
 `git diff <old head>..HEAD` only; for one the author rejected, here is the reason: <reason>. Report only new defects
 tagged Fix or Blocker, including breakage the fix itself brings. If none, say converged."

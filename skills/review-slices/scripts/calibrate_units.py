@@ -385,6 +385,10 @@ def unit_load(config, item):
     return name, sizer.THREE if content or raised else sizer.TABLE[item.level][name], content
 
 
+def share(name, count, total):
+    return "%s %d (%.0f%%)" % (name, count, 100.0 * count / total)
+
+
 def print_load(config, measured, listing):
     """Section 6: the review load each Important and Critical unit would get under CONFIG's bands and kinds."""
     bands = ", ".join("%s %s" % (name, "%d lines, %d files" % limit if limit else "none")
@@ -398,8 +402,8 @@ def print_load(config, measured, listing):
             continue
         bands, given = collections.Counter(found[0] for found in mine), collections.Counter(found[1] for found in mine)
         print("  %-9s  %3d unit(s)  %s  ->  %s" % (
-            level, len(mine), "  ".join("%s %d" % (name, bands[name]) for name in ("small", "medium", "large")),
-            ", ".join("%s %d" % (load, given[load]) for load in (sizer.MERGED, sizer.PAIR, sizer.THREE)
+            level, len(mine), "  ".join(share(name, bands[name], len(mine)) for name in ("small", "medium", "large")),
+            ", ".join(share(load, given[load], len(mine)) for load in (sizer.MERGED, sizer.PAIR, sizer.THREE)
                       if load in table.values())))
     small = [(item, found) for item, found in loads if item.level == "critical" and found[0] == "small"]
     print("small critical units: %d, %d of them in `critical code:` globs alone" % (

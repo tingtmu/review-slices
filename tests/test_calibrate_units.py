@@ -299,13 +299,15 @@ class UnitsTest(unittest.TestCase):
         self.change({"core/x.py": "x\n"}, "small content critical", "critical")
         self.change({"engine/y.py": "y\n"}, "small code critical", "critical")
         out = self.run_ok("--list-candidates", "10", "1")  # the defaults: no medium band, every critical glob content
+        self.assertIn("small 2 (50%)", out)  # each band's and load's share of the level's units
+        out = re.sub(r" \(\d+%\)", "", out)
         self.assertRegex(out, r"important\s+4 unit\(s\)\s+small 2\s+medium 0\s+large 2\s+->\s+one merged reviewer 1, "
                               r"adversarial \+ conformance 0, three reviewers 3")  # the raised unit takes three
         self.assertIn("small critical units: 1, 0 of them in `critical code:` globs alone", out)
         draft = os.path.join(self.repo.tmp, "draft.md")
         with open(draft, "w", encoding="utf-8") as handle:
             handle.write("```review-slices\n%scritical code: engine/*\nmedium: 100 lines, 5 files\n```\n" % UNIT_RULES)
-        out = self.run_ok("--rules", draft, "--list-candidates", "10", "1")
+        out = re.sub(r" \(\d+%\)", "", self.run_ok("--rules", draft, "--list-candidates", "10", "1"))
         self.assertIn("bands: small 40 lines, 3 files, medium 100 lines, 5 files", out)
         self.assertRegex(out, r"important\s+4 unit\(s\)\s+small 2\s+medium 1\s+large 1\s+->\s+one merged reviewer 1, "
                               r"adversarial \+ conformance 1, three reviewers 2")
@@ -325,7 +327,7 @@ class UnitsTest(unittest.TestCase):
         repo.git("merge", "-q", "--no-ff", "-m", "Merge pull request #1 from someone/rewrite", "rewrite")
         repo.git("update-index", "--add", "--cacheinfo", "160000,%s,lib/sub" % repo.out("rev-parse", "HEAD"))
         repo.git("commit", "-q", "-m", "bump a submodule", "-m", repo.trailer("important"))
-        out = self.run_ok()
+        out = re.sub(r" \(\d+%\)", "", self.run_ok())
         self.assertRegex(out, r"important\s+3 unit\(s\)\s+small 0\s+medium 0\s+large 3\s+->\s+one merged reviewer 0")
 
     def test_a_partial_clone_is_never_fetched_into(self):  # review: git log -p fetched the missing blobs

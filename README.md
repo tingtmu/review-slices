@@ -62,7 +62,8 @@ reviewer when medium, and the three otherwise. Critical takes the adversarial an
 and every path that sets the level is in a `critical code:` glob; plain `critical:` globs are content (golden
 outputs, corpora, CI) and always take three. REVIEW.md's `small:` and `medium:` lines set the bands, up to 80/5
 and 400/20; the standing rules' lines count, never a branch's own. A level the author raised for a planned action,
-which `status` cannot see, takes three, and so does `status BASE`. The measure, `.githooks/merged_reviewer.py`,
+which `status` cannot see, takes three unless the base branch's REVIEW.md names it as an exception, and `status
+BASE` takes three. The measure, `.githooks/merged_reviewer.py`,
 is copied by `install`, added by `upgrade`, and loaded from the base branch like the guard; without it there,
 `status` says three reviewers.
 
