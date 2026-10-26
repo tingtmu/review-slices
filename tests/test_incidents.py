@@ -185,6 +185,8 @@ class ReportTest(unittest.TestCase):
         for first, second, load in (("(one merged reviewer)", "(Merged Reviewer)", "merged reviewer"),
                                     ("(one merged reviewer, small band)", "(merged reviewer: small band)",
                                      "merged reviewer"),
+                                    ("(one merged reviewer (small: 12 weighted line(s), 2 file(s)))",
+                                     "(merged reviewer (small band))", "merged reviewer"),
                                     ("(adversarial and conformance)", "(adversarial+conformance)",
                                      "adversarial + conformance")):
             done = LogRepo(self, entry(1, slice_text="2 Review " + first),

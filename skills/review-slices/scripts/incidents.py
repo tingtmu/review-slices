@@ -50,10 +50,10 @@ UNKNOWN_SLICE = "unknown"
 # Reduced review loads a Slice 2 miss may name, as in "2 Review (merged reviewer)"; a second miss turns them off.
 MERGED, PAIR = "merged reviewer", "adversarial + conformance"
 REDUCED_LOADS = (MERGED, PAIR)
-# A load named in parentheses, as SKILL.md writes it or `status` prints it, with more after it: "(merged reviewer)",
-# "(one merged reviewer, small band)". A mention in prose is no miss.
-LOAD_NAMES = {MERGED: re.compile(r"\((?:one\s+)?merged\s+reviewers?\b[^()]*\)", re.I),
-              PAIR: re.compile(r"\(adversarial\s*(?:\+|and)\s*conformance\b[^()]*\)", re.I)}
+# A load that opens a parenthesis, as SKILL.md writes it or `status` prints it, with anything after it, parentheses
+# included: "(merged reviewer)", "(one merged reviewer (small: ...))". A mention in prose is no miss.
+LOAD_NAMES = {MERGED: re.compile(r"\((?:one\s+)?merged\s+reviewers?\b", re.I),
+              PAIR: re.compile(r"\(adversarial\s*(?:\+|and)\s*conformance\b", re.I)}
 # The bands each load comes from, which a second miss turns off until a test plug exists. The pair also comes from
 # the small band at Critical while REVIEW.md has a `critical code:` line.
 LOAD_BANDS = {MERGED: ("small",), PAIR: ("medium",)}
