@@ -91,15 +91,29 @@ def measure(guard, commits, uncommitted, tips):
     return (lines, files), "%d weighted line(s), %d file(s) in %d commit(s)" % (lines, files, len(commits))
 
 
+def limits(rules):
+    """{band: (lines, files) or None}: RULES' `small:` and `medium:` lines (None: the defaults); off is None."""
+    chosen = [(name, (rules or {}).get(name) or default) for name, default in (("small", (MERGED_LINES, MERGED_FILES)),
+                                                                              ("medium", None))]
+    return {name: None if limit == "off" else limit for name, limit in chosen}
+
+
+def band_of(rules, size):
+    """small, medium or large: the first band SIZE (lines, files) fits under RULES; None fits none."""
+    for name, limit in limits(rules).items():  # small first
+        if size and limit and size[0] <= limit[0] and size[1] <= limit[1]:
+            return name
+    return "large"
+
+
 def band(guard, rules, commits, uncommitted, tips):
-    """(small, medium or large, why): the size band of COMMITS under RULES' `small:` and `medium:` lines (None:
-    the defaults). A band that is off, or that a smaller one already covers, takes nothing."""
+    """(small, medium or large, why): the size band of COMMITS under RULES. A band that is off, or that a smaller
+    one already covers, takes nothing."""
     size, why = measure(guard, commits, uncommitted, tips)
-    for name, default in (("small", (MERGED_LINES, MERGED_FILES)), ("medium", None)):
-        limit = (rules or {}).get(name) or default
-        if size and limit not in (None, "off") and size[0] <= limit[0] and size[1] <= limit[1]:
-            return name, "%s, within the %s band's %d lines, %d files" % ((why, name) + tuple(limit))
-    return "large", why if not size else "%s: over every band" % why
+    name = band_of(rules, size)
+    if name == "large":
+        return name, why if not size else "%s: over every band" % why
+    return name, "%s, within the %s band's %d lines, %d files" % ((why, name) + tuple(limits(rules)[name]))
 
 
 def kind(guard, rules, path):
@@ -111,13 +125,17 @@ def kind(guard, rules, path):
     return "code" if globs and not floor and set(globs) <= set((rules or {}).get("code", ())) else "content"
 
 
+def content_path(guard, rules, level, paths):
+    """At Critical, the first of PATHS (those that set the level) that is content, else None."""
+    return next((path for path in paths if kind(guard, rules, path) != "code"), None) if level == "critical" else None
+
+
 def load(guard, rules, level, rows, commits, uncommitted, tips):
     """(load, why): the reviewers a LEVEL change gets, from the TABLE: its size band over COMMITS and, at Critical,
     the kind of every path in ROWS (the paths that set the level)."""
-    if level == "critical":
-        content = [row.path for row in rows if kind(guard, rules, row.path) != "code"]
-        if content:
-            return THREE, "%s is not in `critical code:` globs alone" % content[0]
+    content = content_path(guard, rules, level, [row.path for row in rows])
+    if content:
+        return THREE, "%s is not in `critical code:` globs alone" % content
     name, why = band(guard, rules, commits, uncommitted, tips)
     return TABLE[level][name], "%s: %s" % (name, why)
 

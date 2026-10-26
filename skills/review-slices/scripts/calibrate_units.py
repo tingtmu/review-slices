@@ -49,7 +49,7 @@ def load(name):
 
 
 guard = load("review_slices")
-sizer = load("merged_reviewer")  # the measure `status` enforces the merged reviewer's thresholds with
+sizer = load("merged_reviewer")  # the measure and the review load table `status` uses
 git = guard.git
 
 
@@ -277,7 +277,7 @@ def print_attribution(config, judged):
         print("  (no glob or floor set a level)")
 
 
-# Sections 2-5: review units
+# Sections 2-6: review units
 
 def subject(measured):
     commit = measured.unit.commits[-1]
@@ -331,11 +331,15 @@ def print_quiet(measured):
     print("whitespace- or comment-only units (an estimate; prose never counts): " + ", ".join(counts))
 
 
+def floored(item):
+    return any(fnmatch.fnmatchcase(path, pattern) for path in item.paths for pattern, _level in guard.FLOOR)
+
+
 def candidates(measured):
     """Important units with no declared level above it, no floor path and no binary file."""
     return [item for item in measured if item.level == "important" and not item.size.binary
             and (item.unit.declared is None or guard.rank(item.unit.declared) <= guard.rank("important"))
-            and not any(fnmatch.fnmatchcase(path, pattern) for path in item.paths for pattern, _level in guard.FLOOR)]
+            and not floored(item)]
 
 
 def print_candidates(measured, listing):
@@ -357,6 +361,41 @@ def print_candidates(measured, listing):
                 print("  %s  %d line(s), %d file(s)" % (subject(item), item.size.lines, item.size.files))
 
 
+def unit_load(config, item):
+    """(band, load, content path or None) of a measured unit, as `status` would give it: a floor path or a binary
+    file is large; a unit declared above its computed level was raised, so it takes three."""
+    size = None if item.size.binary or floored(item) else (item.size.lines, item.size.files)
+    name = sizer.band_of(config, size)
+    content = sizer.content_path(guard, config, item.level, [row.path for row in guard.range_level(config,
+                                                                                                    item.paths)[1]])
+    raised = item.unit.declared and guard.rank(item.unit.declared) > guard.rank(item.level)
+    return name, sizer.THREE if content or raised else sizer.TABLE[item.level][name], content
+
+
+def print_load(config, measured, listing):
+    """Section 6: the review load each Important and Critical unit would get under CONFIG's bands and kinds."""
+    bands = ", ".join("%s %s" % (name, "%d lines, %d files" % limit if limit else "none")
+                      for name, limit in sizer.limits(config).items())
+    print("review load (per unit; a branch of several units adds them up, so this overstates the lighter loads; "
+          "bands: %s):" % bands)
+    loads = [(item, unit_load(config, item)) for item in measured if item.level in sizer.TABLE]
+    for level, table in sizer.TABLE.items():
+        mine = [found for item, found in loads if item.level == level]
+        if not mine:
+            continue
+        bands, given = collections.Counter(found[0] for found in mine), collections.Counter(found[1] for found in mine)
+        print("  %-9s  %3d unit(s)  %s  ->  %s" % (
+            level, len(mine), "  ".join("%s %d" % (name, bands[name]) for name in ("small", "medium", "large")),
+            ", ".join("%s %d" % (load, given[load]) for load in (sizer.MERGED, sizer.PAIR, sizer.THREE)
+                      if load in table.values())))
+    small = [(item, found) for item, found in loads if item.level == "critical" and found[0] == "small"]
+    print("small critical units: %d, %d of them in `critical code:` globs alone" % (
+        len(small), sum(1 for _item, found in small if not found[2])))
+    for item, found in reversed(small if listing else []):
+        print("  %s  %d line(s), %d file(s)  %s" % (subject(item), item.size.lines, item.size.files,
+                                                    "code" if not found[2] else "content: " + found[2]))
+
+
 def partial_clone():
     """True if a remote of this clone is a promisor (`clone --filter` marks it so; older git also sets
     extensions.partialClone): reading a file's contents may fetch it."""
@@ -366,7 +405,7 @@ def partial_clone():
 
 
 def print_sections(config, judged, listing=None):
-    """Sections 1-5 after calibrate's own output: JUDGED is its first-parent commits, newest first."""
+    """Sections 1-6 after calibrate's own output: JUDGED is its first-parent commits, newest first."""
     print_attribution(config, judged)
     if partial_clone():
         print("note: this is a partial clone, so the review unit sections were skipped: they read file contents, "
@@ -379,3 +418,4 @@ def print_sections(config, judged, listing=None):
     print_sizes(measured)
     print_quiet(measured)
     print_candidates(measured, listing)
+    print_load(config, measured, listing)

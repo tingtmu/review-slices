@@ -1,4 +1,4 @@
-"""calibrate.py's sections after the level mix: glob attribution, review units, size, quiet changes, candidates."""
+"""calibrate.py's sections after the level mix: glob attribution, units, size, quiet changes, candidates, load."""
 import os
 import re
 import subprocess
@@ -291,6 +291,29 @@ class UnitsTest(unittest.TestCase):
         self.assertRegex(listed, r"small\s+1 line\(s\), 1 file\(s\)")
         self.assertNotIn("big", listed)
         self.assertRegex(self.run_ok("--list-candidates", "100", "1"), r"big\s+100 line\(s\), 1 file\(s\)")
+
+    def test_the_review_load_section_follows_the_draft_s_bands_and_kinds(self):
+        self.change({"lib/small.py": "s\n"}, "small", "important")
+        self.change({"lib/mid.py": "m\n" * 60}, "medium", "important")
+        self.change({"lib/raised.py": "r\n"}, "raised", "critical")
+        self.change({"core/x.py": "x\n"}, "small content critical", "critical")
+        self.change({"engine/y.py": "y\n"}, "small code critical", "critical")
+        out = self.run_ok("--list-candidates", "10", "1")  # the defaults: no medium band, every critical glob content
+        self.assertRegex(out, r"important\s+4 unit\(s\)\s+small 2\s+medium 0\s+large 2\s+->\s+one merged reviewer 1, "
+                              r"adversarial \+ conformance 0, three reviewers 3")  # the raised unit takes three
+        self.assertIn("small critical units: 1, 0 of them in `critical code:` globs alone", out)
+        draft = os.path.join(self.repo.tmp, "draft.md")
+        with open(draft, "w", encoding="utf-8") as handle:
+            handle.write("```review-slices\n%scritical code: engine/*\nmedium: 100 lines, 5 files\n```\n" % UNIT_RULES)
+        out = self.run_ok("--rules", draft, "--list-candidates", "10", "1")
+        self.assertIn("bands: small 40 lines, 3 files, medium 100 lines, 5 files", out)
+        self.assertRegex(out, r"important\s+4 unit\(s\)\s+small 2\s+medium 1\s+large 1\s+->\s+one merged reviewer 1, "
+                              r"adversarial \+ conformance 1, three reviewers 2")
+        self.assertRegex(out, r"critical\s+2 unit\(s\)\s+small 2\s+medium 0\s+large 0\s+->\s+adversarial \+ "
+                              r"conformance 1, three reviewers 1")
+        self.assertIn("small critical units: 2, 1 of them in `critical code:` globs alone", out)
+        self.assertRegex(out, r"small code critical\s+1 line\(s\), 1 file\(s\)\s+code")
+        self.assertRegex(out, r"small content critical\s+1 line\(s\), 1 file\(s\)\s+content: core/x.py")
 
     def test_a_partial_clone_is_never_fetched_into(self):  # review: git log -p fetched the missing blobs
         repo = self.repo

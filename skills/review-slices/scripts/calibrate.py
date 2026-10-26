@@ -18,7 +18,9 @@ that matched nothing. Then, to show what a level costs and why:
 3. size by level: weighted lines and files per review unit;
 4. whitespace- or comment-only units per level (an estimate);
 5. merged-reviewer candidates: important units by size, which one merged reviewer could take;
-   --list-candidates LINES FILES lists those within LINES weighted lines and FILES files.
+   --list-candidates LINES FILES lists those within LINES weighted lines and FILES files;
+6. review load: the reviewers each Important and Critical unit would get under the rules' `small:`, `medium:` and
+   `critical code:` lines (or the defaults), and the small critical units (listed with --list-candidates).
 A review unit is what gets one review (see calibrate_units.py). Run it again as reviewers' level notes build up.
 Standard library only, Python 3.8+, git 2.31+.
 """
