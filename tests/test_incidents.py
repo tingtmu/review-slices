@@ -162,9 +162,57 @@ class ReportTest(unittest.TestCase):
                        entry(2, slice_text="2 Review (Adversarial + conformance)"),
                        entry(3, slice_text="2 Review (merged reviewer)"), entry(4)).run()
         self.assertIn("  2 Review         4\n", done.stdout)
-        self.assertIn("\n  of 2 Review, through a reduced load: merged reviewer 2, adversarial + conformance 1\n",
-                      done.stdout)
+        self.assertIn("\n  misses through a reduced load, recurrences included: merged reviewer 2, "
+                      "adversarial + conformance 1\n", done.stdout)
         self.assertNotIn("reduced load", LogRepo(self, entry(1)).run().stdout)
+
+    def test_a_second_miss_through_the_merged_reviewer_needs_the_small_band_off(self):
+        merged = "2 Review (merged reviewer)"
+        for rules, refused in (("", True), ("small: off\n", False), ("small: off  # I1, I2\n", False),
+                               ("# small: off\n", True), ("small: 20 lines, 2 files\n", True),
+                               ("medium: off\n", True)):
+            log = LogRepo(self, entry(1, slice_text=merged), entry(2, slice_text=merged))
+            with open(os.path.join(log.path, "REVIEW.md"), "a", encoding="utf-8") as handle:
+                handle.write("\nsmall: off, said in prose\n\n```review-slices\ndefault: simple\n%s```\n" % rules)
+            done = log.run("--check")
+            self.assertEqual(done.returncode, int(refused), rules + done.stdout)
+            self.assertEqual("problem: 2 misses went through the merged reviewer load (I1, I2) and I1, I2 has no "
+                             "working test plug, so REVIEW.md's review-slices block needs `small: off`" in done.stdout,
+                             refused, done.stdout)
+        self.assertEqual(LogRepo(self, entry(1, slice_text=merged), entry(2)).run("--check").returncode, 0)
+
+    def test_the_band_stays_on_only_when_every_miss_has_a_working_test_plug(self):
+        merged, test, rule = "2 Review (merged reviewer)", "test tests/test_a.py::test_top", 'rule REVIEW.md "Rules"'
+        for plugs, refused in (((test, test), False), ((test, rule), True), ((test, "none yet"), True),
+                               ((test, "test tests/test_a.py::test_gone"), True)):
+            log = LogRepo(self, *(entry(n, slice_text=merged, status="open" if plug == "none yet" else "plugged",
+                                        plug=plug) for n, plug in enumerate(plugs, 1)))
+            done = log.run("--check")
+            self.assertEqual(done.returncode, int(refused), plugs)
+            self.assertEqual("and I2 has no working test plug" in done.stdout, refused, done.stdout)
+
+    def test_a_second_miss_by_the_pair_turns_off_every_band_that_gives_it(self):
+        pair = "2 Review (adversarial + conformance)"
+        for rules, missing in (("", "`medium: off`"), ("medium: off\n", None),
+                               ("critical code: src/*\n", "`medium: off` and `small: off`"),
+                               ("critical code: src/*\nmedium: off\n", "`small: off`"),
+                               ("critical   code: src/*\nmedium: off\nsmall: off\n", None)):
+            log = LogRepo(self, entry(1, slice_text=pair), entry(2, slice_text=pair))
+            with open(os.path.join(log.path, "REVIEW.md"), "a", encoding="utf-8") as handle:
+                handle.write("\n```review-slices\ndefault: simple\n%s```\n" % rules)
+            done = log.run("--check")
+            self.assertEqual(done.returncode, int(bool(missing)), rules + done.stdout)
+            if missing:
+                self.assertIn("review-slices block needs %s until each has one\n" % missing, done.stdout)
+
+    def test_a_recurrence_that_names_a_load_is_a_miss_through_it(self):
+        recurrence = "\n  - 2026-10-01, 2 Review (merged reviewer): the same class again."
+        for entries, count in (((entry(1, slice_text="1 Offline suite", recurrences=recurrence),), 1),
+                               ((entry(1, slice_text="2 Review (merged reviewer)", recurrences=recurrence),), 2),
+                               ((entry(1, recurrences=recurrence * 2),), 2)):
+            done = LogRepo(self, *entries).run("--check")
+            self.assertIn("recurrences included: merged reviewer %d," % count, done.stdout)
+            self.assertEqual(done.returncode, int(count > 1), done.stdout)
 
     def test_a_band_plug_must_be_a_line_the_guard_reads(self):  # review: a commented-out band passed the check
         plug = 'rule REVIEW.md "small: off"'

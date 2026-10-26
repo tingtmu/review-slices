@@ -22,7 +22,14 @@ bullets; entries whose date is still the template's `<...>` are skipped. For a `
                                      `small:` or `medium:` line must be a line of its review-slices block, not a comment
 
 Paths are relative to the repo root and stay inside it. A missing plug is a problem: the hole is open again. An
-open incident older than 30 days is a note. Standard library only, Python 3.8+.
+open incident older than 30 days is a note.
+
+A miss through a reduced review load is a Slice field at 2 Review, or a recurrence, that names the load in
+parentheses: `2 Review (merged reviewer)`, `2 Review (adversarial + conformance)`. Two or more misses through one
+load are a problem until every incident they belong to is plugged with a working test, unless REVIEW.md's
+review-slices block turns off the bands the load comes from: `small: off` for the merged reviewer; `medium: off` for
+adversarial + conformance, and `small: off` too while the block has a `critical code:` line. Standard library only,
+Python 3.8+.
 """
 import argparse
 import ast
@@ -40,7 +47,11 @@ SLICE_NAMES = (("shown output",), ("offline suite", "offline tests", "offline te
                ("go-ahead", "go ahead"), ("acceptance",))
 UNKNOWN_SLICE = "unknown"
 # Reduced review loads a Slice 2 miss may name, as in "2 Review (merged reviewer)"; counted so a band can be narrowed.
-REDUCED_LOADS = ("merged reviewer", "adversarial + conformance")
+MERGED, PAIR = "merged reviewer", "adversarial + conformance"
+REDUCED_LOADS = (MERGED, PAIR)
+# The bands each load comes from, which a second miss turns off until a test plug exists. The pair also comes from
+# the small band at Critical while REVIEW.md has a `critical code:` line.
+LOAD_BANDS = {MERGED: ("small",), PAIR: ("medium",)}
 STATUSES = ("open", "plugged")
 KINDS = ("defect", "process")
 REOPEN = "the hole is open again; reopen the incident"
@@ -372,6 +383,52 @@ def has_recurrences(incident):
     return not NO_RECURRENCE.match(incident.fields.get("recurrences", "").strip())
 
 
+def misses(incident):
+    """[load, ...]: one for each miss of INCIDENT through a reduced review load, from its Slice field at 2 Review
+    and from each recurrence that names the load."""
+    slice_text = incident.fields.get("slice that should have caught it", "").lower()
+    recurrences = incident.fields.get("recurrences", "").lower()
+    found = [load for load in REDUCED_LOADS if incident.slice == SLICES[2] and "(%s)" % load in slice_text]
+    return found + [load for load in REDUCED_LOADS for _ in range(recurrences.count("(%s)" % load))]
+
+
+def tested(root, incident):
+    """Whether INCIDENT is plugged with at least one test plug that exists."""
+    plugs, _unread = parse_plug(incident.fields.get("plug", ""))
+    return incident.status == "plugged" and any(plug.kind == "test" and not plug_problem(root, plug)
+                                                for plug in plugs)
+
+
+def bands_on(root, load):
+    """The `small: off` / `medium: off` lines REVIEW.md's review-slices block lacks to stop LOAD (a band with no line
+    is on: small by default). An unreadable REVIEW.md turns nothing off."""
+    try:
+        lines = block_lines(read_text(os.path.join(root, RULE_FILE)))
+    except OSError:
+        lines = []
+    settings = [tuple(part.strip() for part in line.partition(":")[::2]) for line in lines]
+    code = load == PAIR and any(key == "critical code" for key, _value in settings)
+    return ["%s: off" % band for band in LOAD_BANDS[load] + (("small",) if code else ())
+            if (band, "off") not in settings]
+
+
+def band_problems(root, incidents):
+    """A problem for each reduced load that two or more misses went through while one of their incidents has no
+    test plug and REVIEW.md leaves a band of that load on: the band is off until a test plug exists."""
+    problems = []
+    for load in REDUCED_LOADS:
+        through = [incident for incident in incidents for found in misses(incident) if found == load]
+        ids = list(dict.fromkeys(incident.id for incident in through))
+        untested = list(dict.fromkeys(incident.id for incident in through if not tested(root, incident)))
+        missing = bands_on(root, load) if len(through) > 1 and untested else []
+        if missing:
+            problems.append("%d misses went through the %s load (%s) and %s has no working test plug, so %s's "
+                            "review-slices block needs %s until each has one"
+                            % (len(through), load, ", ".join(ids), ", ".join(untested), RULE_FILE,
+                               " and ".join("`%s`" % line for line in missing)))
+    return problems
+
+
 def print_report(where, incidents, skipped, today):
     open_ones = [incident for incident in incidents if incident.status == "open"]
     print("incidents: %s: %d incident(s), %d open, %d plugged%s"
@@ -385,11 +442,10 @@ def print_report(where, incidents, skipped, today):
     print("by slice that should have caught it:")
     for name in SLICES + ((UNKNOWN_SLICE,) if counts[UNKNOWN_SLICE] else ()):
         print("  %-16s %d" % (name, counts[name]))
-    loads = collections.Counter(load for incident in incidents if incident.slice == SLICES[2] for load in REDUCED_LOADS
-                                if "(%s)" % load in incident.fields.get("slice that should have caught it", "").lower())
+    loads = collections.Counter(load for incident in incidents for load in misses(incident))
     if loads:
-        print("  of 2 Review, through a reduced load: " + ", ".join("%s %d" % (load, loads[load])
-                                                                    for load in REDUCED_LOADS))
+        print("  misses through a reduced load, recurrences included: " + ", ".join(
+            "%s %d" % (load, loads[load]) for load in REDUCED_LOADS))
     recurring = [incident for incident in incidents if has_recurrences(incident)]
     print("recurrences (each means a weak plug):" + ("" if recurring else " none"))
     for incident in recurring:
@@ -419,6 +475,7 @@ def report(path, root, check, today=None):
     for incident in incidents:
         plug_problems, plug_notes = check_plugs(root, incident)
         problems, notes = problems + plug_problems, notes + plug_notes + age_notes(incident, today)
+    problems += band_problems(root, incidents)
     print_report(os.path.relpath(path), incidents, skipped, today)
     for message in notes:
         print("note: " + message)
