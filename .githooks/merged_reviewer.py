@@ -6,20 +6,26 @@
 # pylint: skip-file
 # mypy: ignore-errors
 # isort: skip_file
-"""review-slices merged reviewer (skill version 0.8.0): may one merged reviewer take an Important push?
+"""review-slices review load (skill version 0.8.0): which reviewers an Important or Critical change gets.
 
-The guard loads this file from the commit its own copy comes from (the base branch) and calls allowed() from
-`status` at Important; it is not run on its own. Without it, or if it fails, `status` says three reviewers.
-calibrate.py measures with the skill's copy, so the thresholds are chosen and enforced by one measure.
+The guard loads this file from the commit its own copy comes from (the base branch) and calls load() from `status`
+at Important and Critical; it is not run on its own. Without it, or if it fails, `status` says three reviewers.
+calibrate.py measures with the skill's copy, so the bands are chosen and enforced by one measure. The guard parses
+REVIEW.md's `small:`, `medium:` and `critical code:` lines; the defaults below apply where they are absent.
 """
 import fnmatch
 import re
 import subprocess
 
 VERSION = "0.8.0"
-# The largest push one merged reviewer may take, in weighted lines (ceil(characters / LINE_WIDTH) per added or
-# deleted line, so a minified line cannot pass as one) and files; chosen from calibrate.py's data (2026-10-25).
+# The default small band, in weighted lines (ceil(characters / LINE_WIDTH) per added or deleted line, so a minified
+# line cannot pass as one) and files; chosen from calibrate.py's data (2026-10-25). No medium band by default.
 MERGED_LINES, MERGED_FILES, LINE_WIDTH = 40, 3, 100
+MERGED, PAIR, THREE = "one merged reviewer", "adversarial + conformance", "three reviewers"
+# The review load table: level -> {size band: load}. A Critical change gets PAIR only when small and every path
+# that sets its level is in `critical code:` globs alone.
+TABLE = {"important": {"small": MERGED, "medium": PAIR, "large": THREE},
+         "critical": {"small": PAIR, "medium": THREE, "large": THREE}}
 PATCH_ARGS = ("--patch", "-U0", "--inter-hunk-context=0", "--no-renames", "--no-ext-diff", "--no-textconv",
               "--no-color", "--submodule=short", "--ignore-submodules=none", "--no-relative", "--src-prefix=a/",
               "--dst-prefix=b/")
@@ -57,32 +63,67 @@ def patch_size(guard, text):
     return lines, len(files), binary
 
 
-def allowed(guard, commits, uncommitted, tips):
-    """(allowed, why): may one merged reviewer take this Important push? Measured over every commit the push adds
-    (per commit then summed, merges left out), so several small units add up; never with uncommitted work, an
-    unfetched base branch, a floor path (so no suite change), a merge with changes of its own, a submodule update
-    or a binary file, whose size it cannot see."""
+def measure(guard, commits, uncommitted, tips):
+    """((weighted lines, files) or None, why) of COMMITS (per commit then summed, merges left out), so several small
+    units add up; None, so no band below large, with uncommitted work, an unfetched base branch, a floor path (so
+    no suite change), a merge with changes of its own, a submodule update or a binary file, whose size it cannot
+    see."""
     if uncommitted or not commits:
-        return False, "uncommitted work" if uncommitted else "no new commits"
+        return None, "uncommitted work" if uncommitted else "no new commits"
     if not guard.base_tip()[1]:
-        return False, "the base branch is not fetched"
+        return None, "the base branch is not fetched"
     floor = [path for path in guard.paths_of(commits)
              if any(fnmatch.fnmatchcase(path, glob) for glob, _level in guard.FLOOR)]
     if floor:
-        return False, "%s is always at least important" % floor[0]
+        return None, "%s is a floor path" % floor[0]
     merges = guard.git("rev-list", "--merges", "HEAD", *(("--not",) + tuple(tips) if tips else ())).split()
     for merge in merges:
         if guard.commit_paths(merge):
-            return False, "merge %s has changes of its own" % merge[:12]
+            return None, "merge %s has changes of its own" % merge[:12]
     raw = guard.git("log", "--no-walk=unsorted", "--no-merges", "--root", "--format=", "--raw", "--no-abbrev",
                     "--no-renames", "--ignore-submodules=none", *commits)  # whatever .gitmodules or config say
     if any("160000" in line[1:].split()[:2] for line in raw.splitlines() if line.startswith(":")):
-        return False, "a submodule update"
+        return None, "a submodule update"
     lines, files, binary = patch_size(guard, read_patch(guard, "log", "--no-walk=unsorted", "--no-merges", "--root",
                                                         "--format=", *PATCH_ARGS, *commits))
     if binary:
-        return False, "a binary file"
-    size = "%d weighted line(s), %d file(s) in %d new commit(s)" % (lines, files, len(commits))
-    if lines > MERGED_LINES or files > MERGED_FILES:
-        return False, "%s: over %d or %d" % (size, MERGED_LINES, MERGED_FILES)
-    return True, size
+        return None, "a binary file"
+    return (lines, files), "%d weighted line(s), %d file(s) in %d commit(s)" % (lines, files, len(commits))
+
+
+def band(guard, rules, commits, uncommitted, tips):
+    """(small, medium or large, why): the size band of COMMITS under RULES' `small:` and `medium:` lines (None:
+    the defaults). A band that is off, or that a smaller one already covers, takes nothing."""
+    size, why = measure(guard, commits, uncommitted, tips)
+    for name, default in (("small", (MERGED_LINES, MERGED_FILES)), ("medium", None)):
+        limit = (rules or {}).get(name) or default
+        if size and limit not in (None, "off") and size[0] <= limit[0] and size[1] <= limit[1]:
+            return name, "%s, within the %s band's %d lines, %d files" % ((why, name) + tuple(limit))
+    return "large", why if not size else "%s: over every band" % why
+
+
+def kind(guard, rules, path):
+    """code if every critical glob of RULES that PATH matches is a `critical code:` glob and PATH is no floor
+    path; content otherwise (a `critical:` glob, a critical default, unreadable rules)."""
+    globs = [glob for level, glob in (rules or {}).get("globs", ()) if level == "critical"
+             and fnmatch.fnmatchcase(path, glob)]
+    floor = any(fnmatch.fnmatchcase(path, glob) for glob, _level in guard.FLOOR)
+    return "code" if globs and not floor and set(globs) <= set((rules or {}).get("code", ())) else "content"
+
+
+def load(guard, rules, level, rows, commits, uncommitted, tips):
+    """(load, why): the reviewers a LEVEL change gets, from the TABLE: its size band over COMMITS and, at Critical,
+    the kind of every path in ROWS (the paths that set the level)."""
+    if level == "critical":
+        content = [row.path for row in rows if kind(guard, rules, row.path) != "code"]
+        if content:
+            return THREE, "%s is not in `critical code:` globs alone" % content[0]
+    name, why = band(guard, rules, commits, uncommitted, tips)
+    return TABLE[level][name], "%s: %s" % (name, why)
+
+
+def allowed(guard, commits, uncommitted, tips):
+    """(allowed, why): 0.8.0's question, kept for callers that ask it: may one merged reviewer take this Important
+    push under the default bands?"""
+    name, why = band(guard, None, commits, uncommitted, tips)
+    return name == "small", why

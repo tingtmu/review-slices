@@ -24,13 +24,16 @@ Configuration is the first ```review-slices fenced block in REVIEW.md at the rep
     default: simple                      # level of a path no glob matches (default: simple)
     critical: engine/src/*/approval.py   # "<level>: <glob>", one per line; "*" also matches "/"
     secrets: gitleaks                    # scan the commits a push adds (.githooks/secret_scan.py, gitleaks 8.19+)
+    critical code: engine/src/*          # critical code a small diff can be judged from (others are content)
+    small: 40 lines, 3 files             # size bands of the review load, up to 80/5 and 400/20; or off
+    medium: 200 lines, 10 files
 
 A path takes its highest matching level; REVIEW.md, .githooks/* and .gitleaks* are at least important. A push is
 judged by its new commits (neither the target ref nor the base branch has them), a merge only where it differs from
 git's own merge. A trailer covers the new commits in its history no earlier trailer reaches, at their level or
 higher. The standing rules (REVIEW.md where the branch left the base branch) judge a change, so it cannot lower its
-own levels; a suite change is reported, not blocked. `status` says when an Important push is small enough for one
-merged reviewer (.githooks/merged_reviewer.py). `status`, `pre-push` and `ci` hand off to the base branch's guard
+own levels; a suite change is reported, not blocked. `status` names the review load of an Important or Critical
+change (.githooks/merged_reviewer.py). `status`, `pre-push` and `ci` hand off to the base branch's guard
 when this copy differs from it; `run-suite` runs the .githooks/run_suite.py beside this copy. Standard library only,
 Python 3.8+, git 2.32+.
 """
@@ -56,12 +59,13 @@ HANDOFF = "REVIEW_SLICES_HANDOFF"
 # The first guard version that has each command; the base branch's guard runs a command only if it has it.
 SINCE = {"level": (0, 1, 0), "run-suite": (0, 1, 0), "pre-push": (0, 1, 0), "check": (0, 2, 0),
          "status": (0, 3, 0), "ci": (0, 4, 0)}
-MERGED = ("one merged reviewer (the adversarial, Standards and Spec lenses), or a Standards, a Spec and an "
-          "adversarial reviewer")
-SLICE2 = {"trivial": "no review",
-          "simple": "1-2 adversarial reviewers",
-          "important": "a Standards, a Spec and an adversarial reviewer",
-          "critical": "a Standards, a Spec and an adversarial reviewer, then the user's go-ahead for the one-way door"}
+THREE = "a Standards, a Spec and an adversarial reviewer"
+SLICE2 = {"trivial": "no review", "simple": "1-2 adversarial reviewers", "important": THREE, "critical": THREE}
+# The reduced review loads `status` may print, and the most a REVIEW.md size band may say (lines, files).
+LOADS = {"one merged reviewer": "one merged reviewer (the adversarial, Standards and Spec lenses), or " + THREE,
+         "adversarial + conformance": "an adversarial and a conformance reviewer (the Standards and Spec lenses), or "
+                                      + THREE}
+CEILINGS = {"small": (80, 5), "medium": (400, 20)}
 OVERRIDE = "If the user decides to push anyway, the user runs `git push --no-verify`; an agent never does."
 # Settings in a user's git config that would change what the guard reads.
 GIT_SETTINGS = ("-c", "core.quotePath=false", "-c", "color.ui=never", "-c", "log.showSignature=false",
@@ -118,8 +122,8 @@ def parse_config(text):
     if not match:
         raise GuardError("REVIEW.md has no ```review-slices block")
     config = {"tests": [], "base": None, "default": "simple", "globs": [], "errors": [], "warnings": [],
-              "secrets": None}
-    seen = set()
+              "secrets": None, "small": None, "medium": None}
+    seen, kinds = set(), {"code": set(), "content": set()}
     for number, raw in enumerate(match.group(1).splitlines(), 1):
         line = COMMENT.sub("", raw).strip()
         if not line:
@@ -129,11 +133,25 @@ def parse_config(text):
             raise GuardError("review-slices block line %d is not 'key: value': %r" % (number, raw))
         if PLACEHOLDER.search(value):
             config["errors"].append("line %d still holds a template placeholder: %s" % (number, line))
-        if key in LEVELS:
+        level, kind = (key.split(None, 1) + ["", ""])[:2]
+        if level in LEVELS:  # a mistyped kind ("critical cdoe:") still counts at its level, as content
+            if kind and (level, kind) != ("critical", "code"):
+                config["errors"].append("line %d: %r is not a key; its globs count at %s" % (number, key, level))
             globs = [glob.strip() for glob in value.split(",") if glob.strip()]
             if len(globs) > 1:
                 config["warnings"].append("line %d is read as %d globs; write one glob per line" % (number, len(globs)))
-            config["globs"] += [(key, glob) for glob in globs]
+            config["globs"] += [(level, glob) for glob in globs]
+            kinds["code" if kind == "code" else "content"].update(globs if level == "critical" else ())
+        elif key in CEILINGS:  # a size band: a repeat reads as the stricter one, a value it cannot read as off
+            limit = re.fullmatch(r"(\d+) lines?, (\d+) files?", value)
+            wanted = (int(limit.group(1)), int(limit.group(2))) if limit else "off"
+            band = tuple(map(min, wanted, CEILINGS[key])) if limit else "off"
+            config["errors"] += [] if limit or value == "off" else ["line %d: %s: takes off or 'N lines, M files'; "
+                                                                    "read as off" % (number, key)]
+            config["warnings"] += [] if band == wanted else ["line %d: %s: is over the most it may say, so it reads "
+                                                             "as %d lines, %d files" % ((number, key) + band)]
+            old = config[key] or band
+            config[key] = "off" if "off" in (old, band) else (min(old[0], band[0]), min(old[1], band[1]))
         elif key == "test":
             config["tests"].append(value)
         elif key == "secrets":  # any value turns the scan on; `check` names one it does not know
@@ -146,6 +164,7 @@ def parse_config(text):
             config[key] = value
         else:
             raise GuardError("review-slices block line %d has an unknown key or level: %r" % (number, raw))
+    config["code"] = kinds["code"] - kinds["content"]  # a glob also listed as content is content
     return config
 
 
@@ -483,23 +502,30 @@ def print_lint(config, where):
     return errors, warnings
 
 
-def merged_reviewer(commits, uncommitted, tips):
-    """(allowed, why) from .githooks/merged_reviewer.py, loaded as the secret scanner is; without it, or if it
-    fails, three reviewers."""
+def review_load(rules, level, rows, uncommitted):
+    """(load, why) from .githooks/merged_reviewer.py, loaded as the secret scanner is, over every commit this
+    branch adds to the base branch, with the bands and kinds of the standing RULES only (None: the defaults), so a
+    change cannot lighten its own review. Without the measure, or if it fails, three reviewers; a 0.8.0 measure
+    has no load(), so it judges Important pushes only."""
     tip = base_tip()[1]
     if not tip:  # vendored() would fall back to this branch's own copy
-        return False, "the base branch is not fetched"
+        return "three reviewers", "the base branch is not fetched"
     at, source = vendored(tip, "HEAD", MERGED_PATH)
     if at == "HEAD":  # the base branch never had a guard: nothing it trusts measures this push
-        return False, "the base branch has no guard yet"
+        return "three reviewers", "the base branch has no guard yet"
     if not source:
-        return False, "%s has no %s: run the skill's setup_tools.py upgrade" % (at[:12], MERGED_PATH)
-    module = types.ModuleType("merged_reviewer")
+        return "three reviewers", "%s has no %s: run the skill's setup_tools.py upgrade" % (at[:12], MERGED_PATH)
+    module, guard, commits = types.ModuleType("merged_reviewer"), types.SimpleNamespace(**globals()), new_commits(
+        "HEAD", (tip,))  # the whole branch, so a change pushed in slices is measured whole
     try:
         exec(compile(source, MERGED_PATH, "exec"), module.__dict__)
-        return module.allowed(types.SimpleNamespace(**globals()), commits, uncommitted, tips)
+        if hasattr(module, "load"):
+            return module.load(guard, rules, level, rows, commits, uncommitted, (tip,))
+        allowed, why = module.allowed(guard, commits, uncommitted, (tip,)) if level == "important" else (False, (
+            "%s at %s measures Important changes only" % (MERGED_PATH, at[:12])))
+        return "one merged reviewer" if allowed else "three reviewers", why
     except Exception as error:  # a broken measure means three reviewers, not a traceback
-        return False, "%s at %s did not run: %r" % (MERGED_PATH, at[:12], error)
+        return "three reviewers", "%s at %s did not run: %r" % (MERGED_PATH, at[:12], error)
 
 
 def last_trailer(commits):
@@ -511,7 +537,7 @@ def listed(paths, limit=5):
     return ", ".join(paths[:limit]) + (" and %d more" % (len(paths) - limit) if len(paths) > limit else "")
 
 
-def next_step(config, level, start, commits, uncommitted, tips, merged=False):
+def next_step(config, level, start, commits, uncommitted, tips, load=None):
     if uncommitted:
         edited = sorted(set(changed_paths("HEAD")))
         new = [path for path in uncommitted if path not in edited]
@@ -520,9 +546,10 @@ def next_step(config, level, start, commits, uncommitted, tips, merged=False):
                 "else's edits. Files a tool wrote (build output, caches) belong in .gitignore: ask the user"
                 % (" Edited: %s." % listed(edited) if edited else "", " New: %s." % listed(new) if new else ""))
     if level != "trivial":
-        return ("review at %s: %s, on `git diff %s..HEAD`; then add the trailer to the last commit with "
+        return ("review at %s: %s%s, on `git diff %s..HEAD`; then add the trailer to the last commit with "
                 "`git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer \"Review: %s %s\"`"
-                % (level, MERGED if merged else SLICE2[level], start[:12], level, start[:12]))
+                % (level, LOADS.get(load, SLICE2[level]), ", then the user's go-ahead for the one-way door"
+                   if level == "critical" else "", start[:12], level, start[:12]))
     problems = review_problems(config, commits, tips)
     if problems:
         return "fix the trailers: " + problems[0]
@@ -558,7 +585,8 @@ def cmd_status(args):
     working = working_config(root)
     tips, tip_name = status_tips(args), base_tip()[0]
     standing = standing_commit("HEAD", tips)
-    config = (standing and rules_at(standing)) or working
+    rules = standing and rules_at(standing)
+    config = rules or working
     if config is None:
         raise GuardError("no REVIEW.md with a review-slices block here or where this branch left %s; to set one "
                          "up, follow the skill's \"Set up a repo\"" % tip_name)
@@ -570,15 +598,14 @@ def cmd_status(args):
         print("  %s  (%s)" % (row.path, row.pattern))
     print("trailer: Review: %s %s" % (level, start[:12]))
     uncommitted = sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
-    merged = ((False, "a BASE was given, so the push is not measured whole") if args
-              else merged_reviewer(commits, uncommitted, tips)) if level == "important" else None
-    if merged:
-        print("review: %s (%s)" % ("merged reviewer allowed: one reviewer for the adversarial, Standards and Spec "
-                                   "lenses" if merged[0] else "three reviewers", merged[1]))
+    load = (("three reviewers", "a BASE was given, so the branch is not measured whole") if args else review_load(
+        rules, level, rows, uncommitted)) if level in ("important", "critical") else None
+    if load:
+        print("review: %s (%s)" % load)
     print("new commits: %d not yet on %s or this branch's remote" % (len(commits), tip_name))
     print("standing rules: %s" % ("REVIEW.md at %s, where this branch left %s" % (standing[:12], tip_name)
-                                  if standing and rules_at(standing) else "this branch's own REVIEW.md (%s not fetched "
-                                  "or without one)" % tip_name))
+                                  if rules else "this branch's own REVIEW.md (%s not fetched or without one)"
+                                  % tip_name))
     stamp = stamps().get(worktree_tree(root))
     print("pass stamp: %s" % ("yes, " + stamp if stamp is not None else "none for the working tree"))
     wiring = hook_wiring()
@@ -596,7 +623,7 @@ def cmd_status(args):
     print("secrets: " + ("\n  ".join(secret + notes) or ("no new commits to scan" if config.get("secrets") else
                                                        "not scanned (REVIEW.md has no secrets: line)")))
     print("next: " + ("deal with the secret scan before review: " + secret[0].splitlines()[0] if secret else
-                      next_step(config, level, start, commits, uncommitted, tips, bool(merged and merged[0]))))
+                      next_step(config, level, start, commits, uncommitted, tips, load and load[0])))
     return 0
 
 

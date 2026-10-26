@@ -49,6 +49,17 @@ class CheckTest(unittest.TestCase):
         self.assertNotIn("Traceback", done.stderr)
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
 
+    def test_the_review_load_lines_are_linted(self):  # a mistyped kind or band is an error; over a ceiling, a warning
+        repo = Repo(self, rules=RULES + "critical cdoe: core/*\nsmall: 30 lines\nmedium: 900 lines, 9 files\n")
+        done = repo.guard("check")
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertIn("'critical cdoe' is not a key; its globs count at critical", done.stdout)
+        self.assertIn("small: takes off or 'N lines, M files'; read as off", done.stdout)
+        self.assertIn("warning in REVIEW.md: line 9: medium: is over the most it may say, so it reads as 400 lines, 9 "
+                      "files", done.stdout)
+        repo = Repo(self, rules=RULES.replace("trivial: notes/*\n", "") + "critical code: core/*\nsmall: off\n")
+        self.assertIn("check: ok", repo.guard("check").stdout)
+
     def test_version(self):
         repo = Repo(self)
         done = repo.guard("--version")
