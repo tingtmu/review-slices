@@ -153,10 +153,12 @@ under `--select ALL`. The agent hook is checked live with Codex 0.164.0, which s
 band of every commit the branch adds to the base branch and, at critical, the glob kind of the paths that set the
 level. Important takes one merged reviewer when small, an adversarial and a conformance (Standards and Spec)
 reviewer when medium, and three otherwise; critical takes the adversarial and conformance pair only when small and
-in `critical code:` globs alone. REVIEW.md may say `small:` and `medium:` (up to 80 lines, 5 files and 400 lines,
-20 files) and `critical code:`; the defaults keep 0.8.0's behaviour, and the base branch needs the 0.9.0 guard
-before these lines are added. `calibrate.py` adds a review load section. SKILL.md adds escalation from a reduced
-load, leaner second rounds and an incident loop that narrows or switches off a band; the reviewer briefs add a
-conformance reviewer and a structured report for reduced loads; `incidents.py` counts misses per reduced load and
-checks a band plug against REVIEW.md's block. `run-suite` moves into a vendored `.githooks/run_suite.py`, which
-`install` copies and `upgrade` adds; the stamp format is unchanged.
+in `critical code:` globs alone. REVIEW.md may say `small:` and `medium:` (up to 80 lines, 5 files and 400 lines, 20
+files) and `critical code:`; the default bands are 0.8.0's (small 40 lines, 3 files, no medium), but the whole
+branch is measured now, not only the push, so a branch pushed in slices is measured whole. The base branch needs the
+0.9.0 guard before these lines are added. A release that only swaps the version takes one merged reviewer where the
+base branch's REVIEW.md says so, with the shown checks it names. `calibrate.py` adds a review load section. SKILL.md
+adds escalation from a reduced load, leaner second rounds and an incident loop that narrows or switches off a band;
+the reviewer briefs add a conformance reviewer and a structured report for reduced loads; `incidents.py` counts
+misses per reduced load and checks a band plug against REVIEW.md's block. `run-suite` moves into a vendored
+`.githooks/run_suite.py`, which `install` copies and `upgrade` adds; the stamp format is unchanged.
