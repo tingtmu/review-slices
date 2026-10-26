@@ -431,6 +431,36 @@ class UpgradeAndDoctorTest(unittest.TestCase):
         self.assertEqual(done.returncode, 1)
         self.assertIn("does not reach the guard", done.stdout)
 
+    def test_a_module_planted_beside_the_bootstrap_never_stands_in_for_the_standard_library(self):  # 0.9.1 (I1)
+        repo = Repo(self)
+        repo.install()
+        for name in ("subprocess", "tempfile"):  # the bootstrap imports both; either would end it with a pass
+            with open(os.path.join(repo.path, ".git", "review-slices", name + ".py"), "w", encoding="utf-8") as handle:
+                handle.write("import sys\nsys.exit(0)\n")
+        repo.write("core/x.py", "unreviewed\n")
+        repo.commit("an unreviewed critical change")
+        self.assertNotEqual(repo.try_push().returncode, 0)
+
+    def test_doctor_names_hooks_an_older_install_wrote(self):  # 0.9.1: they ran Python without -I
+        repo = Repo(self)
+        self.assertEqual(repo.setup("install", "--apply", "--agent-hooks").returncode, 0)
+        hook = repo.out("rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push")
+        with open(hook, encoding="utf-8") as handle:
+            text = handle.read()
+        with open(hook, "w", encoding="utf-8") as handle:
+            handle.write(text.replace("python3 -I ", "python3 "))
+        settings = os.path.join(repo.path, ".claude", "settings.json")
+        with open(settings, encoding="utf-8") as handle:
+            text = handle.read()
+        repo.write(".claude/settings.json", text.replace(" -I -c ", " -c "))
+        done = repo.setup("doctor")
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertIn("the way an older install wrote it", done.stdout)
+        self.assertIn(".claude/settings.json runs an older agent hook command", done.stdout)
+        self.assertEqual(repo.setup("install", "--apply", "--agent-hooks").returncode, 0)
+        done = repo.setup("doctor")
+        self.assertNotIn("older", done.stdout)
+
     def test_doctor_passes_after_install(self):
         repo = Repo(self)
         repo.install()

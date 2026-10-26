@@ -26,7 +26,9 @@ each failure class from getting through again. Terms: the skill's
   test tests/test_install.py::BootstrapTest::test_an_edited_checkout_guard_does_not_judge_after_the_base_lost_its_own,
   test tests/test_install.py::BootstrapTest::test_a_base_branch_tracking_an_upstream_without_rules_keeps_origin,
   test tests/test_install.py::BootstrapTest::test_a_base_branch_tracking_another_remote_without_rules_keeps_origin,
-  test tests/test_install.py::BootstrapTest::test_an_upstream_that_only_mentions_a_rules_block_has_no_rules
+  test tests/test_install.py::BootstrapTest::test_an_upstream_that_only_mentions_a_rules_block_has_no_rules,
+  test tests/test_agent_hook.py::SettingsTest::test_a_module_planted_where_the_hook_runs_never_stands_in_for_the_standard_library,
+  test tests/test_install.py::UpgradeAndDoctorTest::test_a_module_planted_beside_the_bootstrap_never_stands_in_for_the_standard_library
 - **Recurrences:**
   - 2026-10-24, review finding on 0.4.0: the agent hook ran the checkout's copy, which the agent can edit. The plug
     covered the guard and `ci`, not the agent hook added after it.
@@ -36,6 +38,12 @@ each failure class from getting through again. Terms: the skill's
     even when it had no review rules (an `upstream` or any other remote), so the checkout's own guard judged
     pushes; a REVIEW.md that only mentioned the rules block in prose also counted as rules. The plug tested an
     `upstream` with no REVIEW.md, never a base branch tracking one, and never an edited guard after install.
+  - 2026-10-26, reported by an adopter's session (seqslab_skill) after 0.9.0: the agent hook ran `python3 -c`, so
+    a stdlib-named file the agent writes in the working directory (`json.py`) stood in for the hook's imports, the
+    hook crashed, and "any error allows" let `git push --no-verify` through; the pre-push wrapper ran the
+    bootstrap the same way, from `.git/review-slices/`, where only the stamp and the bootstrap are protected. The
+    plugs ran the base branch's code, never asking what else Python imports beside it. Every Python the hooks
+    start now runs isolated (`-I`), and `doctor` names hooks an older install wrote; two tests plant such files.
 
 ## I2. The guard fails open on unexpected input
 

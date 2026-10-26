@@ -35,11 +35,12 @@ COPIED = (SKILL_GUARD, SKILL_AGENT_HOOK, os.path.join(HERE, "incidents.py"), SKI
           SKILL_SUITE)
 # Runs the agent hook committed on the base branch (the checkout's copy only before it is there), so an edited
 # copy never decides; a clone that never ran install has no review-slices.base, and any error allows the action.
+# Every Python these hooks start runs isolated (-I), so a module the agent writes beside it is never imported.
 AGENT_COMMAND = ("sh -c 'top=$(git -C \"${CLAUDE_PROJECT_DIR:-.}\" rev-parse --show-toplevel 2>/dev/null) && "
                  "base=$(git -C \"$top\" config --get review-slices.base) || exit 0; "
                  "code=$(git -C \"$top\" show \"refs/remotes/$base:%s\" 2>/dev/null) || "
                  "code=$(cat \"$top/%s\" 2>/dev/null) || exit 0; "
-                 "export REVIEW_SLICES_TOP=\"$top\"; exec python3 -c \"$code\"' || true"
+                 "export REVIEW_SLICES_TOP=\"$top\"; exec python3 -I -c \"$code\"' || true"
                  % (AGENT_HOOK_PATH, AGENT_HOOK_PATH))
 AGENT_SETTINGS = ((".claude/settings.json", "Bash|Write|Edit|MultiEdit|NotebookEdit"), (".codex/hooks.json", "Bash"))
 CHAINED = "pre-push.review-slices-chained"
@@ -88,7 +89,7 @@ def find_guard():
 
 def run(path, args, data):
     env = dict(os.environ, REVIEW_SLICES_HANDOFF="1")
-    return subprocess.run([sys.executable, path] + args, input=data, env=env).returncode
+    return subprocess.run([sys.executable, "-I", path] + args, input=data, env=env).returncode
 
 
 def main(args):
@@ -120,12 +121,13 @@ def main(args):
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 '''
+PRE_PUSH = "python3 -I %s pre-push"  # the config hook's command
 WRAPPER = '''#!/bin/sh
 # review-slices wrapper: run the guard, then the hook that was here before it (if any), each with the full input.
 input=$(mktemp) || exit 1
 trap 'rm -f "$input"' EXIT
 cat > "$input"
-python3 %s pre-push "$@" < "$input" || exit $?
+python3 -I %s pre-push "$@" < "$input" || exit $?
 next="$(dirname "$0")/%s"
 if [ -x "$next" ]; then "$next" "$@" < "$input" || exit $?; fi
 '''
@@ -263,6 +265,14 @@ def without_old_agent_hooks(entries):
     return [entry for entry in kept if entry["hooks"]]
 
 
+def stale_wiring(wiring, bootstrap):
+    """True if WIRING (guard.hook_wiring()) reaches the bootstrap, but not as this install would write it now."""
+    if wiring.startswith("config hook"):
+        return git("config", "--get", "hook.review-slices.command", check=False) != PRE_PUSH % shlex.quote(bootstrap)
+    hook = git("rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push")
+    return "0.1.0's" not in wiring and bool(hook_file_steps(os.path.dirname(hook), bootstrap)[0])
+
+
 def agent_hook_steps(root):
     """Steps that add the agent hook to Claude Code's and Codex's committed hook settings, keeping what is there."""
     steps, problems = [], []
@@ -317,7 +327,7 @@ def install_steps(config_hook=False, agent_hooks=False):
         steps.append(("unset core.hooksPath=.githooks (0.1.0's install), so the hooks in .git/hooks run again",
                       lambda: git("config", "--local", "--unset", "core.hooksPath")))
         hooks_path = None
-    command = "python3 %s pre-push" % shlex.quote(bootstrap)
+    command = PRE_PUSH % shlex.quote(bootstrap)
     if config_hook or (hooks_path and guard.git_version() >= (2, 54)):
         if guard.git_version() < (2, 54):
             return steps, problems + ["this git (%s) does not run config hooks" % ".".join(
@@ -395,7 +405,7 @@ def tree_lines(root, bootstrap, base_has_guard):
     committed = (("REVIEW.md", "the rules"), ("docs/INCIDENTS.md", "incidents and their plugs"),
                  (guard.GUARD_PATH, "the guard; " + ("the base branch's copy judges pushes" if base_has_guard
                                                      else "the base branch has none yet, so this checkout's runs")),
-                 (guard.MERGED_PATH, "when one merged reviewer may take an Important push"),
+                 (guard.MERGED_PATH, "the review load: which reviewers a change gets"),
                  (guard.SUITE_PATH, "run-suite: runs the suite and writes the pass stamp"))
     if wants_scanner(root):
         committed += ((guard.SCANNER_PATH, "the secret scan the guard runs (REVIEW.md says secrets:)"),)
@@ -468,13 +478,20 @@ def cmd_doctor(_args):
     wiring = guard.hook_wiring()
     if wiring is None:
         problems.append("this clone's pre-push does not reach the guard: run install")
+    elif stale_wiring(wiring, bootstrap):
+        problems.append("this clone's pre-push runs the bootstrap the way an older install wrote it (without -I, so a "
+                        "module beside it can stand in for the standard library): run install --apply")
     agent = []
     for relative, _matcher in AGENT_SETTINGS:
         try:
-            agent = agent + ([relative] if has_agent_hook(agent_hook_entries(read(os.path.join(root, relative)))[1])
-                             else [])
+            entries = agent_hook_entries(read(os.path.join(root, relative)))[1]
         except ValueError:
             problems.append("%s is not valid JSON" % relative)
+            continue
+        agent = agent + ([relative] if has_agent_hook(entries) else [])
+        if entries != without_old_agent_hooks(entries) and not has_agent_hook(entries):
+            problems.append("%s runs an older agent hook command: run install --agent-hooks --apply and commit it"
+                            % relative)
     if read(os.path.join(root, AGENT_HOOK_PATH)) not in (None, read(SKILL_AGENT_HOOK)):
         notes.append("the repo's agent hook differs from this skill's: run upgrade")
     hooks_path = git("config", "--get", "core.hooksPath", check=False)

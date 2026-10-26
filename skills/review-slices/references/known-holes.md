@@ -39,3 +39,6 @@ are known; reviewers and the user cover them.
   does any agent tool it does not see, Codex until its hooks feature is on and the user trusts the hook, and
   Codex's `apply_patch` edits, since its hook sees shell commands only. It runs the copy committed on the
   base branch, so editing the checkout's copy changes nothing.
+- The hooks run Python isolated (`-I`), so a module written beside them is never imported. Commands the agent runs
+  itself (`python3 .githooks/review_slices.py status` or `run-suite`) put `.githooks/` first on the import path: a
+  stdlib-named file there, untracked, could fake a pass stamp. `run-suite`'s stamp is the agent's word, as above.

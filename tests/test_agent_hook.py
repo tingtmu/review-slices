@@ -213,6 +213,17 @@ class SettingsTest(unittest.TestCase):
                 capture_output=True, text=True, cwd=repo.path, env=dict(ENV, CLAUDE_PROJECT_DIR=repo.path))
             self.assertIn('"deny"', decided.stdout, agent_command)
 
+    def test_a_module_planted_where_the_hook_runs_never_stands_in_for_the_standard_library(self):  # 0.9.1 (I1)
+        repo = Repo(self)
+        self.assertEqual(repo.setup("install", "--apply", "--agent-hooks").returncode, 0)
+        for name in ("json", "re", "shlex", "subprocess"):  # each, imported, would end the hook: an allow
+            repo.write(name + ".py", "raise SystemExit(0)\n")
+        command = load_script("setup_tools", SETUP).AGENT_COMMAND
+        decided = subprocess.run(("sh", "-c", command), input=json.dumps(
+            {"tool_name": "Bash", "tool_input": {"command": "git push --no-verify"}, "cwd": repo.path}),
+            capture_output=True, text=True, cwd=repo.path, env=dict(ENV, CLAUDE_PROJECT_DIR=repo.path))
+        self.assertIn('"deny"', decided.stdout, decided.stderr)
+
     def test_settings_of_the_wrong_shape_are_reported_not_crashed_on(self):
         repo = Repo(self)
         repo.write(".claude/settings.json", '{"hooks": []}')
