@@ -162,3 +162,11 @@ adds escalation from a reduced load, leaner second rounds and an incident loop t
 the reviewer briefs add a conformance reviewer and a structured report for reduced loads; `incidents.py` counts
 misses per reduced load and checks a band plug against REVIEW.md's block. `run-suite` moves into a vendored
 `.githooks/run_suite.py`, which `install` copies and `upgrade` adds; the stamp format is unchanged.
+
+`0.9.1`: every Python the hooks start runs isolated and without site (`python3 -I -S`): the agent hook, the pre-push
+hook file and config hook, the bootstrap and the guard's hand-off. Before, a stdlib-named file the agent wrote in
+the working directory (`json.py`) or beside the bootstrap, or a `.pth` file in a virtualenv on PATH, could stand in
+for the hook's imports, so the agent hook allowed `git push --no-verify` or the pre-push hook passed. `doctor` names
+a hook or an agent hook command an older install wrote; `install --agent-hooks --apply` rewrites both, and the
+`.claude` and `.codex` settings it writes are committed changes. A push whose command line sets `PATH` or git's own
+variables is listed as a known hole.
