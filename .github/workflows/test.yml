@@ -15,8 +15,8 @@ jobs:
       matrix:
         python: ["3.8", "3.x"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - run: git --version
@@ -45,7 +45,7 @@ jobs:
           apt-get update -q
           DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
             ca-certificates git openssh-client python3
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: This leg must run a git older than 2.36
         run: git --version && git --version | grep -q '^git version 2\.3[2-5]\.'
       - run: python3 -m unittest discover -s tests -v
@@ -54,7 +54,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
