@@ -148,3 +148,15 @@ whitespace- or comment-only units, and the merged-reviewer candidates (`--list-c
 partial clone it runs only the first section and fetches nothing. The vendored copies no longer trip ruff's PGH004
 under `--select ALL`. The agent hook is checked live with Codex 0.164.0, which shows it shell commands only, so
 `apply_patch` edits are a known hole.
+
+`0.9.0`: `status` prints the review load at important and critical: which reviewers a change needs, from the size
+band of every commit the branch adds to the base branch and, at critical, the glob kind of the paths that set the
+level. Important takes one merged reviewer when small, an adversarial and a conformance (Standards and Spec)
+reviewer when medium, and three otherwise; critical takes the adversarial and conformance pair only when small and
+in `critical code:` globs alone. REVIEW.md may say `small:` and `medium:` (up to 80 lines, 5 files and 400 lines,
+20 files) and `critical code:`; the defaults keep 0.8.0's behaviour, and the base branch needs the 0.9.0 guard
+before these lines are added. `calibrate.py` adds a review load section. SKILL.md adds escalation from a reduced
+load, leaner second rounds and an incident loop that narrows or switches off a band; the reviewer briefs add a
+conformance reviewer and a structured report for reduced loads; `incidents.py` counts misses per reduced load and
+checks a band plug against REVIEW.md's block. `run-suite` moves into a vendored `.githooks/run_suite.py`, which
+`install` copies and `upgrade` adds; the stamp format is unchanged.

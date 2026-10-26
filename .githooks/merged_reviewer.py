@@ -6,7 +6,7 @@
 # pylint: skip-file
 # mypy: ignore-errors
 # isort: skip_file
-"""review-slices review load (skill version 0.8.0): which reviewers an Important or Critical change gets.
+"""review-slices review load (skill version 0.9.0): which reviewers an Important or Critical change gets.
 
 The guard loads this file from the commit its own copy comes from (the base branch) and calls load() from `status`
 at Important and Critical; it is not run on its own. Without it, or if it fails, `status` says three reviewers.
@@ -17,7 +17,7 @@ import fnmatch
 import re
 import subprocess
 
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 # The default small band, in weighted lines (ceil(characters / LINE_WIDTH) per added or deleted line, so a minified
 # line cannot pass as one) and files; chosen from calibrate.py's data (2026-10-25). No medium band by default.
 MERGED_LINES, MERGED_FILES, LINE_WIDTH = 40, 3, 100

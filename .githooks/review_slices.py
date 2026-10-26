@@ -6,7 +6,7 @@
 # pylint: skip-file
 # mypy: ignore-errors
 # isort: skip_file
-"""review-slices guard (skill version 0.8.0): review levels, pass stamps and the pre-push check.
+"""review-slices guard (skill version 0.9.0): review levels, pass stamps and the pre-push check.
 
     review_slices.py status [BASE]         where this work stands: its review level and the trailer to write, the
                                            rules it is judged by, the pass stamp, the hook, and the next step
@@ -48,7 +48,7 @@ import sys
 import tempfile
 import types
 
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 LEVELS = ("trivial", "simple", "important", "critical")
 FLOOR = (("REVIEW.md", "important"), (".githooks/*", "important"), (".gitleaks*", "important"))
 GUARD_PATH = ".githooks/review_slices.py"

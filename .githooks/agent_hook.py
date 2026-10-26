@@ -6,7 +6,7 @@
 # pylint: skip-file
 # mypy: ignore-errors
 # isort: skip_file
-"""review-slices agent hook (skill version 0.8.0): a PreToolUse hook for Claude Code and Codex that stops an agent
+"""review-slices agent hook (skill version 0.9.0): a PreToolUse hook for Claude Code and Codex that stops an agent
 from taking the user's overrides: skipping hooks with --no-verify, rewiring the push hook, writing pass stamps or
 the bootstrap, or amending new content into a commit that carries a review trailer.
 
