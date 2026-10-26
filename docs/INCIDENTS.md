@@ -29,8 +29,7 @@ each failure class from getting through again. Terms: the skill's
   test tests/test_install.py::BootstrapTest::test_an_upstream_that_only_mentions_a_rules_block_has_no_rules,
   test tests/test_agent_hook.py::SettingsTest::test_a_module_planted_where_the_hook_runs_never_stands_in_for_the_standard_library,
   test tests/test_install.py::UpgradeAndDoctorTest::test_a_module_planted_beside_the_bootstrap_never_stands_in_for_the_standard_library,
-  test tests/test_install.py::UpgradeAndDoctorTest::test_a_pth_file_in_a_virtualenv_on_path_never_runs_in_the_hooks,
-  test tests/test_agent_hook.py::AgentHookTest::test_a_push_that_picks_its_own_git_config_or_python_is_denied
+  test tests/test_install.py::UpgradeAndDoctorTest::test_a_pth_file_in_a_virtualenv_on_path_never_runs_in_the_hooks
 - **Recurrences:**
   - 2026-10-24, review finding on 0.4.0: the agent hook ran the checkout's copy, which the agent can edit. The plug
     covered the guard and `ci`, not the agent hook added after it.
@@ -46,8 +45,9 @@ each failure class from getting through again. Terms: the skill's
     bootstrap the same way, from `.git/review-slices/`, where only the stamp and the bootstrap are protected. The
     plugs ran the base branch's code, never asking what else Python imports beside it. Every Python the hooks
     start now runs isolated and without site (`-I -S`: the review found a `.pth` file in a virtualenv on PATH ran
-    under `-I` alone), the agent hook refuses a push whose command line sets `PATH` or git's own variables
-    (`GIT_CONFIG_*` reached `core.hooksPath` unseen), and `doctor` names hooks an older install wrote.
+    under `-I` alone), and `doctor` names hooks an older install wrote. The review also found that a push whose
+    command line sets `PATH` or git's own variables gets past the agent hook; the owner chose to list it as a
+    known hole rather than chase it in the hook's parser.
 
 ## I2. The guard fails open on unexpected input
 

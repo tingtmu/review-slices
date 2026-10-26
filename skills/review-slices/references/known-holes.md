@@ -40,8 +40,9 @@ are known; reviewers and the user cover them.
   Codex's `apply_patch` edits, since its hook sees shell commands only. It runs the copy committed on the
   base branch, so editing the checkout's copy changes nothing.
 - The hooks run Python isolated and without site (`-I -S`), so a module written beside them or a `.pth` file in a
-  virtualenv never runs, and the agent hook refuses a push whose command line sets `PATH` or git's own variables.
-  They still find `python3` and `git` on PATH: a shim written into a directory already on it gets past them, as a
-  fake `gitleaks` does the scan. Commands the agent runs itself (`python3 .githooks/review_slices.py status` or
+  virtualenv never runs. They still find `python3` and `git` on PATH: a shim written into a directory already on
+  it gets past them, as a fake `gitleaks` does the scan. So does a push whose command line sets `PATH` or git's
+  own variables (`GIT_CONFIG_*`, `GIT_DIR`, `HOME`), which choose the git, config and hooks it runs: the agent hook
+  reads `-c` settings, not the environment. Commands the agent runs itself (`python3 .githooks/review_slices.py status` or
   `run-suite`) put `.githooks/` first on the import path: a stdlib-named file there, untracked, could fake a pass
   stamp. `run-suite`'s stamp is the agent's word, as above.

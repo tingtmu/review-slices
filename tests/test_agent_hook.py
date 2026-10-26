@@ -43,17 +43,6 @@ class AgentHookTest(unittest.TestCase):
     def assert_allowed(self, command):
         self.assertIsNone(self.decide({"command": command}), "blocked: %s" % command)
 
-    def test_a_push_that_picks_its_own_git_config_or_python_is_denied(self):  # review of 0.9.1 (I1)
-        for command in ("PATH=/tmp/shim:$PATH git push", "env PATH=/tmp/shim git push origin main",
-                        "export PATH=/tmp/shim; git push", "GIT_EXEC_PATH=/tmp/x git push",
-                        "GIT_CONFIG_GLOBAL=/tmp/cfg git push", "sh -c 'GIT_DIR=/tmp/other.git git push'"):
-            self.assert_denied(command, "set on a push")
-        self.assert_denied("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git status",
-                           "rewires")
-        for command in ("PATH=/tmp/bin make", "GIT_PAGER=cat git log", "GIT_TRACE=1 git push",
-                        "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=color.ui GIT_CONFIG_VALUE_0=never git status"):
-            self.assert_allowed(command)
-
     def test_overrides_are_denied(self):
         for command in ("git push --no-verify origin main",
                         "git status && git push origin main --no-verify",
