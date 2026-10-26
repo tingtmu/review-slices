@@ -258,4 +258,4 @@ End every review with: the level output, the reviewers run and their lenses, eac
 what happened to it (fixed, rejected and why), any level notes, the shown output for the final state, and any
 incident recorded.
 Never a secret's value.
-What the guard cannot see is listed in [references/known-holes.md](references/known-holes.md).
+What the guard does not promise is summarized in [references/known-holes.md](references/known-holes.md).

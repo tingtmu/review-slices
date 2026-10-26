@@ -37,7 +37,7 @@ COPIED = (SKILL_GUARD, SKILL_AGENT_HOOK, os.path.join(HERE, "incidents.py"), SKI
 # copy never decides; a clone that never ran install has no review-slices.base, and any error allows the action.
 # Every Python these hooks start runs isolated and without site (-I -S), so neither a module the agent writes beside
 # it nor a .pth file in a virtualenv's site-packages runs. A python3 or git shim earlier on PATH still would
-# (references/known-holes.md).
+# (docs/known-holes.md).
 AGENT_COMMAND = ("sh -c 'top=$(git -C \"${CLAUDE_PROJECT_DIR:-.}\" rev-parse --show-toplevel 2>/dev/null) && "
                  "base=$(git -C \"$top\" config --get review-slices.base) || exit 0; "
                  "code=$(git -C \"$top\" show \"refs/remotes/$base:%s\" 2>/dev/null) || "
