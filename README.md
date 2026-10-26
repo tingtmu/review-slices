@@ -169,4 +169,5 @@ the working directory (`json.py`) or beside the bootstrap, or a `.pth` file in a
 for the hook's imports, so the agent hook allowed `git push --no-verify` or the pre-push hook passed. `doctor` names
 a hook or an agent hook command an older install wrote; `install --agent-hooks --apply` rewrites both, and the
 `.claude` and `.codex` settings it writes are committed changes. A push whose command line sets `PATH` or git's own
-variables is listed as a known hole.
+variables, a `python3` or `git` shim on PATH, and a stdlib-named file in `.githooks/` when the agent runs the guard
+itself are listed as known holes.
