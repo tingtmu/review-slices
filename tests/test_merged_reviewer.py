@@ -295,7 +295,16 @@ class ReviewLoadTest(unittest.TestCase):
         self.assertLoad("one merged reviewer", "old measure")
         self.change({"engine/a.py": "a\n"})
         at = self.repo.out("rev-parse", "origin/main")[:12]
-        self.assertLoad("three reviewers", ".githooks/merged_reviewer.py at %s measures Important changes only" % at)
+        self.assertLoad("three reviewers", ".githooks/merged_reviewer.py at %s has no load(): it measures Important "
+                                           "changes, under no small: line, only" % at)
+
+    def test_a_base_branch_measure_without_load_never_ignores_a_small_line(self):  # review: small: off was ignored
+        self.on_main({".githooks/merged_reviewer.py": "def allowed(guard, commits, uncommitted, tips):\n"
+                                                      "    return True, 'old measure'\n",
+                      "REVIEW.md": read_text(os.path.join(self.repo.path, "REVIEW.md")).replace(
+                          "medium: 100 lines, 6 files", "small: off")}, "an 0.8.0 measure under small: off")
+        self.change({"lib/a.py": "a\n"})
+        self.assertEqual(self.review()[0].split(" (")[0], "review: three reviewers")
 
 
 class BandAndKindTest(unittest.TestCase):
@@ -321,6 +330,8 @@ class BandAndKindTest(unittest.TestCase):
         config = self.parse("small: 30 lines\n")
         self.assertEqual(config["small"], "off")
         self.assertEqual(config["errors"], ["line 1: small: takes off or 'N lines, M files'; read as off"])
+        config = self.parse("small: %s lines, 3 files\n" % ("9" * 4400))  # review: int() raised past 4300 digits
+        self.assertEqual((config["small"], len(config["errors"])), ("off", 1))
 
     def test_a_band_over_its_ceiling_reads_as_the_ceiling(self):
         config = self.parse("small: 100 lines, 2 files\nmedium: 900 lines, 99 files\n")

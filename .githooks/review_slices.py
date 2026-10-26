@@ -143,7 +143,7 @@ def parse_config(text):
             config["globs"] += [(level, glob) for glob in globs]
             kinds["code" if kind == "code" else "content"].update(globs if level == "critical" else ())
         elif key in CEILINGS:  # a size band: a repeat reads as the stricter one, a value it cannot read as off
-            limit = re.fullmatch(r"(\d+) lines?, (\d+) files?", value)
+            limit = re.fullmatch(r"(\d{1,6}) lines?, (\d{1,6}) files?", value)  # int() refuses 4300+ digits
             wanted = (int(limit.group(1)), int(limit.group(2))) if limit else "off"
             band = tuple(map(min, wanted, CEILINGS[key])) if limit else "off"
             config["errors"] += [] if limit or value == "off" else ["line %d: %s: takes off or 'N lines, M files'; "
@@ -521,8 +521,9 @@ def review_load(rules, level, rows, uncommitted):
         exec(compile(source, MERGED_PATH, "exec"), module.__dict__)
         if hasattr(module, "load"):
             return module.load(guard, rules, level, rows, commits, uncommitted, (tip,))
-        allowed, why = module.allowed(guard, commits, uncommitted, (tip,)) if level == "important" else (False, (
-            "%s at %s measures Important changes only" % (MERGED_PATH, at[:12])))
+        allowed, why = module.allowed(guard, commits, uncommitted, (tip,)) if level == "important" and not (
+            rules or {}).get("small") else (False, "%s at %s has no load(): it measures Important changes, under "
+                                                   "no small: line, only" % (MERGED_PATH, at[:12]))
         return "one merged reviewer" if allowed else "three reviewers", why
     except Exception as error:  # a broken measure means three reviewers, not a traceback
         return "three reviewers", "%s at %s did not run: %r" % (MERGED_PATH, at[:12], error)
