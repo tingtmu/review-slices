@@ -157,6 +157,12 @@ _Avoid_: bug, finding, postmortem
 A later incident or review finding of the same failure class as an earlier incident, listed under that incident.
 _Avoid_: duplicate, repeat
 
+**Miss**:
+An incident, or a recurrence, whose Slice 2 review had a reduced load and named it, as in
+`2 Review (merged reviewer)`. A second miss through one load turns off every band that gives that load until each
+miss has a test plug.
+_Avoid_: slip, escape
+
 **Failure class**:
 The general shape of a mistake, named so one fix can cover every instance, such as "a fake kinder than the real
 service".

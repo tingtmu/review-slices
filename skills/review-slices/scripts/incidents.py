@@ -19,17 +19,19 @@ bullets; entries whose date is still the template's `<...>` are skipped. For a `
                                      fail (expectedFailure, skip, xfail, skipTest, an always-true skipIf)
     guard <path>                     the file exists
     rule REVIEW.md "<line>"          REVIEW.md holds that text (backticks and whitespace runs are ignored); a
-                                     `small:` or `medium:` line must be a line of its review-slices block, not a comment
+                                     `small:` or `medium:` line must be a line of its review-slices block, not a
+                                     comment, unless the block turns that band off
 
 Paths are relative to the repo root and stay inside it. A missing plug is a problem: the hole is open again. An
 open incident older than 30 days is a note.
 
 A miss through a reduced review load is a Slice field at 2 Review, or a recurrence, that names the load in
-parentheses: `2 Review (merged reviewer)`, `2 Review (adversarial + conformance)`. Two or more misses through one
-load are a problem until every incident they belong to is plugged with a working test, unless REVIEW.md's
-review-slices block turns off the bands the load comes from: `small: off` for the merged reviewer; `medium: off` for
-adversarial + conformance, and `small: off` too while the block has a `critical code:` line. Standard library only,
-Python 3.8+.
+parentheses: `2 Review (merged reviewer)` (or `one merged reviewer`, as `status` prints it),
+`2 Review (adversarial + conformance)`. Two or more misses through one load are a problem until every one has a
+working test plug (the Plug field's for the incident, and one more named in the Recurrences text for each recurrence
+through a load), unless REVIEW.md's review-slices block turns off the bands the load comes from: `small: off` for the
+merged reviewer; `medium: off` for adversarial + conformance, and `small: off` too while the block has a
+`critical code:` line. Standard library only, Python 3.8+.
 """
 import argparse
 import ast
@@ -49,6 +51,9 @@ UNKNOWN_SLICE = "unknown"
 # Reduced review loads a Slice 2 miss may name, as in "2 Review (merged reviewer)"; counted so a band can be narrowed.
 MERGED, PAIR = "merged reviewer", "adversarial + conformance"
 REDUCED_LOADS = (MERGED, PAIR)
+# How a log may name each load: as SKILL.md writes it, or as `status` prints it ("one merged reviewer").
+LOAD_NAMES = {MERGED: re.compile(r"\((?:one\s+)?merged\s+reviewer\)", re.I),
+              PAIR: re.compile(r"\(adversarial\s*(?:\+|and)\s*conformance\)", re.I)}
 # The bands each load comes from, which a second miss turns off until a test plug exists. The pair also comes from
 # the small band at Critical while REVIEW.md has a `critical code:` line.
 LOAD_BANDS = {MERGED: ("small",), PAIR: ("medium",)}
@@ -307,8 +312,13 @@ def flat(text):
 
 def block_lines(text):
     """The lines of TEXT's first review-slices block as the guard reads them: comments dropped, flattened."""
-    block = re.search(r"^```review-slices[^\n]*\n(.*?)^```", text, re.S | re.M)
+    block = re.search(r"^```review-slices[ \t]*\r?\n(.*?)^```", text, re.S | re.M)  # the guard's fence, exactly
     return [flat(re.sub(r"(?:^|\s)#.*$", "", line)) for line in (block.group(1).splitlines() if block else [])]
+
+
+def block_settings(text):
+    """[(key, value)] of TEXT's review-slices block, split at the first colon as the guard splits them."""
+    return [tuple(part.strip() for part in line.partition(":")[::2]) for line in block_lines(text)]
 
 
 def broken_test(path, plug, text):
@@ -347,9 +357,12 @@ def plug_problem(root, plug):
         text = read_text(path)
     except OSError as error:
         return "%s cannot be read (%s)" % (plug.path, error.strerror or error)
+    band = BAND_RULE.match(flat(plug.names[0])) if plug.kind == "rule" else None
+    if band and (band.group(1), "off") in block_settings(text):
+        return None  # off is narrower than any band the plug names: a second miss turned it off
     if plug.kind == "rule" and flat(plug.names[0]) not in flat(text):
         return "%s does not contain %r" % (plug.path, plug.names[0])
-    if plug.kind == "rule" and BAND_RULE.match(flat(plug.names[0])) and flat(plug.names[0]) not in block_lines(text):
+    if band and flat(plug.names[0]) not in block_lines(text):
         return "%s's review-slices block has no line %r, so the band is not narrowed" % (plug.path, plug.names[0])
     return broken_test(path, plug, text) if plug.kind == "test" else None
 
@@ -383,30 +396,43 @@ def has_recurrences(incident):
     return not NO_RECURRENCE.match(incident.fields.get("recurrences", "").strip())
 
 
+def recurrence_misses(incident):
+    """[load, ...]: one for each recurrence of INCIDENT that names a reduced review load."""
+    recurrences = incident.fields.get("recurrences", "")
+    return [load for load in REDUCED_LOADS for _ in LOAD_NAMES[load].findall(recurrences)]
+
+
 def misses(incident):
     """[load, ...]: one for each miss of INCIDENT through a reduced review load, from its Slice field at 2 Review
     and from each recurrence that names the load."""
-    slice_text = incident.fields.get("slice that should have caught it", "").lower()
-    recurrences = incident.fields.get("recurrences", "").lower()
-    found = [load for load in REDUCED_LOADS if incident.slice == SLICES[2] and "(%s)" % load in slice_text]
-    return found + [load for load in REDUCED_LOADS for _ in range(recurrences.count("(%s)" % load))]
+    slice_text = incident.fields.get("slice that should have caught it", "")
+    found = [load for load in REDUCED_LOADS if incident.slice == SLICES[2] and LOAD_NAMES[load].search(slice_text)]
+    return found + recurrence_misses(incident)
 
 
 def tested(root, incident):
-    """Whether INCIDENT is plugged with at least one test plug that exists."""
+    """Whether every miss of INCIDENT has a working test plug: its Plug field names one, and its Recurrences text
+    names a further one for each recurrence through a reduced load (the earlier plug did not stop that one)."""
     plugs, _unread = parse_plug(incident.fields.get("plug", ""))
-    return incident.status == "plugged" and any(plug.kind == "test" and not plug_problem(root, plug)
-                                                for plug in plugs)
+    named = {match.group(0): Plug("test", match.group(1), re.split(r"::|\.", match.group(2)), match.group(0))
+             for match in TEST_ITEM.finditer(incident.fields.get("recurrences", "").replace("`", ""))}
+    working = [plug for plug in named.values() if not plug_problem(root, plug)]
+    return (incident.status == "plugged" and any(plug.kind == "test" and not plug_problem(root, plug)
+                                                 for plug in plugs)
+            and len(working) >= len(recurrence_misses(incident)))
 
 
-def bands_on(root, load):
-    """The `small: off` / `medium: off` lines REVIEW.md's review-slices block lacks to stop LOAD (a band with no line
-    is on: small by default). An unreadable REVIEW.md turns nothing off."""
+def review_settings(root):
+    """(settings, error): the (key, value) lines of REVIEW.md's review-slices block, or why it cannot be read."""
     try:
-        lines = block_lines(read_text(os.path.join(root, RULE_FILE)))
-    except OSError:
-        lines = []
-    settings = [tuple(part.strip() for part in line.partition(":")[::2]) for line in lines]
+        return block_settings(read_text(os.path.join(root, RULE_FILE))), None
+    except OSError as error:
+        return [], error.strerror or str(error)
+
+
+def bands_on(settings, load):
+    """The `small: off` / `medium: off` lines the block SETTINGS lack to stop LOAD (a band with no line is on: small
+    by default)."""
     code = load == PAIR and any(key == "critical code" for key, _value in settings)
     return ["%s: off" % band for band in LOAD_BANDS[load] + (("small",) if code else ())
             if (band, "off") not in settings]
@@ -415,17 +441,19 @@ def bands_on(root, load):
 def band_problems(root, incidents):
     """A problem for each reduced load that two or more misses went through while one of their incidents has no
     test plug and REVIEW.md leaves a band of that load on: the band is off until a test plug exists."""
+    settings, error = review_settings(root)
     problems = []
     for load in REDUCED_LOADS:
         through = [incident for incident in incidents for found in misses(incident) if found == load]
         ids = list(dict.fromkeys(incident.id for incident in through))
         untested = list(dict.fromkeys(incident.id for incident in through if not tested(root, incident)))
-        missing = bands_on(root, load) if len(through) > 1 and untested else []
+        missing = bands_on(settings, load) if len(through) > 1 and untested else []
         if missing:
-            problems.append("%d misses went through the %s load (%s) and %s has no working test plug, so %s's "
-                            "review-slices block needs %s until each has one"
+            problems.append("%d misses went through the %s load (%s) and %s has no working test plug for each, so "
+                            "%s's review-slices block needs %s until each has one%s"
                             % (len(through), load, ", ".join(ids), ", ".join(untested), RULE_FILE,
-                               " and ".join("`%s`" % line for line in missing)))
+                               " and ".join("`%s`" % line for line in missing),
+                               " (%s cannot be read: %s)" % (RULE_FILE, error) if error else ""))
     return problems
 
 
@@ -490,7 +518,8 @@ def main(argv):
     parser = argparse.ArgumentParser(prog="incidents.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--path", help="the incident log (default: docs/INCIDENTS.md at the repo root)")
-    parser.add_argument("--check", action="store_true", help="exit 1 if any plug is missing or unreadable")
+    parser.add_argument("--check", action="store_true", help="exit 1 on any problem: a plug missing or unreadable, "
+                        "or a band a second miss through a reduced load needs off")
     args = parser.parse_args(argv[1:])
     root = repo_root()
     try:
