@@ -361,11 +361,24 @@ def print_candidates(measured, listing):
                 print("  %s  %d line(s), %d file(s)" % (subject(item), item.size.lines, item.size.files))
 
 
+def status_size(item):
+    """(weighted lines, files) of a unit as `status` measured it before the push, each commit summed; None where it
+    would be large: a floor path, a binary file, a submodule update, or a merge with changes of its own. A pull
+    request is sized from its branch's commits, not its net diff; a squash's commits are gone, so its diff stands."""
+    shas = side_commits(item.unit.commits[0]) if item.unit.pull else [commit.sha for commit in item.unit.commits]
+    merges = [sha for sha in shas if len(git("rev-list", "--parents", "-n", "1", sha).split()) > 2]
+    if floored(item) or any(guard.commit_paths(sha) for sha in merges):
+        return None
+    text = log_patch(shas) if item.unit.pull else None
+    size = Size(*sizer.patch_size(guard, text)) if text is not None else item.size
+    gitlink = re.search(r"^[-+]Subproject commit ", text if text is not None else unit_patch(item.unit), re.M)
+    return None if size.binary or gitlink else (size.lines, size.files)
+
+
 def unit_load(config, item):
-    """(band, load, content path or None) of a measured unit, as `status` would give it: a floor path or a binary
-    file is large; a unit declared above its computed level was raised, so it takes three."""
-    size = None if item.size.binary or floored(item) else (item.size.lines, item.size.files)
-    name = sizer.band_of(config, size)
+    """(band, load, content path or None) of a measured unit, as `status` would give it (status_size); a unit
+    declared above its computed level was raised, so it takes three."""
+    name = sizer.band_of(config, status_size(item))
     content = sizer.content_path(guard, config, item.level, [row.path for row in guard.range_level(config,
                                                                                                     item.paths)[1]])
     raised = item.unit.declared and guard.rank(item.unit.declared) > guard.rank(item.level)
@@ -376,8 +389,8 @@ def print_load(config, measured, listing):
     """Section 6: the review load each Important and Critical unit would get under CONFIG's bands and kinds."""
     bands = ", ".join("%s %s" % (name, "%d lines, %d files" % limit if limit else "none")
                       for name, limit in sizer.limits(config).items())
-    print("review load (per unit; a branch of several units adds them up, so this overstates the lighter loads; "
-          "bands: %s):" % bands)
+    print("review load (per unit; a branch of several units adds them up, and a squash is sized by its diff, so this "
+          "overstates the lighter loads; bands: %s):" % bands)
     loads = [(item, unit_load(config, item)) for item in measured if item.level in sizer.TABLE]
     for level, table in sizer.TABLE.items():
         mine = [found for item, found in loads if item.level == level]

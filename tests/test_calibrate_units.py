@@ -315,6 +315,19 @@ class UnitsTest(unittest.TestCase):
         self.assertRegex(out, r"small code critical\s+1 line\(s\), 1 file\(s\)\s+code")
         self.assertRegex(out, r"small content critical\s+1 line\(s\), 1 file\(s\)\s+content: core/x.py")
 
+    def test_the_review_load_sizes_units_as_status_did(self):  # review: a net diff and a gitlink looked small
+        repo = self.repo
+        repo.git("checkout", "-q", "-b", "rewrite")
+        for number in range(3):  # each commit rewrites the same 30 lines: status summed 150, the net diff is 30
+            self.change({"lib/a.py": ("%d\n" % number) * 30}, "rewrite %d" % number)
+        self.change({"lib/b.py": "b\n"}, "last", "important")
+        repo.git("checkout", "-q", "main")
+        repo.git("merge", "-q", "--no-ff", "-m", "Merge pull request #1 from someone/rewrite", "rewrite")
+        repo.git("update-index", "--add", "--cacheinfo", "160000,%s,lib/sub" % repo.out("rev-parse", "HEAD"))
+        repo.git("commit", "-q", "-m", "bump a submodule", "-m", repo.trailer("important"))
+        out = self.run_ok()
+        self.assertRegex(out, r"important\s+3 unit\(s\)\s+small 0\s+medium 0\s+large 3\s+->\s+one merged reviewer 0")
+
     def test_a_partial_clone_is_never_fetched_into(self):  # review: git log -p fetched the missing blobs
         repo = self.repo
         self.change({"lib/a.py": "a\n"}, "a change", "important")
