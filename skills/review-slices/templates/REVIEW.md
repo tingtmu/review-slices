@@ -59,4 +59,4 @@ What has gone wrong here before. Reviewers check every change against this list.
 
 - <files reviewers must never open, commands they must never run, secrets they must never print>
 
-What the guard cannot see: the review-slices skill's `references/known-holes.md`.
+The guard's known holes: the review-slices skill's `references/known-holes.md`.
