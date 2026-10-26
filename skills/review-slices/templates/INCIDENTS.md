@@ -19,5 +19,5 @@ each failure class from getting through again. Terms: the review-slices skill's 
 - **Fix:** <what repaired this instance, or "not yet">
 - **Plug:** <test / guard / rule, or "none yet">
 - **Recurrences:** <none, or ID and date each, with why the plug missed it; name a reduced load as in the Slice
-  field, and the `test <path>::<function>` added for it>
+  field, and add its test to the Plug field>
 - **Record:** <links>

@@ -183,6 +183,8 @@ class ReportTest(unittest.TestCase):
 
     def test_the_load_is_named_as_skill_md_writes_it_or_as_status_prints_it(self):  # review: "(one merged reviewer)"
         for first, second, load in (("(one merged reviewer)", "(Merged Reviewer)", "merged reviewer"),
+                                    ("(one merged reviewer, small band)", "(merged reviewer: small band)",
+                                     "merged reviewer"),
                                     ("(adversarial and conformance)", "(adversarial+conformance)",
                                      "adversarial + conformance")):
             done = LogRepo(self, entry(1, slice_text="2 Review " + first),
@@ -226,17 +228,17 @@ class ReportTest(unittest.TestCase):
             self.assertEqual(done.returncode, int(refused), plugs)
             self.assertEqual("and I2 has no working test plug" in done.stdout, refused, done.stdout)
 
-    def test_a_recurrence_needs_its_own_test_plug(self):  # review: the plug that missed it covered it
-        line = "\n  - 2026-10-01, 2 Review (merged reviewer): the same class again%s."
-        test = "test tests/test_a.py::test_top"
-        for recurrences, refused in ((line % "" * 2, True), (line % (", plug " + test) + line % "", True),
-                                     (line % (", plug `test tests/test_a.py::test_top`") +
-                                      line % (", plug test tests/test_a.py::ATest::test_in_class"), False),
-                                     (line % (", plug " + test) * 2, True),
-                                     (line % (", plug test tests/test_a.py::test_gone") +
-                                      line % (", plug test tests/test_a.py::ATest::test_in_class"), True)):
-            done = LogRepo(self, entry(1, status="plugged", plug=test, recurrences=recurrences)).run("--check")
-            self.assertEqual(done.returncode, int(refused), recurrences + done.stdout)
+    def test_each_miss_needs_its_own_test_in_the_plug(self):  # review: the plug that missed it covered it
+        line = "\n  - 2026-10-01, 2 Review (merged reviewer): the plug test tests/test_a.py::test_top missed it."
+        top, cls, dot = ("test tests/test_a.py::test_top", "test tests/test_a.py::ATest::test_in_class",
+                         "test tests/test_a.py::ATest.test_in_class")
+        for plug, recurrences, refused in ((top, line, True), (top + ", " + cls, line, False),
+                                           (top + ", " + cls + ", " + dot, line * 2, True),
+                                           (top + ", " + cls + ", test tests/test_a.py::test_gone", line, True),
+                                           (top, "none", False)):
+            done = LogRepo(self, entry(1, slice_text="2 Review (merged reviewer)", status="plugged", plug=plug,
+                                       recurrences=recurrences)).run("--check")
+            self.assertEqual(done.returncode, int(refused), plug + recurrences + done.stdout)
 
     def test_a_second_miss_by_the_pair_turns_off_every_band_that_gives_it(self):
         pair = "2 Review (adversarial + conformance)"
