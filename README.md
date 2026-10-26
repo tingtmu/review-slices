@@ -47,17 +47,24 @@ to the guard reaches every clone by push. Only clones that run `install` are che
 Before writing REVIEW.md, `discover.py` lists the checks the repo already has (CI files, package scripts, Makefile
 and more), marked local or remote, and `--run` tries the local ones on a clean tree. `calibrate.py` shows how a draft
 level table would have judged the base branch's last 50 commits and, by review unit, which globs set the levels,
-what each level costs in size, and which small important units one merged reviewer could take.
+what each level costs in size, which small important units one merged reviewer could take, and the review load
+each unit would get under the draft's size bands and glob kinds.
 `incidents.py [--check]` reports docs/INCIDENTS.md and checks that every plug still exists. All three run from the
 skill's `scripts/`; `incidents.py` can also be copied into `.githooks/` to run in a repo's suite, and `upgrade`
 keeps it current.
 
-At important, `status` says whether one merged reviewer may take the push or why it needs three. It may take at
-most 40 weighted lines and 3 files, all committed, against a fetched base branch, with no floor path, merge changes
-of its own, submodule update, or binary or Git LFS file; never with `status BASE`, and never on a level the author
-raised for a planned action, which `status` cannot see. That measure, `.githooks/merged_reviewer.py`, is copied by
-`install`, added by `upgrade`, and loaded from the base branch like the guard; without it there, `status` always
-says three reviewers.
+At important and critical, `status` prints the review load: which reviewers the change needs. It measures every
+commit the branch adds to the base branch, so a change pushed in slices is measured whole, and puts it in a size
+band: small (built in: at most 40 weighted lines and 3 files), medium (none built in) or large. Uncommitted work, an
+unfetched base branch, a floor path, a merge with changes of its own, a submodule update or a binary or Git LFS file
+make it large. Important takes one merged reviewer when small, an adversarial and a conformance (Standards and Spec)
+reviewer when medium, and the three otherwise. Critical takes the adversarial and conformance pair only when small
+and every path that sets the level is in a `critical code:` glob; plain `critical:` globs are content (golden
+outputs, corpora, CI) and always take three. REVIEW.md's `small:` and `medium:` lines set the bands, up to 80/5
+and 400/20; the standing rules' lines count, never a branch's own. A level the author raised for a planned action,
+which `status` cannot see, takes three, and so does `status BASE`. The measure, `.githooks/merged_reviewer.py`,
+is copied by `install`, added by `upgrade`, and loaded from the base branch like the guard; without it there,
+`status` says three reviewers.
 
 `install --agent-hooks` also adds a PreToolUse hook for Claude Code (`.claude/settings.json`) and Codex
 (`.codex/hooks.json`, shell commands only, once its hooks feature is on and the user trusts the hook; a refused

@@ -37,16 +37,24 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    step. A secret it finds goes to [A secret turns up](#a-secret-turns-up) before any reviewer sees the diff. Fix errors in REVIEW.md that your change introduced; report the
    ones it says are in the standing rules to the user. Raise the level for planned actions REVIEW.md lists (for
    example a live cloud action); when unsure, go one higher. A raised level is the level the trailer records.
-   Never lower it. Put its output in your report. At Important it also prints a `review:` line: whether this push
-   is small enough for one merged reviewer, or why not.
-4. **Review at that level** (briefs in [references/reviewer-briefs.md](references/reviewer-briefs.md)):
+   Never lower it. Put its output in your report. At Important and Critical it also prints a `review:` line: the
+   review load (which reviewers) and why, from the size band of everything the branch adds to the base branch and,
+   at Critical, the glob kind of the paths that set the level.
+4. **Review at that level, with the load `status` printed** (briefs in
+   [references/reviewer-briefs.md](references/reviewer-briefs.md)):
 
    | Level | Slice 2 |
    |---|---|
    | Trivial | none |
    | Simple | 1–2 adversarial reviewers |
-   | Important | a Standards, a Spec and an adversarial reviewer, all in parallel; or one merged reviewer where `status` prints `review: merged reviewer allowed` and you raised no level |
-   | Critical | Important's three; then the user's go-ahead for the one-way door, given with the review findings. A [review meeting](references/review-meeting.md) only for a disputed review finding, only if the user says yes |
+   | Important | `review: one merged reviewer` (small band); `adversarial + conformance` (medium band): an adversarial and a conformance reviewer; `three reviewers` (large): a Standards, a Spec and an adversarial reviewer. All of one round in parallel |
+   | Critical | `adversarial + conformance` (small, and every path that sets the level is in `critical code:` globs alone); else the three. Then the user's go-ahead for the one-way door, given with the review findings. A [review meeting](references/review-meeting.md) only for a disputed review finding, only if the user says yes |
+
+   The load is the least review the change needs; more is always allowed. A level you raised for a planned action
+   takes the three reviewers whatever `status` prints for the computed level, unless REVIEW.md as committed on the
+   base branch (`git show <base>:REVIEW.md`) names that action as an exception in its planned-actions paragraph;
+   wording that exists only on your branch never applies. A guard before 0.9.0, or no `review:` line: the three
+   reviewers, except one merged reviewer where `status` prints `review: merged reviewer allowed` at Important.
 
    Reviewers read `git diff <base>..HEAD`, with `<base>` from the trailer line `status` printed. They are
    read-only, have fresh context and use the strongest model available. Give them the diff command, REVIEW.md,
@@ -67,13 +75,24 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    - Level note (a reviewer's line that the level looks too high): put it in your report; the level of this change
      stays. Acting on one is a change to REVIEW.md's table of its own, reviewed, never part of the change that
      raised it.
+   - **Escalation** from a reduced load (one merged reviewer, or adversarial + conformance): the review goes to the
+     three reviewers on the whole unit (`git diff <base>..HEAD`) when that round reports a Blocker; a review
+     finding the reviewer tagged with a "Failure looks like" entry; that the change is too big or risky for its
+     load; a "cannot verify from the diff" item your shown output does not close; when `status` no longer prints
+     that load; or when history inside the unit was rewritten (amend, squash, rebase) after the round. Each is a
+     tag, a list in the report or a git fact: apply it as written, never by your own reading. Never the reverse.
    Fix a review finding's whole class at once, not only the line quoted. Fixes are new commits, except a secret
    in unpushed commits, which is removed by rewriting them ([A secret turns up](#a-secret-turns-up)).
-6. **Converge.** After a merged review, run `status` again before a second round: if it no longer prints
-   `review: merged reviewer allowed`, the second round is the three reviewers on `git diff <base>..HEAD`. One review
-   round, then at most one second round on the new commits only
-   (`git diff <old head>..HEAD`), resuming the same reviewers. Never re-raise a review finding already settled.
-   Still split after that: escalate to the user.
+6. **Converge.** Run `status` again before a second round. If the load rose (the unit grew a band, or a floor
+   path came in), the second round is the new load's reviewers on the whole unit, `git diff <base>..HEAD`. A unit's
+   load is the highest `status` printed since the unit began, and the three reviewers once history inside the unit
+   was rewritten; a lower load printed later changes nothing. Otherwise: one review round, then at most one second
+   round on the new commits only (`git diff <old head>..HEAD`), resuming the same reviewers, so they keep their
+   model and context. At Important, resume only the reviewers whose review finding was fixed or rejected (a rejected
+   one sees your reason), plus the adversarial or merged reviewer always, for new breakage in the fix; resume every
+   reviewer when `git diff --name-only <old head>..HEAD` lists a file no review finding cited, or a floor path. At
+   Critical, resume every reviewer. Never re-raise a review finding already settled. Still split after that:
+   escalate to the user.
 7. **Add the trailer** `status` printed to the last commit the review covered, with exactly
    `git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer "Review: <level> <base-sha>"`
    (`status` prints it filled in): it keeps the message, leaves anything staged out, and replaces an earlier
@@ -134,11 +153,16 @@ find one, in your own work or another agent's:
    happened, the slice that should have caught it and why it did not, the failure class, the fix, the plug.
 2. If an earlier incident has the same failure class, add this one under its Recurrences instead. A recurrence
    means the earlier plug is weak: say so.
-3. If the slice that should have caught it was a merged reviewer, say so in the entry and tell the user: it
-   narrows the merged-reviewer thresholds (`MERGED_LINES`, `MERGED_FILES` in `.githooks/merged_reviewer.py`), a
+3. If the slice that should have caught it was a reduced load, name it in the Slice field
+   (`2 Review (merged reviewer)`, `2 Review (adversarial + conformance)`) and tell the user. Its plug, best first:
+   a test for the class; else narrow that band in REVIEW.md (`small: 20 lines, 2 files`), written as a
+   `rule REVIEW.md "<line>"` plug so `--check` notices if it is loosened again (narrowing it further edits that plug
+   line in the same change); else a "Failure looks like" rule. A second incident through the same reduced load:
+   set that band to `off` until a test plug exists. Widening a band is never automatic: calibrate shows the
+   evidence, and the user changes the line in a reviewed REVIEW.md change. The built-in bands change only by a
    guard release.
-4. Choose the plug in this order: a test or guard that fails on the class; else a rule in REVIEW.md's "Failure
-   looks like" list. An incident stays open until its plug exists.
+4. Otherwise choose the plug in this order: a test or guard that fails on the class; else a rule in REVIEW.md's
+   "Failure looks like" list. An incident stays open until its plug exists.
 5. A new failure class gets a one-line entry in REVIEW.md's "Failure looks like" list, linked to the incident.
 6. **Check the log:** `python3 <skill>/scripts/incidents.py` lists open incidents with their age, counts per slice
    and recurrences; `--check` exits 1 when a plugged incident's plug is gone (the hole is open again: reopen it).
@@ -169,7 +193,13 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    draft kept elsewhere). Its later sections say what a level costs and why. A glob that alone sets many high
    levels is the one to narrow first. A trailer declared above the table is a planned action, or a table too
    loose; one below it, a table stricter than the one that judged it. Small Important units that are mostly prose
-   call for a narrower glob, not fewer reviewers. Run it again as reviewers' level notes build up.
+   call for a narrower glob, not fewer reviewers. Its review load section shows the reviewers each unit would
+   get. Tag a critical glob `critical code:` only where its files are code a reviewer can judge from a small diff;
+   golden outputs, corpora, state tables and CI stay `critical:` (content, the default, which always takes three).
+   `small: N lines, M files` and `medium: N lines, M files` (or `off`) set the size bands; built in: small 40 lines,
+   3 files, no medium; at most 80/5 and 400/20. Where the base branch's guard is older than 0.9.0, push the upgraded
+   guard first: an older guard cannot parse these lines, so pushes count every path as critical and `status`
+   stops with a parse error. Run it again as reviewers' level notes build up.
 4. Run `python3 <skill>/scripts/setup_tools.py install --agent-hooks`, show the user what it would change, and
    with their go-ahead run it again with `--apply`. It copies the guard, `merged_reviewer.py` and `run_suite.py` to
    `.githooks/` if missing, writes this clone's bootstrap, records the base branch, and wires pre-push with a hook file that
@@ -206,7 +236,7 @@ reviewed change. What gets installed:
 <repo>/.githooks/review_slices.py      the guard; the base branch's copy   committed
                                        judges every push
 <repo>/.githooks/agent_hook.py         blocks an agent's overrides         committed
-<repo>/.githooks/merged_reviewer.py    when one reviewer may do            committed
+<repo>/.githooks/merged_reviewer.py    the review load: which reviewers    committed
 <repo>/.githooks/run_suite.py          run-suite: runs the suite, stamps   committed
 <repo>/.githooks/secret_scan.py        the secret scan (with secrets:)     committed
 <repo>/.claude/settings.json           runs the agent hook (Claude Code)   committed

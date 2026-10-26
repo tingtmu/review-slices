@@ -29,6 +29,16 @@ simple: README.md
 Planned actions that make a change Critical: a release tag; a change to the pass stamp or review trailer
 format, or to how the hook is installed, since every adopting clone depends on them.
 
+The one exception to "a raised level or a floor path takes three reviewers": a release commit whose only changed
+lines outside README.md swap the version for a newer one (`VERSION = "x"` and `(skill version x)`) takes one merged
+reviewer, and its second round stays one merged reviewer while the fix commits touch only README.md. It applies only
+as written in `git show <base>:REVIEW.md`, never as a branch edits it, and only after the author shows
+`git diff --no-renames --word-diff=porcelain <base> HEAD -- ':!README.md'` with every changed token the old version
+turned into the new one, and `git diff --no-renames --name-status --summary <base> HEAD -- ':!README.md'` with every
+entry `M` and no `mode change` or `Binary` line. The merged reviewer's adversarial part re-runs both and checks that
+the old version is the base branch guard's `VERSION`, the new one is higher, and it is the same everywhere. The
+user's go-ahead, the pull request and green CI stay.
+
 ## Remote checks
 
 Checks that run only in CI or another remote service, outside the suite. Read their result after the push.

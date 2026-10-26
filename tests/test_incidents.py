@@ -157,6 +157,15 @@ class ReportTest(unittest.TestCase):
                        entry(3, slice_text="1 Offline suite")).run()
         self.assertIn("  1 Offline suite  2\n  2 Review         1\n", done.stdout)
 
+    def test_misses_through_a_reduced_review_load_are_counted(self):
+        done = LogRepo(self, entry(1, slice_text="2 Review (merged reviewer)"),
+                       entry(2, slice_text="2 Review (Adversarial + conformance)"),
+                       entry(3, slice_text="2 Review (merged reviewer)"), entry(4)).run()
+        self.assertIn("  2 Review         4\n", done.stdout)
+        self.assertIn("\n  of 2 Review, through a reduced load: merged reviewer 2, adversarial + conformance 1\n",
+                      done.stdout)
+        self.assertNotIn("reduced load", LogRepo(self, entry(1)).run().stdout)
+
     def test_recurrences_are_listed_as_a_weak_plug(self):
         done = LogRepo(self, entry(1, recurrences="I1 again on 2026-10-01: the rule was not read"), entry(2)).run()
         self.assertIn("recurrences (each means a weak plug):\n  I1. A failure: I1 again on 2026-10-01", done.stdout)

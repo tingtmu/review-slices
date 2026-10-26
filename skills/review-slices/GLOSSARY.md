@@ -72,6 +72,26 @@ How much review a change gets: Trivial, Simple, Important or Critical. It is com
 of paths and actions, never chosen by feel.
 _Avoid_: tier, risk level, priority
 
+**Review load**:
+The reviewers a review unit gets at its review level, computed by `status` from the level, the size band and the
+glob kind of the paths that set the level. Never chosen by the agent; never recorded in the trailer. A unit's load is
+the highest one `status` printed since the unit began; after rewriting history inside a unit (amend, squash,
+rebase) it is the three reviewers.
+_Avoid_: sub-level, subgrade, tier, light review
+
+**Size band**:
+Small, medium or large, by the weighted lines and files of every commit the branch adds to the base branch (not
+only those a push adds, so a change pushed in slices is measured whole), against the standing rules' `small:` and
+`medium:` lines (built-in defaults where absent). A floor path, a binary file, a submodule update, uncommitted work
+or a merge with changes of its own puts a change in no band below large.
+_Avoid_: size class, tier
+
+**Glob kind**:
+Whether a critical glob's files are code a reviewer can judge from a small diff (`critical code:`), or content whose
+small diff can change what counts as correct, such as golden outputs, corpora, state tables or CI (`critical:`, the
+default). A path is code only if every critical glob it matches is a code glob and it is no floor path.
+_Avoid_: type, engine, category
+
 **Review unit**:
 The new commits one review covers: from the previous review trailer, or from what the remote already has, up to
 the commit that carries the trailer.
@@ -91,9 +111,19 @@ A reviewer with fresh context told to assume the change is wrong and to show how
 _Avoid_: red team, devil's advocate
 
 **Merged reviewer**:
-One reviewer who takes the adversarial, Standards and Spec lenses in turn, for an Important push small enough
-that `status` allows it. Never at Critical, on a raised level, a floor path or a merge with changes of its own.
+One reviewer who takes the adversarial, Standards and Spec lenses in turn: the review load of an Important change
+in the small band. Never at Critical, on a raised level, a floor path or a merge with changes of its own.
 _Avoid_: light review, quick review
+
+**Conformance reviewer**:
+One reviewer who takes the Standards and Spec lenses in turn: both compare the change against written text. It pairs
+with a dedicated adversarial reviewer.
+_Avoid_: merged reviewer (that one takes all three lenses), compliance reviewer
+
+**Escalation**:
+Moving a review unit to the three reviewers on the whole unit because a reduced load's round flagged something
+(SKILL.md step 5). Never the reverse.
+_Avoid_: upgrade, bump
 
 **Review meeting**:
 A multi-agent decision meeting limited to disputed review findings, held only with the user's go-ahead.

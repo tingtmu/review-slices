@@ -13,8 +13,8 @@ each failure class from getting through again. Terms: the review-slices skill's 
 
 - **Date / kind / status:** <YYYY-MM-DD> · <defect or process> · <open or plugged>
 - **What happened:** <one to three sentences>
-- **Slice that should have caught it:** <slice; for Slice 2, which reviewers, or a merged reviewer>. Why it did
-  not: <the hole>
+- **Slice that should have caught it:** <slice; for Slice 2, which reviewers, or the reduced load, as in
+  `2 Review (merged reviewer)` or `2 Review (adversarial + conformance)`>. Why it did not: <the hole>
 - **Failure class:** <the general shape of the mistake>
 - **Fix:** <what repaired this instance, or "not yet">
 - **Plug:** <test / guard / rule, or "none yet">

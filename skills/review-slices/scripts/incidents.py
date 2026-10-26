@@ -38,6 +38,8 @@ SLICES = ("0 Shown output", "1 Offline suite", "2 Review", "3 Go-ahead", "4 Acce
 SLICE_NAMES = (("shown output",), ("offline suite", "offline tests", "offline test"), ("review",),
                ("go-ahead", "go ahead"), ("acceptance",))
 UNKNOWN_SLICE = "unknown"
+# Reduced review loads a Slice 2 miss may name, as in "2 Review (merged reviewer)"; counted so a band can be narrowed.
+REDUCED_LOADS = ("merged reviewer", "adversarial + conformance")
 STATUSES = ("open", "plugged")
 KINDS = ("defect", "process")
 REOPEN = "the hole is open again; reopen the incident"
@@ -373,6 +375,11 @@ def print_report(where, incidents, skipped, today):
     print("by slice that should have caught it:")
     for name in SLICES + ((UNKNOWN_SLICE,) if counts[UNKNOWN_SLICE] else ()):
         print("  %-16s %d" % (name, counts[name]))
+    loads = collections.Counter(load for incident in incidents if incident.slice == SLICES[2] for load in REDUCED_LOADS
+                                if "(%s)" % load in incident.fields.get("slice that should have caught it", "").lower())
+    if loads:
+        print("  of 2 Review, through a reduced load: " + ", ".join("%s %d" % (load, loads[load])
+                                                                    for load in REDUCED_LOADS))
     recurring = [incident for incident in incidents if has_recurrences(incident)]
     print("recurrences (each means a weak plug):" + ("" if recurring else " none"))
     for incident in recurring:

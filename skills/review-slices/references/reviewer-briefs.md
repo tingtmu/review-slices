@@ -78,11 +78,23 @@ shown output would prove it).
 <the rules every brief carries>
 ```
 
-## Merged reviewer (Important, only where `status` prints `review: merged reviewer allowed`)
+## Report for a reduced load
 
-One reviewer takes the three lenses, in this order. Use it only on the `status` line that allows it, never on a
-level you raised for a planned action. Before a second round, run `status` again: once fixes make the push too big,
-the second round is the three reviewers on the whole unit.
+The merged and conformance reviewers end with this report, so the author can apply escalation (SKILL.md step 5)
+from what it says, not from a reading of it:
+
+```
+Report one part per lens, each with its own verdict (clean, or its review findings). Then:
+- Cannot verify from the diff: each claim or behaviour only shown output or a run could prove, and what would.
+- Declined to judge: anything you did not review, and why.
+- For each review finding, the REVIEW.md "Failure looks like" entry it falls under (I1, I2, ...), or "none".
+If the change looks bigger or riskier than this load should take, say so at the top.
+```
+
+## Merged reviewer (Important, where `status` prints `review: one merged reviewer`)
+
+One reviewer takes the three lenses, in this order. Use it only on the `status` line that names it, never on a
+level you raised for a planned action.
 
 ```
 Review this change three ways, in order, and keep the three parts of your report apart.
@@ -92,8 +104,24 @@ Review level output: <paste the `level` output>. Spec: <spec path>.
 1. Adversarial: <the adversarial brief from "Assume this change is wrong" through its lenses>.
 2. Standards: <the Standards brief from "Check this change against the standards" through its last line>.
 3. Spec: <the Spec brief from "Check that this change does what was asked" through its last line>.
-Finish all three even if the first finds a Blocker. If the change looks bigger or riskier than one reviewer
-should take, say so at the top: the author then runs the three reviewers instead.
+Finish all three even if the first finds a Blocker.
+<the report for a reduced load>
+<the rules every brief carries>
+```
+
+## Conformance reviewer (where `status` prints `review: adversarial + conformance`)
+
+It takes the Standards and Spec lenses; start the adversarial reviewer (its own brief, above) in the same message.
+
+```
+Review this change two ways, in order, and keep the two parts of your report apart.
+
+Change: `git diff <base>..HEAD` in <repo path>; commits `git log --oneline <base>..HEAD`.
+Review level output: <paste the `level` output>. Spec: <spec path>.
+1. Standards: <the Standards brief from "Check this change against the standards" through its last line>.
+2. Spec: <the Spec brief from "Check that this change does what was asked" through its last line>.
+Finish both even if the first finds a Blocker.
+<the report for a reduced load>
 <the rules every brief carries>
 ```
 
@@ -104,5 +132,8 @@ adversarial reviewer in the same message.
 
 ## Second round
 
-Resume the same reviewers. Brief: "Confirm whether each of your review findings is fixed, on the new commits
-`git diff <old head>..HEAD` only. Report only new defects tagged Fix or Blocker. If none, say converged."
+Run `status` first: a higher load than round one's means the new load's reviewers on the whole unit (SKILL.md step
+6). Otherwise resume the same reviewers, so they keep their model and context; at Important only those SKILL.md
+step 6 names. Brief: "Confirm whether each of your review findings is fixed, on the new commits
+`git diff <old head>..HEAD` only; for one the author rejected, here is the reason: <reason>. Report only new defects
+tagged Fix or Blocker, including breakage the fix itself brings. If none, say converged."
