@@ -74,12 +74,11 @@ def patch_size(guard, text):
     return lines, len(files), binary
 
 
-def measure(guard, commits, uncommitted, tips, since=None):
+def measure(guard, commits, uncommitted, tips):
     """((weighted lines, files) or None, why) of COMMITS (per commit then summed, merges left out), so several small
-    units add up (SINCE: the restart they follow, for the why); None, so no band below large, with uncommitted
-    work, an unfetched base branch, a floor path (so no suite change), a merge with changes of its own, a submodule
-    update or a binary file added, edited or deleted, whose size it cannot see (one moved unchanged is an exact
-    rename: no lines)."""
+    units add up; None, so no band below large, with uncommitted work, an unfetched base branch, a floor path (so
+    no suite change), a merge with changes of its own, a submodule update or a binary file added, edited or
+    deleted, whose size it cannot see (one moved unchanged is an exact rename: no lines)."""
     if uncommitted or not commits:
         return None, "uncommitted work" if uncommitted else "no new commits"
     if not guard.base_tip()[1]:
@@ -101,9 +100,8 @@ def measure(guard, commits, uncommitted, tips, since=None):
     if binary:
         return None, "a binary file"
     renames = sum(line.startswith("rename from ") for line in text.split("\n"))  # -U0: content starts with +/-
-    return (lines, files), "%d weighted line(s), %d file(s) in %d commit(s)%s%s" % (
-        lines, files, len(commits), " since %s, a unit large on its own" % since[:12] if since else "",
-        "; %d exact rename(s) counted as 0 lines" % renames if renames else "")
+    return (lines, files), "%d weighted line(s), %d file(s) in %d commit(s)%s" % (
+        lines, files, len(commits), "; %d exact rename(s) counted as 0 lines" % renames if renames else "")
 
 
 def limits(rules):
@@ -121,10 +119,10 @@ def band_of(rules, size):
     return "large"
 
 
-def band(guard, rules, commits, uncommitted, tips, since=None):
+def band(guard, rules, commits, uncommitted, tips):
     """(small, medium or large, why): the size band of COMMITS under RULES. A band that is off, or that a smaller
     one already covers, takes nothing."""
-    size, why = measure(guard, commits, uncommitted, tips, since)
+    size, why = measure(guard, commits, uncommitted, tips)
     name = band_of(rules, size)
     if name == "large":
         return name, why if not size else "%s: over every band" % why
@@ -196,8 +194,9 @@ def load(guard, rules, level, rows, commits, uncommitted, tips):
     if found:
         kept = set(guard.rev_list("HEAD", tuple(tips) + tuple(found)))
         commits, tips = [commit for commit in commits if commit in kept], tuple(tips) + tuple(found)
-    name, why = band(guard, rules, commits, uncommitted, tips, found[-1] if found else None)
-    return TABLE[level][name], "%s: %s" % (name, why)
+    name, why = band(guard, rules, commits, uncommitted, tips)
+    return TABLE[level][name], "%s: %s%s" % (name, why, "; since %s, a unit large on its own" % found[-1][:12]
+                                             if found else "")
 
 
 def allowed(guard, commits, uncommitted, tips):

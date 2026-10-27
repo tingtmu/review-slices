@@ -14,8 +14,9 @@ are known; reviewers and the user cover them.
   glob can take the adversarial and conformance pair on a diff that shows none of it; reviewers read the moved file
   whole.
 - The measure starts over after a unit large on its own that the review log shows went to three reviewers, so the
-  slices before and after it are never measured together: about one band of lightly reviewed work per stretch. A
-  unit padded past the line limit with filler buys that restart; reviewers see the filler. The restart needs this
+  slices before and after it are never measured together: about one band of lightly reviewed work per stretch. Any
+  unit over the line limit buys that restart, filler or not: a deleted file, a file moved with a one-character edit
+  (it counts in full) or one very long line reads as little as a pure move; reviewers see them. The restart needs this
   branch's log line, so another clone, a deleted log or a rebase measures the branch whole again (three); a forged
   log line restarts only a unit that is large on its own anyway.
 - The trailer's base SHA is informational; rebases change it and the guard does not check it.

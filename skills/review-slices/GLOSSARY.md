@@ -38,7 +38,8 @@ _Avoid_: test cache, green flag
 
 **Review log**:
 A per-clone record of the review load `status` printed for committed work, by branch and review unit, through
-which `status` holds a unit's highest load and spots a rewrite inside it. Never committed; calibrate reads it.
+which `status` holds a unit's highest load and spots a rewrite inside it, and which shows that a unit large on its
+own went to three reviewers, so the size band starts over after it. Never committed; calibrate reads it.
 _Avoid_: load history, review record
 
 **Review trailer**:

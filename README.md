@@ -69,8 +69,8 @@ measure, `.githooks/merged_reviewer.py`, is copied by `install`, added by `upgra
 like the guard; without it there, `status` says three reviewers. Each load `status` prints for committed work goes
 into the clone's review log, `<git-common-dir>/review-slices/review-log`, by branch and review unit: a unit keeps the
 highest load printed since it began (`held:`), and takes three once a commit a load was printed at leaves the
-branch's history (amend, squash, rebase). `calibrate.py`'s logged loads section reads it to show the loads units
-really got.
+branch's history (amend, squash, rebase); a logged three on a unit large on its own also lets the measure start
+after that unit. `calibrate.py`'s logged loads section reads it to show the loads units really got.
 
 `install --agent-hooks` also adds a PreToolUse hook for Claude Code (`.claude/settings.json`) and Codex
 (`.codex/hooks.json`, shell commands only, once its hooks feature is on and the user trusts the hook; a refused

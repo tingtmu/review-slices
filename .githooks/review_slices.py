@@ -517,7 +517,7 @@ def review_load(rules, level, rows, uncommitted, start):
     if not source:
         return "three reviewers", "%s has no %s: run the skill's setup_tools.py upgrade" % (at[:12], MERGED_PATH)
     module, guard, commits = types.ModuleType("merged_reviewer"), types.SimpleNamespace(**globals()), new_commits(
-        "HEAD", (tip,))  # the whole branch, so a change pushed in slices is measured whole
+        "HEAD", (tip,))  # the whole branch, so slices are measured whole; load() may start after a large unit
     try:
         exec(compile(source, MERGED_PATH, "exec"), module.__dict__)
         if hasattr(module, "load"):
