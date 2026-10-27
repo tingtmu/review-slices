@@ -24,6 +24,8 @@ LINE_CAPS, FILE_CAPS = (10, 20, 40, 80), (1, 3, 5)
 TOP_GLOBS, LISTED = 8, 3
 # Never -w: it hides indentation, which is code in Python, YAML and Makefiles.
 QUIET_ARGS = ("--ignore-space-at-eol", "--ignore-blank-lines")
+# status finds a submodule update in a diff without renames: a moved gitlink pairs as an exact rename.
+NO_RENAMES = ("--no-renames",)
 PROSE = (".md", ".txt", ".rst")  # in this skill prose is the instructions: never a quiet change
 MARKERS = dict([(ext, ("#",)) for ext in (".py", ".sh", ".yml", ".yaml", ".toml", ".r")]
                + [(ext, ("//", "/*", "*/", "* ")) for ext in (".js", ".ts", ".go", ".c", ".h", ".cpp", ".java", ".rs")]
@@ -371,7 +373,8 @@ def status_size(item):
         return None
     text = log_patch(shas) if item.unit.pull else None
     size = Size(*sizer.patch_size(guard, text)) if text is not None else item.size
-    gitlink = re.search(r"^[-+]Subproject commit ", text if text is not None else unit_patch(item.unit), re.M)
+    plain = log_patch(shas, NO_RENAMES) if item.unit.pull else unit_patch(item.unit, NO_RENAMES)
+    gitlink = re.search(r"^[-+]Subproject commit ", plain, re.M)
     return None if size.binary or gitlink else (size.lines, size.files)
 
 

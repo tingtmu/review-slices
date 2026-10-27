@@ -258,7 +258,7 @@ class UnitsTest(unittest.TestCase):
         out = self.run_ok("--list-candidates", "100", "5")
         self.assertRegex(out, r"a long line\s+11 line\(s\), 1 file\(s\)")
         self.assertRegex(out, r"mode only\s+0 line\(s\), 1 file\(s\)")
-        self.assertRegex(out, r"rename\s+4 line\(s\), 2 file\(s\)")  # a delete plus an add
+        self.assertRegex(out, r"rename\s+0 line\(s\), 1 file\(s\)")  # an exact rename, as status counts it
         self.assertRegex(out, r"lone CRs\s+40 line\(s\), 1 file\(s\)")
         self.assertNotRegex(out, r"binary\s+\d+ line")
         self.assertIn("(1 unit(s) with a binary file left out)", out)
@@ -327,8 +327,11 @@ class UnitsTest(unittest.TestCase):
         repo.git("merge", "-q", "--no-ff", "-m", "Merge pull request #1 from someone/rewrite", "rewrite")
         repo.git("update-index", "--add", "--cacheinfo", "160000,%s,lib/sub" % repo.out("rev-parse", "HEAD"))
         repo.git("commit", "-q", "-m", "bump a submodule", "-m", repo.trailer("important"))
+        repo.git("update-index", "--force-remove", "lib/sub")  # plan review: a moved gitlink is an exact rename
+        repo.git("update-index", "--add", "--cacheinfo", "160000,%s,lib/moved" % repo.out("rev-parse", "HEAD~"))
+        repo.git("commit", "-q", "-m", "move a submodule", "-m", repo.trailer("important"))
         out = re.sub(r" \(\d+%\)", "", self.run_ok())
-        self.assertRegex(out, r"important\s+3 unit\(s\)\s+small 0\s+medium 0\s+large 3\s+->\s+one merged reviewer 0")
+        self.assertRegex(out, r"important\s+4 unit\(s\)\s+small 0\s+medium 0\s+large 4\s+->\s+one merged reviewer 0")
 
     def test_a_partial_clone_is_never_fetched_into(self):  # review: git log -p fetched the missing blobs
         repo = self.repo

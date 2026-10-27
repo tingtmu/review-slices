@@ -156,6 +156,29 @@ class MergedReviewerTest(unittest.TestCase):
         self.repo.git("push", "-q", "--no-verify", "origin", "main")
         self.repo.git("fetch", "-q")
 
+    def moved(self, edit=lambda lines: lines):
+        """Move lib/a.md, 100 distinct lines on main, to lib/archive/a.md with EDIT applied to its lines."""
+        lines = ["line %d\n" % number for number in range(100)]
+        self.on_main({"lib/a.md": "".join(lines)}, "base")
+        os.makedirs(os.path.join(self.repo.path, "lib", "archive"))
+        self.repo.git("mv", "lib/a.md", "lib/archive/a.md")
+        self.repo.write("lib/archive/a.md", "".join(edit(lines)))
+
+    def test_an_exact_rename_counts_one_file_and_no_lines(self):  # issue #13: an archive move measured as 405 lines
+        self.moved()
+        self.change({"lib/b.py": "b\n" * 20})
+        self.assertAllowed("20 weighted line(s), 2 file(s) in 1 commit(s); 1 exact rename(s) counted as 0 lines")
+
+    def test_a_rename_with_an_edit_counts_in_full(self):
+        self.moved(lambda lines: lines[:-1] + ["edited\n"])
+        self.change({})
+        self.assertThree("large: 200 weighted line(s), 2 file(s) in 1 commit(s): over every band")
+
+    def test_a_move_with_two_lines_swapped_counts_in_full(self):  # only git's exact pass, never its similarity
+        self.moved(lambda lines: [lines[1], lines[0]] + lines[2:])
+        self.change({})
+        self.assertThree("large: 200 weighted line(s), 2 file(s) in 1 commit(s): over every band")
+
     def test_deleted_lines_that_start_with_dashes_count(self):  # review: hunk lengths were never exercised
         self.on_main({"lib/a.sql": "-- note\n" * 45 + "select 1;\n"}, "base")
         self.change({"lib/a.sql": "select 1;\n"})
@@ -255,6 +278,18 @@ class ReviewLoadTest(unittest.TestCase):
         self.change({"engine/b.py": "b\n" * 30})  # medium at Critical: three
         self.assertLoad("three reviewers", "medium: 42 weighted line(s), 2 file(s) in 2 commit(s), within the "
                                            "medium band's 100 lines, 6 files")
+
+    def test_an_exact_rename_is_judged_at_both_paths(self):  # issue #13: only its size is relieved
+        self.on_main({"lib/a.py": "a\n" * 50}, "base")
+        os.makedirs(os.path.join(self.repo.path, "engine", "golden"))
+        self.repo.git("mv", "lib/a.py", "engine/a.py")
+        self.change({}, "into critical code")
+        self.assertLoad("adversarial + conformance", "small: 0 weighted line(s), 1 file(s) in 1 commit(s); 1 exact "
+                                                     "rename(s) counted as 0 lines, within the small band's 40 lines, "
+                                                     "3 files")
+        self.repo.git("mv", "engine/a.py", "engine/golden/a.py")
+        self.change({}, "into critical content")
+        self.assertLoad("three reviewers", "engine/golden/a.py is not in `critical code:` globs alone")
 
     def test_a_content_path_that_sets_the_level_takes_three(self):
         self.change({"engine/a.py": "a\n" * 12, "engine/golden/x.json": "{}\n"})

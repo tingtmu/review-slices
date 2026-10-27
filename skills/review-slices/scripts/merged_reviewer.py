@@ -30,7 +30,9 @@ MERGED, PAIR, THREE = "one merged reviewer", "adversarial + conformance", "three
 # that sets its level is in `critical code:` globs alone.
 TABLE = {"important": {"small": MERGED, "medium": PAIR, "large": THREE},
          "critical": {"small": PAIR, "medium": THREE, "large": THREE}}
-PATCH_ARGS = ("--patch", "-U0", "--inter-hunk-context=0", "--no-renames", "--no-ext-diff", "--no-textconv",
+# A file moved unchanged is one file and no lines; 100% finds only byte-identical moves (git's exact pass), whatever
+# diff.renameLimit says, so a move with any edit still counts in full as a delete plus an add.
+PATCH_ARGS = ("--patch", "-U0", "--inter-hunk-context=0", "--find-renames=100%", "--no-ext-diff", "--no-textconv",
               "--no-color", "--submodule=short", "--ignore-submodules=none", "--no-relative", "--src-prefix=a/",
               "--dst-prefix=b/")
 LFS_POINTER = "version https://git-lfs.github.com/spec/"
@@ -93,11 +95,13 @@ def measure(guard, commits, uncommitted, tips):
                     "--no-renames", "--ignore-submodules=none", *commits)  # whatever .gitmodules or config say
     if any("160000" in line[1:].split()[:2] for line in raw.splitlines() if line.startswith(":")):
         return None, "a submodule update"
-    lines, files, binary = patch_size(guard, read_patch(guard, "log", "--no-walk=unsorted", "--no-merges", "--root",
-                                                        "--format=", *PATCH_ARGS, *commits))
+    text = read_patch(guard, "log", "--no-walk=unsorted", "--no-merges", "--root", "--format=", *PATCH_ARGS, *commits)
+    lines, files, binary = patch_size(guard, text)
     if binary:
         return None, "a binary file"
-    return (lines, files), "%d weighted line(s), %d file(s) in %d commit(s)" % (lines, files, len(commits))
+    renames = sum(line.startswith("rename from ") for line in text.split("\n"))  # -U0: content starts with +/-
+    return (lines, files), "%d weighted line(s), %d file(s) in %d commit(s)%s" % (
+        lines, files, len(commits), "; %d exact rename(s) counted as 0 lines" % renames if renames else "")
 
 
 def limits(rules):
