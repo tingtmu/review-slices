@@ -55,7 +55,8 @@ keeps it current.
 
 At important and critical, `status` prints the review load: which reviewers the change needs. It measures every
 commit the branch adds to the base branch, so a change pushed in slices is measured whole, and puts it in a size
-band: small (built in: at most 40 weighted lines and 3 files), medium (none built in) or large. A file moved
+band (after a unit that is over every band's line limit on its own and that the clone's review log shows went to
+three reviewers, it measures only what follows that unit, so later small fixes get the lighter load again): small (built in: at most 40 weighted lines and 3 files), medium (none built in) or large. A file moved
 unchanged counts as one file and no lines. Uncommitted work, an unfetched base branch, a floor path, a merge with
 changes of its own, a submodule update or a binary or Git LFS file added, edited or deleted make it large. Important
 takes one merged reviewer when small, an adversarial and a conformance (Standards and Spec) reviewer when medium, and

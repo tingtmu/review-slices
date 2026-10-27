@@ -306,7 +306,8 @@ class ReviewLoadTest(unittest.TestCase):
         self.change({"engine/a.py": "a\n" * 12, "engine/golden/x.json": "{}\n"})
         self.assertLoad("three reviewers", "engine/golden/x.json is not in `critical code:` globs alone")
 
-    def test_a_branch_pushed_in_small_slices_is_measured_whole(self):  # plan review 1: @{push} was a tip
+    def test_a_branch_pushed_in_slices_is_measured_whole(self):  # plan review 1: @{push} was a tip; no logged three,
+        # so the large unit does not start the measure over (test_restart.py)
         self.repo.git("checkout", "-q", "-b", "feature")
         self.change({"engine/a.py": "a\n" * 200}, "big", self.repo.trailer("critical"))
         self.repo.git("push", "-q", "--no-verify", "-u", "origin", "feature")

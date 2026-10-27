@@ -397,8 +397,8 @@ def print_load(config, measured, listing):
     """Section 6: the review load each Important and Critical unit would get under CONFIG's bands and kinds."""
     bands = ", ".join("%s %s" % (name, "%d lines, %d files" % limit if limit else "none")
                       for name, limit in sizer.limits(config).items())
-    print("review load (per unit; a branch of several units adds them up, and a squash is sized by its diff, so this "
-          "overstates the lighter loads; bands: %s):" % bands)
+    print("review load (per unit; a branch of several units adds them up until one large on its own, and a squash "
+          "is sized by its diff, so this overstates the lighter loads; bands: %s):" % bands)
     loads = [(item, unit_load(config, item)) for item in measured if item.level in sizer.TABLE]
     for level, table in sizer.TABLE.items():
         mine = [found for item, found in loads if item.level == level]

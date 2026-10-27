@@ -30,7 +30,7 @@ trivial: <notes and roadmap files no check reads>
 Planned actions that make a change Critical: <for example a live cloud action, a release tag, a data deletion>.
 
 `status` prints the review load (which reviewers) at Important and Critical, from the size band of everything a
-branch adds to the base branch (`small:` and `medium:`; built in: small 40 lines, 3 files, no medium; at most 80/5
+branch adds to the base branch, or since its last unit large on its own that went to three reviewers (`small:` and `medium:`; built in: small 40 lines, 3 files, no medium; at most 80/5
 and 400/20) and the glob kind. A `critical:` glob is content, such as golden outputs, corpora, state tables or CI,
 and always takes three reviewers; a `critical code:` glob is code a reviewer can judge from a small diff. Loosening a
 band or tagging a glob as code is a reviewed change to this file.

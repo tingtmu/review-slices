@@ -87,7 +87,9 @@ _Avoid_: sub-level, subgrade, tier, light review
 **Size band**:
 Small, medium or large, by the weighted lines and files of every commit the branch adds to the base branch (not
 only those a push adds, so a change pushed in slices is measured whole), against the standing rules' `small:` and
-`medium:` lines (built-in defaults where absent). A file moved unchanged counts as one file and no lines. A floor
+`medium:` lines (built-in defaults where absent). It starts over after a unit large on its own: a closed Important
+or Critical unit with no merge, its trailer at that level or higher, whose net diff is over every band's line limit
+and for which this branch's review log shows three reviewers printed when it was already that large. A file moved unchanged counts as one file and no lines. A floor
 path, a binary file added, edited or deleted, a submodule update, uncommitted work or a merge with changes of its own
 puts a change in no band below large.
 _Avoid_: size class, tier

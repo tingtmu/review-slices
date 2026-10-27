@@ -74,11 +74,12 @@ def patch_size(guard, text):
     return lines, len(files), binary
 
 
-def measure(guard, commits, uncommitted, tips):
+def measure(guard, commits, uncommitted, tips, since=None):
     """((weighted lines, files) or None, why) of COMMITS (per commit then summed, merges left out), so several small
-    units add up; None, so no band below large, with uncommitted work, an unfetched base branch, a floor path (so
-    no suite change), a merge with changes of its own, a submodule update or a binary file added, edited or
-    deleted, whose size it cannot see (one moved unchanged is an exact rename: no lines)."""
+    units add up (SINCE: the restart they follow, for the why); None, so no band below large, with uncommitted
+    work, an unfetched base branch, a floor path (so no suite change), a merge with changes of its own, a submodule
+    update or a binary file added, edited or deleted, whose size it cannot see (one moved unchanged is an exact
+    rename: no lines)."""
     if uncommitted or not commits:
         return None, "uncommitted work" if uncommitted else "no new commits"
     if not guard.base_tip()[1]:
@@ -100,8 +101,9 @@ def measure(guard, commits, uncommitted, tips):
     if binary:
         return None, "a binary file"
     renames = sum(line.startswith("rename from ") for line in text.split("\n"))  # -U0: content starts with +/-
-    return (lines, files), "%d weighted line(s), %d file(s) in %d commit(s)%s" % (
-        lines, files, len(commits), "; %d exact rename(s) counted as 0 lines" % renames if renames else "")
+    return (lines, files), "%d weighted line(s), %d file(s) in %d commit(s)%s%s" % (
+        lines, files, len(commits), " since %s, a unit large on its own" % since[:12] if since else "",
+        "; %d exact rename(s) counted as 0 lines" % renames if renames else "")
 
 
 def limits(rules):
@@ -119,14 +121,55 @@ def band_of(rules, size):
     return "large"
 
 
-def band(guard, rules, commits, uncommitted, tips):
+def band(guard, rules, commits, uncommitted, tips, since=None):
     """(small, medium or large, why): the size band of COMMITS under RULES. A band that is off, or that a smaller
     one already covers, takes nothing."""
-    size, why = measure(guard, commits, uncommitted, tips)
+    size, why = measure(guard, commits, uncommitted, tips, since)
     name = band_of(rules, size)
     if name == "large":
         return name, why if not size else "%s: over every band" % why
     return name, "%s, within the %s band's %d lines, %d files" % ((why, name) + tuple(limits(rules)[name]))
+
+
+def line_limit(rules):
+    """The most weighted lines a band of RULES that is on takes, or None with every band off."""
+    return max((limit[0] for limit in limits(rules).values() if limit), default=None)
+
+
+def net_lines(guard, old, new):
+    """The weighted lines of the net diff OLD..NEW; a binary file or a submodule update adds none it can see."""
+    return patch_size(guard, read_patch(guard, "diff", *PATCH_ARGS, old, new))[0]
+
+
+def restarts(guard, rules, commits, tips):
+    """The trailer commits among COMMITS after which the measure starts over: each closes a unit with no merge, of
+    the standing RULES' Important or Critical level, whose trailer says that level or higher and whose net diff is
+    over every band's line limit, and for which this ref's review log holds three reviewers printed in the unit at
+    or before it, when the unit was already that large. So a slice that is small on its own, a unit grown past the
+    band after a lighter load, a base branch reset under it, rules tightened since, another clone or a rebase never
+    restart; the log can only take a restart away. No standing rules, or a guard without the helpers: none."""
+    limit = line_limit(rules)
+    if not rules or limit is None or not all(hasattr(guard, name) for name in ("review_units", "range_level",
+                                                                              "paths_of", "rank")):
+        return []
+    ref = unit_ref(guard)
+    logged = [entry for entry in read_log(guard, log_path(guard)) if (entry.ref, entry.load) == (ref, THREE)]
+    found = []
+    for commit, unit in guard.review_units(commits, tips)[0]:  # a unit's commits newest first, so a chain ends at
+        level = guard.range_level(rules, guard.paths_of(unit))[0]  # its oldest
+        parents = [guard.git("rev-list", "--parents", "-n", "1", sha).split()[1:] for sha in unit]
+        if (level not in TABLE or guard.rank(guard.trailer_level(commit)) < guard.rank(level)
+                or any(len(found_parents) != 1 for found_parents in parents)
+                or net_lines(guard, parents[-1][0], commit) <= limit):
+            continue
+        starts, tree = (set(unit) - {commit}) | {parents[-1][0]}, guard.git("rev-parse", commit + "^{tree}")
+        if any(entry.start in starts and (guard.git("merge-base", "--is-ancestor", entry.head, commit,
+                                                    check=False) is not None
+                                          or guard.git("rev-parse", "--verify", "--quiet", entry.head + "^{tree}",
+                                                       check=False) == tree)
+               and net_lines(guard, entry.start, entry.head) > limit for entry in logged):
+            found.append(commit)
+    return found
 
 
 def kind(guard, rules, path):
@@ -144,12 +187,16 @@ def content_path(guard, rules, level, paths):
 
 
 def load(guard, rules, level, rows, commits, uncommitted, tips):
-    """(load, why): the reviewers a LEVEL change gets, from the TABLE: its size band over COMMITS and, at Critical,
-    the kind of every path in ROWS (the paths that set the level)."""
+    """(load, why): the reviewers a LEVEL change gets, from the TABLE: its size band over COMMITS since the last
+    restart, if any, and, at Critical, the kind of every path in ROWS (the paths that set the level)."""
     content = content_path(guard, rules, level, [row.path for row in rows])
     if content:
         return THREE, "%s is not in `critical code:` globs alone" % content
-    name, why = band(guard, rules, commits, uncommitted, tips)
+    found = [] if uncommitted else restarts(guard, rules, commits, tips)
+    if found:
+        kept = set(guard.rev_list("HEAD", tuple(tips) + tuple(found)))
+        commits, tips = [commit for commit in commits if commit in kept], tuple(tips) + tuple(found)
+    name, why = band(guard, rules, commits, uncommitted, tips, found[-1] if found else None)
     return TABLE[level][name], "%s: %s" % (name, why)
 
 

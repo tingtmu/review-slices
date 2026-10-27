@@ -504,10 +504,10 @@ def print_lint(config, where):
 
 def review_load(rules, level, rows, uncommitted, start):
     """(load, why) from .githooks/merged_reviewer.py, loaded as the secret scanner is, over every commit this
-    branch adds to the base branch, with the bands and kinds of the standing RULES only (None: the defaults), so a
-    change cannot lighten its own review; its hold() then keeps the unit at the highest load printed since START
-    (the review log). Without the measure, or if it fails, three reviewers; a 0.8.0 measure has no load(), so it
-    judges Important pushes only."""
+    branch adds to the base branch (its load() may start after a unit large on its own), with the bands and kinds
+    of the standing RULES only (None: the defaults), so a change cannot lighten its own review; its hold() then
+    keeps the unit at the highest load printed since START (the review log). Without the measure, or if it fails,
+    three reviewers; a 0.8.0 measure has no load(), so it judges Important pushes only."""
     tip = base_tip()[1]
     if not tip:  # vendored() would fall back to this branch's own copy
         return "three reviewers", "the base branch is not fetched"

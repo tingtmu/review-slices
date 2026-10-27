@@ -38,8 +38,9 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    ones it says are in the standing rules to the user. Raise the level for planned actions REVIEW.md lists (for
    example a live cloud action); when unsure, go one higher. A raised level is the level the trailer records.
    Never lower it. Put its output in your report. At Important and Critical it also prints a `review:` line: the
-   review load (which reviewers) and why, from the size band of everything the branch adds to the base branch and,
-   at Critical, the glob kind of the paths that set the level.
+   review load (which reviewers) and why, from the size band of everything the branch adds to the base branch (or,
+   after a unit over every band's line limit on its own that `status` sent to three reviewers, only what follows
+   it: `since <sha>, a unit large on its own`) and, at Critical, the glob kind of the paths that set the level.
 4. **Review at that level, with the load `status` printed** (briefs in
    [references/reviewer-briefs.md](references/reviewer-briefs.md)):
 

@@ -81,8 +81,9 @@ class ReviewLogTest(unittest.TestCase):
         self.add_trailer()  # an amend, but it starts the next unit
         self.change({"lib/b.py": "b\n"})
         review = self.review()[0]
-        self.assertTrue(review.startswith("review: three reviewers (large: 51 weighted line(s)"), review)
-        self.assertNotIn("held", review)  # the branch is measured whole, and nothing is held from the closed unit
+        self.assertTrue(review.startswith("review: one merged reviewer (small: 1 weighted line(s)"), review)
+        self.assertIn("since %s, a unit large on its own" % self.repo.out("rev-parse", "HEAD~1")[:12], review)
+        self.assertNotIn("held", review)  # nothing is held from the closed unit (test_restart.py: the restart)
         self.assertNotIn("rewritten", review)
 
     def test_uncommitted_work_is_never_logged(self):
