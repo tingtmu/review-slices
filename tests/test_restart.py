@@ -209,15 +209,18 @@ class RestartTest(unittest.TestCase):
         self.change({"lib/b.py": "b\n"})
         self.assertThree("large: 52 weighted line(s), 2 file(s) in 3 commit(s): over every band")
 
-    def test_a_large_unit_merged_in_from_a_side_branch_never_restarts(self):  # logged on the side branch's ref
+    def test_a_restart_from_a_side_branch_still_measures_the_mainline(self):  # only the restart's history drops
         self.repo.git("switch", "-q", "-c", "feature")
         self.change({"lib/m.py": "m\n" * 5})
         self.repo.git("switch", "-q", "-c", "side", "origin/main")
-        self.large_unit()
+        trailer = self.large_unit()
         self.repo.git("switch", "-q", "feature")
+        with open(self.log_path(), "a", encoding="utf-8") as log:  # as if logged on feature, so it is evidence
+            log.write("".join(line.replace("\trefs/heads/side\t", "\trefs/heads/feature\t") + "\n"
+                              for line in self.log()))
         self.repo.git("merge", "-q", "--no-edit", "side")
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 57 weighted line(s), 3 file(s) in 5 commit(s): over every band")
+        self.assertRestarted(trailer, "6 weighted line(s), 2 file(s) in 3 commit(s)")
 
     def test_a_unit_with_a_merge_never_restarts(self):
         self.other_work_on_main()
@@ -226,15 +229,24 @@ class RestartTest(unittest.TestCase):
         self.change({"lib/b.py": "b\n"})
         self.assertIn("review: three reviewers (large: ", self.review()[0])
 
-    def test_a_merge_of_main_in_an_earlier_unit_leaves_main_s_work_out(self):  # main's 50 lines would restart it
+    def test_a_large_unit_after_a_merge_of_main_restarts(self):
         self.other_work_on_main()
         self.repo.git("merge", "-q", "--no-edit", "origin/main")
         self.repo.git("commit", "-q", "--amend", "--no-edit", "--trailer", self.repo.trailer("important"))
-        self.change({"lib/b.py": "b\n" * 30, ".githooks/x.txt": "x\n"})
-        self.assertIn("review: three reviewers (large: .githooks/x.txt is a floor path)", self.review()[0])
+        trailer = self.large_unit()
+        self.change({"lib/b.py": "b\n"})
+        self.assertRestarted(trailer)
+
+    def test_a_merge_of_main_in_an_earlier_unit_leaves_main_s_work_out(self):  # with main's 50 lines it would restart
+        self.other_work_on_main()
+        self.repo.git("merge", "-q", "--no-edit", "origin/main")
+        self.repo.git("commit", "-q", "--amend", "--no-edit", "--trailer", self.repo.trailer("important"))
+        self.change({"lib/b.py": "b\n" * 50})
+        self.assertIn("review: three reviewers (large: ", self.review()[0])
+        self.change({"lib/b.py": "b\n" * 25}, "take half back")
         self.add_trailer()
         self.change({"lib/c.py": "c\n"})
-        self.assertThree("large: .githooks/x.txt is a floor path")
+        self.assertIn("review: three reviewers (large: 81 weighted line(s)", self.review()[0])
 
     def test_a_branch_that_tightens_its_own_bands_never_restarts(self):  # I1: the standing rules decide
         self.change({"lib/a.py": "a\n" * 30, "REVIEW.md": read_text(os.path.join(self.repo.path, "REVIEW.md"))
