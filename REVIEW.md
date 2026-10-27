@@ -37,10 +37,10 @@ merged reviewer while the fix commits touch only those notes. It applies only as
 `git show <base>:REVIEW.md`, never as a branch edits it, and only after the author shows that the base's copy of the
 release check, `git show <base>:tests/release_check.py | python3 -I - --base <base>`, prints its
 `release check: OK` line and exits 0 (no output is a fail: the base has no check to run). It takes OLD from the base
-guard's `VERSION` and NEW from HEAD's, and fails unless NEW is higher, each file changed outside
-the notes is its base copy with only those two forms swapped (byte for byte, whitespace included), every changed
-entry is `M` with its mode kept, and no file outside the notes still holds an OLD form. The merged reviewer's
-adversarial part re-runs that command itself. The user's go-ahead, the pull request and green CI stay.
+guard's `VERSION` and NEW from HEAD's, and fails unless NEW is higher, each file changed outside the notes is its
+base copy with only those two forms swapped (byte for byte, whitespace included), every other changed entry is `M`
+with its mode kept, each note stays a plain file at its exact path, and no file outside the notes still holds an OLD
+form. The merged reviewer's adversarial part re-runs that command itself. The user's go-ahead, the pull request and green CI stay.
 
 ## Remote checks
 

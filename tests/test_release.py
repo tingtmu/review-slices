@@ -66,7 +66,7 @@ class ReleaseCheckTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertIn("OK, 1.2.0 -> 1.10.0", done.stdout)
 
-    def test_any_other_change_outside_readme_differs(self):
+    def test_any_other_change_outside_the_notes_differs(self):
         self.release()
         self.repo.write("docs/notes.md", "keep \n")
         self.repo.commit("release")
@@ -78,6 +78,23 @@ class ReleaseCheckTest(unittest.TestCase):
                         .replace('"1.10.0"', '"1.2.0"'))
         self.repo.commit("release")
         self.assertEqual(self.problems(), ["still 1.2.0: .githooks/helper.py:1"])
+
+    def test_a_note_must_stay_a_plain_file(self):
+        self.release()
+        self.repo.remove("README.md")
+        os.chmod(os.path.join(self.repo.path, "CHANGELOG.md"), 0o755)
+        self.repo.commit("release")
+        self.assertEqual(sorted(self.problems()), ["entry: A 000000 -> 100755 CHANGELOG.md",
+                                                   "entry: D 100644 -> 000000 README.md"])
+
+    def test_a_directory_named_like_a_note_is_not_a_note(self):
+        self.release()
+        self.repo.remove("CHANGELOG.md")
+        self.repo.write("CHANGELOG.md/hidden.py", "anything\n")
+        self.repo.commit("release")
+        found = self.problems()
+        self.assertIn("differs: CHANGELOG.md/hidden.py", found)
+        self.assertIn("entry: A 000000 -> 100644 CHANGELOG.md/hidden.py", found)
 
     def test_added_deleted_and_mode_changed_files_are_listed(self):
         self.release()

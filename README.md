@@ -102,5 +102,5 @@ step 10) needs GitHub CLI 2.40.0+, for `gh run list --commit`; step 10's other `
 
 ## Versions
 
-Release notes are in [CHANGELOG.md](CHANGELOG.md); each release is tagged `vX.Y.Z` and has a
-GitHub Release with the same notes.
+Release notes are in [CHANGELOG.md](CHANGELOG.md). Each release is tagged `vX.Y.Z`; from 0.9.2 on, each
+also has a GitHub Release with the same notes.

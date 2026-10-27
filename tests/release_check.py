@@ -5,11 +5,11 @@ Run it as the base commit holds it, so a branch cannot edit the check that judge
     git show <base>:tests/release_check.py | python3 -I - --base <base> [--head HEAD]
 
 OLD is the base guard's VERSION and NEW the head guard's; NEW must be higher. The notes are the root README.md and
-CHANGELOG.md. Every file the release changes outside them must be its base copy with only `VERSION = "OLD"` lines
-and `(skill version OLD)` swapped for NEW, byte for byte; every entry `git diff --raw` lists must be `M` with no mode
-change (`--name-status --summary` prints no mode change line); and no file outside the notes may still hold either
-OLD form. Prints each problem and exits 1, or
-prints one OK line and exits 0. Exit 2: git failed or an argument is wrong.
+CHANGELOG.md, matched by exact path; each may change or be added, as a plain file (mode 100644). Every other file the
+release changes must be its base copy with only `VERSION = "OLD"` lines and `(skill version OLD)` swapped for NEW,
+byte for byte; every other entry `git diff --raw` lists must be `M` with no mode change (`--name-status --summary`
+prints no mode change line); and no file outside the notes may still hold either OLD form. Prints each problem and
+exits 1, or prints one OK line and exits 0. Exit 2: git failed or an argument is wrong.
 """
 import argparse
 import os
@@ -19,7 +19,7 @@ import sys
 
 GUARD = "skills/review-slices/scripts/review_slices.py"
 VERSION_LINE = re.compile(rb'^VERSION = "([^"\n]*)"$', re.M)
-OUTSIDE_NOTES = ("--", ":!README.md", ":!CHANGELOG.md")
+NOTES = ("README.md", "CHANGELOG.md")  # matched by exact path: a pathspec would also exclude a NOTES/ directory
 
 
 def fail(message):
@@ -61,12 +61,17 @@ def swapped(text, old, new):
 
 
 def problems(base, head, old, new):
-    """Each changed path must be M, keep its mode and differ only by the swap."""
+    """Each changed path must be M, keep its mode and differ only by the swap; a note may change or be added freely
+    but must stay a plain file."""
     found = []
-    raw = git("diff", "--no-renames", "--raw", "-z", base, head, *OUTSIDE_NOTES).split(b"\0")
+    raw = git("diff", "--no-renames", "--raw", "-z", base, head).split(b"\0")
     for meta, name in zip(raw[0:-1:2], raw[1::2]):
         old_mode, new_mode, _, _, status = meta.decode().lstrip(":").split(" ")
         path = name.decode(errors="surrogateescape")
+        if path in NOTES:
+            if status not in ("M", "A") or new_mode != "100644":
+                found.append("entry: %s %s -> %s %s" % (status, old_mode, new_mode, path))
+            continue
         if status != "M" or old_mode != new_mode:
             found.append("entry: %s %s -> %s %s" % (status, old_mode, new_mode, path))
         before, after = blob(base, path), blob(head, path)
@@ -78,13 +83,13 @@ def problems(base, head, old, new):
 def still_old(head, old):
     """Files outside the notes that still hold an OLD form, such as one the swap never touched."""
     forms = (b'VERSION = "%s"' % old.encode(), b"(skill version %s)" % old.encode())
-    out = git("grep", "-z", "-n", "-I", "-F", "-e", forms[0], "-e", forms[1], head, *OUTSIDE_NOTES, ok=(0, 1))
+    out = git("grep", "-z", "-n", "-I", "-F", "-e", forms[0], "-e", forms[1], head, ok=(0, 1))
     found = []
     for hit in filter(None, out.split(b"\n")):
         path, line, text = hit.split(b"\0", 2)
-        if text == forms[0] or forms[1] in text:
-            found.append("still %s: %s:%s" % (old, path.decode(errors="surrogateescape").split(":", 1)[1],
-                                              line.decode()))
+        path = path.decode(errors="surrogateescape").split(":", 1)[1]
+        if path not in NOTES and (text == forms[0] or forms[1] in text):
+            found.append("still %s: %s:%s" % (old, path, line.decode()))
     return found
 
 
