@@ -365,8 +365,9 @@ def print_candidates(measured, listing):
 
 def status_size(item):
     """(weighted lines, files) of a unit as `status` measured it before the push, each commit summed; None where it
-    would be large: a floor path, a binary file, a submodule update, or a merge with changes of its own. A pull
-    request is sized from its branch's commits, not its net diff; a squash's commits are gone, so its diff stands."""
+    would be large: a floor path, a binary file added, edited or deleted, a submodule update, or a merge with changes
+    of its own. A pull request is sized from its branch's commits, not its net diff; a squash's commits are gone, so
+    its diff stands."""
     shas = side_commits(item.unit.commits[0]) if item.unit.pull else [commit.sha for commit in item.unit.commits]
     merges = [sha for sha in shas if len(git("rev-list", "--parents", "-n", "1", sha).split()) > 2]
     if floored(item) or any(guard.commit_paths(sha) for sha in merges):

@@ -212,6 +212,9 @@ class MergedReviewerTest(unittest.TestCase):
             self.repo.git("mv", "lib/" + name, "lib/archive/" + name)
         self.change({})
         self.assertAllowed("0 weighted line(s), 2 file(s) in 1 commit(s); 2 exact rename(s) counted as 0 lines")
+        self.repo.remove("lib/archive/b.bin")
+        self.change({}, "a binary file deleted")
+        self.assertThree("large: a binary file")
 
     def test_status_with_a_base_measures_no_push(self):  # review: BASE measured a subset of the push
         self.change({"lib/a.py": "a\n" * 200})
