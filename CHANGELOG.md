@@ -3,6 +3,22 @@
 Each release of the review-slices skill, newest first. Each is tagged `vX.Y.Z`; from 0.9.2 on, each also has a
 GitHub Release with the same notes.
 
+## 0.9.2 (2026-10-27)
+
+`status` keeps a review log in the clone (`<git-common-dir>/review-slices/review-log`) of each load it prints for
+committed work, by branch and review unit: a unit keeps the highest load printed since it began (`held:`), and takes
+three reviewers once a commit a load was printed at leaves the branch's history within the unit (amend, squash,
+rebase), so stepping a branch back no longer lightens its review; a rebase onto a moved base branch starts the log
+over, a known hole. The hold lives in `.githooks/merged_reviewer.py` and applies once the base branch has it.
+`calibrate.py` adds a logged loads section, and GLOSSARY.md adds Review log and Miss. `incidents.py --check` makes it
+a problem when two misses go through one reduced load, one of their incidents has no working test plug, and REVIEW.md
+still leaves that load's band on (`small: off` for the merged reviewer; `medium: off` for the pair, and `small: off`
+too while a `critical code:` line remains); each miss needs its own test in the Plug field, and a recurrence names
+its load as the Slice field does. The guard's known holes move to this repo's `docs/known-holes.md`; the skill keeps
+a short note for agents that links the full list here. The CI template uses `actions/checkout@v7`. Release notes move
+from README.md to this file. The version-swap check REVIEW.md names is a script, `tests/release_check.py`, and lets a
+release change CHANGELOG.md as well as README.md.
+
 ## 0.9.1 (2026-10-26)
 
 Every Python the hooks start runs isolated and without site (`python3 -I -S`): the agent hook, the pre-push

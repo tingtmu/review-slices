@@ -6,7 +6,7 @@
 # pylint: skip-file
 # mypy: ignore-errors
 # isort: skip_file
-"""review-slices suite wrapper (skill version 0.9.1): `review_slices.py run-suite` runs the suite and stamps a pass.
+"""review-slices suite wrapper (skill version 0.9.2): `review_slices.py run-suite` runs the suite and stamps a pass.
 
 The guard loads this file from beside itself and calls run(); it is not run on its own. run-suite never hands off
 to the base branch's guard: it runs the working copy's own suite, so nothing here decides what a push needs. The
@@ -18,7 +18,7 @@ import subprocess
 import sys
 import time
 
-VERSION = "0.9.1"
+VERSION = "0.9.2"
 STAMP_KEEP = 50
 
 
