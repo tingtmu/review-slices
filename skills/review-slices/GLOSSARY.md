@@ -118,8 +118,8 @@ _Avoid_: red team, devil's advocate
 **Merged reviewer**:
 One reviewer who takes the adversarial, Standards and Spec lenses in turn: the review load of an Important change
 in the small band. Never on a merge with changes of its own, and never at Critical, on a raised level or a floor
-path, except for a release whose only changes outside README.md swap the version, where the base branch's REVIEW.md
-names it as an exception.
+path, except for a release whose only changes outside its release notes swap the version, where the base branch's
+REVIEW.md names it as an exception.
 _Avoid_: light review, quick review
 
 **Conformance reviewer**:

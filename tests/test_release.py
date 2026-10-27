@@ -1,4 +1,4 @@
-"""A release names one version everywhere: every script's VERSION and "(skill version x)", and README's Versions."""
+"""A release names one version everywhere: every script's VERSION and "(skill version x)", and CHANGELOG.md."""
 import glob
 import os
 import re
@@ -24,10 +24,9 @@ class ReleaseTest(unittest.TestCase):
         self.assertEqual(list(found), [version], found)
         self.assertIn(os.path.join(".githooks", "run_suite.py"), found[version])  # unreleased since PR #8
 
-    def test_readme_versions_name_this_version(self):
-        readme = read_text(os.path.join(ROOT, "README.md"))
-        versions = readme.split("\n## Versions\n", 1)[1].split("\n## ", 1)[0]
-        self.assertIn("\n`%s`: " % load_guard().VERSION, versions)
+    def test_changelog_names_this_version(self):
+        changelog = read_text(os.path.join(ROOT, "CHANGELOG.md"))
+        self.assertRegex(changelog, r"\n## %s \(\d{4}-\d\d-\d\d\)\n" % re.escape(load_guard().VERSION))
 
 
 CHECK = os.path.join(ROOT, "tests", "release_check.py")
@@ -47,7 +46,8 @@ class ReleaseCheckTest(unittest.TestCase):
     def release(self, new="1.10.0"):
         self.repo.write("skills/review-slices/scripts/review_slices.py", FAKE_GUARD % (new, new))
         self.repo.write(".githooks/helper.py", 'VERSION = "%s"\nVERSION = "1.2.0" # not the line form\n' % new)
-        self.repo.write("README.md", "start\n`%s`: notes\n" % new)
+        self.repo.write("README.md", "start\nsee CHANGELOG.md\n")
+        self.repo.write("CHANGELOG.md", "## %s\n\nnotes\n" % new)
 
     def check(self, *args, stdin=None, cwd=None):
         command = (sys.executable, "-I", "-" if stdin else CHECK, "--base", self.base) + args
@@ -95,11 +95,13 @@ class ReleaseCheckTest(unittest.TestCase):
     def test_a_subdirectory_still_checks_the_whole_tree(self):
         self.release()
         self.repo.write("docs/README.md", "not the root README\n")
+        self.repo.write("docs/CHANGELOG.md", "not the root CHANGELOG\n")
         self.repo.write(".githooks/helper.py", read_text(os.path.join(self.repo.path, ".githooks/helper.py"))
                         .replace('"1.10.0"', '"1.2.0"'))
         self.repo.commit("release")
         found = self.problems(cwd=os.path.join(self.repo.path, "docs"))
         self.assertIn("differs: docs/README.md", found)
+        self.assertIn("differs: docs/CHANGELOG.md", found)
         self.assertIn("still 1.2.0: .githooks/helper.py:1", found)
 
     def test_the_version_must_rise(self):

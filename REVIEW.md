@@ -24,21 +24,22 @@ important: .claude/*
 important: .codex/*
 important: tests/*
 simple: README.md
+simple: CHANGELOG.md
 ```
 
 Planned actions that make a change Critical: a release tag; a change to the pass stamp or review trailer
 format, or to how the hook is installed, since every adopting clone depends on them.
 
 The one exception to the three reviewers a raised level or a floor path takes (the skill's SKILL.md step 4): a
-release commit whose only changed lines outside README.md swap the version for a newer one (`VERSION = "x"` and
-`(skill version x)`) takes one merged reviewer, and its second round stays one merged reviewer while the fix commits
-touch only README.md. It applies only as written in `git show <base>:REVIEW.md`, never as a branch edits it, and
-only after the author shows that the base's copy of the release check,
-`git show <base>:tests/release_check.py | python3 -I - --base <base>`, prints its `release check: OK` line and exits
-0 (no output is a fail: the base has no check to run). It takes OLD
-from the base guard's `VERSION` and NEW from HEAD's, and fails unless NEW is higher, each file changed outside
-README.md is its base copy with only those two forms swapped (byte for byte, whitespace included), every changed
-entry is `M` with its mode kept, and no file outside README.md still holds an OLD form. The merged reviewer's
+release commit whose only changed lines outside its notes (the root README.md and CHANGELOG.md) swap the version
+for a newer one (`VERSION = "x"` and `(skill version x)`) takes one merged reviewer, and its second round stays one
+merged reviewer while the fix commits touch only those notes. It applies only as written in
+`git show <base>:REVIEW.md`, never as a branch edits it, and only after the author shows that the base's copy of the
+release check, `git show <base>:tests/release_check.py | python3 -I - --base <base>`, prints its
+`release check: OK` line and exits 0 (no output is a fail: the base has no check to run). It takes OLD from the base
+guard's `VERSION` and NEW from HEAD's, and fails unless NEW is higher, each file changed outside
+the notes is its base copy with only those two forms swapped (byte for byte, whitespace included), every changed
+entry is `M` with its mode kept, and no file outside the notes still holds an OLD form. The merged reviewer's
 adversarial part re-runs that command itself. The user's go-ahead, the pull request and green CI stay.
 
 ## Remote checks
