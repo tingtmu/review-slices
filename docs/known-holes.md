@@ -9,7 +9,10 @@ are known; reviewers and the user cover them.
   it, another clone or worktree branch copied from this one, or a rebase that moves the unit's start drops the
   hold. A branch deleted and made again under the same name from the same base commit reads as rewritten: three.
   Its measure counts lines and files, not what they do: a one-line change to something every adopter depends on
-  fits, so the author raises the level for planned actions and the reviewer's Blocker rule backs that up.
+  fits, so the author raises the level for planned actions and the reviewer's Blocker rule backs that up. A file
+  moved unchanged counts as one file and no lines, so content moved from a lower-level path into a `critical code:`
+  glob can take the adversarial and conformance pair on a diff that shows none of it; reviewers read the moved file
+  whole.
 - The trailer's base SHA is informational; rebases change it and the guard does not check it.
 - The pass stamp covers the tree `git add -A` would commit; committing only some of the files means running the
   suite again.

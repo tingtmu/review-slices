@@ -57,19 +57,18 @@ At important and critical, `status` prints the review load: which reviewers the 
 commit the branch adds to the base branch, so a change pushed in slices is measured whole, and puts it in a size
 band: small (built in: at most 40 weighted lines and 3 files), medium (none built in) or large. A file moved
 unchanged counts as one file and no lines. Uncommitted work, an unfetched base branch, a floor path, a merge with
-changes of its own, a submodule update or a binary or Git LFS file make it large. Important takes one merged reviewer
-when small, an adversarial and a conformance (Standards and Spec) reviewer when medium, and the three otherwise.
-Critical takes the adversarial and conformance pair only when small
-and every path that sets the level is in a `critical code:` glob; plain `critical:` globs are content (golden
-outputs, corpora, CI) and always take three. REVIEW.md's `small:` and `medium:` lines set the bands, up to 80/5
-and 400/20; the standing rules' lines count, never a branch's own. A level the author raised for a planned action,
-which `status` cannot see, takes three (except a version-swap release where the base branch's REVIEW.md says so),
-and `status BASE` takes three. The measure, `.githooks/merged_reviewer.py`,
-is copied by `install`, added by `upgrade`, and loaded from the base branch like the guard; without it there,
-`status` says three reviewers. Each load `status` prints for committed work goes into the clone's review log,
-`<git-common-dir>/review-slices/review-log`, by branch and review unit: a unit keeps the highest load printed
-since it began (`held:`), and takes three once a commit a load was printed at leaves the branch's history (amend,
-squash, rebase). `calibrate.py`'s logged loads section reads it to show the loads units really got.
+changes of its own, a submodule update or a binary or Git LFS file added or edited make it large. Important takes one
+merged reviewer when small, an adversarial and a conformance (Standards and Spec) reviewer when medium, and the three
+otherwise. Critical takes the adversarial and conformance pair only when small and every path that sets the level is
+in a `critical code:` glob; plain `critical:` globs are content (golden outputs, corpora, CI) and always take three.
+REVIEW.md's `small:` and `medium:` lines set the bands, up to 80/5 and 400/20; the standing rules' lines count, never
+a branch's own. A level the author raised for a planned action, which `status` cannot see, takes three (except a
+version-swap release where the base branch's REVIEW.md says so), and `status BASE` takes three. The measure,
+`.githooks/merged_reviewer.py`, is copied by `install`, added by `upgrade`, and loaded from the base branch like the
+guard; without it there, `status` says three reviewers. Each load `status` prints for committed work goes into the
+clone's review log, `<git-common-dir>/review-slices/review-log`, by branch and review unit: a unit keeps the highest
+load printed since it began (`held:`), and takes three once a commit a load was printed at leaves the branch's
+history (amend, squash, rebase). `calibrate.py`'s logged loads section reads it to show the loads units really got.
 
 `install --agent-hooks` also adds a PreToolUse hook for Claude Code (`.claude/settings.json`) and Codex
 (`.codex/hooks.json`, shell commands only, once its hooks feature is on and the user trusts the hook; a refused

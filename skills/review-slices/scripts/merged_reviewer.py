@@ -77,8 +77,8 @@ def patch_size(guard, text):
 def measure(guard, commits, uncommitted, tips):
     """((weighted lines, files) or None, why) of COMMITS (per commit then summed, merges left out), so several small
     units add up; None, so no band below large, with uncommitted work, an unfetched base branch, a floor path (so
-    no suite change), a merge with changes of its own, a submodule update or a binary file, whose size it cannot
-    see."""
+    no suite change), a merge with changes of its own, a submodule update or a binary file added or edited, whose
+    size it cannot see (one moved unchanged is an exact rename: no lines)."""
     if uncommitted or not commits:
         return None, "uncommitted work" if uncommitted else "no new commits"
     if not guard.base_tip()[1]:

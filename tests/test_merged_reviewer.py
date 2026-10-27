@@ -205,6 +205,14 @@ class MergedReviewerTest(unittest.TestCase):
                                        % ("0" * 64)})
         self.assertThree("large: a binary file")
 
+    def test_a_binary_or_lfs_file_moved_unchanged_is_an_exact_rename(self):  # review: untested
+        self.on_main({"lib/b.bin": "\0\1\n", "lib/model.onnx": "version https://git-lfs.github.com/spec/v1\n"}, "base")
+        os.makedirs(os.path.join(self.repo.path, "lib", "archive"))
+        for name in ("b.bin", "model.onnx"):
+            self.repo.git("mv", "lib/" + name, "lib/archive/" + name)
+        self.change({})
+        self.assertAllowed("0 weighted line(s), 2 file(s) in 1 commit(s); 2 exact rename(s) counted as 0 lines")
+
     def test_status_with_a_base_measures_no_push(self):  # review: BASE measured a subset of the push
         self.change({"lib/a.py": "a\n" * 200})
         self.change({"lib/b.py": "b\n"}, "small", self.repo.trailer("important"))
