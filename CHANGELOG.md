@@ -3,6 +3,18 @@
 Each release of the review-slices skill, newest first. Each is tagged `vX.Y.Z`; from 0.9.2 on, each also has a
 GitHub Release with the same notes.
 
+## 0.9.3 (2026-10-27)
+
+The review load's measure counts a file moved unchanged (an exact rename) as one file and no lines, and `status`'s
+`review:` line names how many it found (`; 4 exact rename(s) counted as 0 lines`). Before, every move counted as all
+its lines deleted and added, in two files, so an archive of a few moved files (an OpenSpec `/opsx:archive`) landed in
+the large band and took three reviewers ([#13](https://github.com/tingtmu/review-slices/issues/13)). Only git's
+exact pass pairs a move (`--find-renames=100%`, whatever `diff.renameLimit` says): a move with any edit, even two
+lines swapped, still counts in full. The level still takes both paths, a binary file added, edited or deleted still
+makes a change large, and `calibrate.py` sizes units the same way while still finding a moved submodule.
+`docs/known-holes.md` notes that unchanged content moved into a `critical code:` glob can take the adversarial and
+conformance pair on a diff that shows none of it.
+
 ## 0.9.2 (2026-10-27)
 
 `status` keeps a review log in the clone (`<git-common-dir>/review-slices/review-log`) of each load it prints for
