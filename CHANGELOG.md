@@ -3,6 +3,21 @@
 Each release of the review-slices skill, newest first. Each is tagged `vX.Y.Z`; from 0.9.2 on, each also has a
 GitHub Release with the same notes.
 
+## 0.9.4 (2026-10-29)
+
+The review load `status` prints is binding where the agent decides ([#26](https://github.com/tingtmu/review-slices/issues/26)):
+an adopter's agent ran two reviewers where `status` printed three, without asking. The `next:` line now counts the
+first round's separate reviewers (`3 separate reviewers (Standards, Spec, adversarial), each its own fresh agent`),
+says that fewer, or lenses combined into fewer reviewers, take the user's go-ahead asked first (or step 4's
+exceptions), scopes itself to the first round on the whole unit, and puts the trailer after the reviewers report; a
+reduced load reads as the least, never enough. A large change's `why` names the widest band that is on (`over every
+band (widest on: small, 40 lines, 3 files)`), or that every band is off. SKILL.md steps 4 and 7 and its Report, the
+conformance brief, templates/REVIEW.md and the known holes say the same; before starting reviewers the agent writes
+one `load: ...; starting: ...` line. Separately, after a unit large on its own that the review log shows went to
+three reviewers, the review load's measure starts over, so later small fixes on a long branch get the lighter load
+again instead of three reviewers for good; small slices never restart, so a change pushed in slices is still
+measured whole.
+
 ## 0.9.3 (2026-10-27)
 
 The review load's measure counts a file moved unchanged (an exact rename) as one file and no lines, and `status`'s
