@@ -559,11 +559,13 @@ def next_step(config, level, start, commits, uncommitted, tips, load=None):
                 % (" Edited: %s." % listed(edited) if edited else "", " New: %s." % listed(new) if new else ""))
     if level != "trivial":
         reviewers, fewer = LOADS.get(load, SLICE2[level])
-        return ("review at %s, first round on the whole unit: %s, on `git diff %s..HEAD`%s; %s; a second round as "
+        return ("review at %s, first round on the whole unit: %s, on `git diff %s..HEAD`%s; %s; before starting "
+                "them, write in your message `load: <%s>; starting: <each reviewer, its lenses>`; a second round as "
                 "step 6 says; once they have reported, add the trailer to the last commit with "
                 "`git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer \"Review: %s %s\"`"
                 % (level, reviewers, start[:12], ", then the user's go-ahead for the one-way door"
-                   if level == "critical" else "", fewer, level, start[:12]))
+                   if level == "critical" else "", fewer, "the review: line" if load else "this load", level,
+                   start[:12]))
     problems = review_problems(config, commits, tips)
     if problems:
         return "fix the trailers: " + problems[0]

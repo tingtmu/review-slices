@@ -1,5 +1,6 @@
 """`status` makes the printed review load binding where the agent decides (issue #26): `next:` counts the first
-round's separate reviewers and says who may lower them, and the `why` of a large change names the limit crossed."""
+round's separate reviewers, says who may lower them and asks for the `load:` line before they start, and the `why`
+of a large change names the limit crossed."""
 import unittest
 
 from support import Repo
@@ -7,6 +8,7 @@ from test_merged_reviewer import ENGINE_RULES, LIB_RULES, MergedReviewerTest
 
 ASKED = "only with the user's go-ahead asked first"
 LEAST = "the least: more where step 3 raises the level, step 5 escalates, or step 6 after a rebase; "
+LOAD = "; before starting them, write in your message `load: <%s>; starting: <each reviewer, its lenses>`"
 TRAILER = "; a second round as step 6 says; once they have reported, add the trailer to the last commit with `git -c "
 THREE = ("3 separate reviewers (Standards, Spec, adversarial), each its own fresh agent", "fewer, or lenses combined "
          "into fewer reviewers, only with the user's go-ahead asked first, or step 4's exceptions (size was already "
@@ -14,8 +16,9 @@ THREE = ("3 separate reviewers (Standards, Spec, adversarial), each its own fres
 
 
 class NextStepTest(unittest.TestCase):
-    """The first round's reviewers, counted and separate; a reduction is the user's call, asked first; the trailer
-    only once they have reported, still last on the line."""
+    """The first round's reviewers, counted and separate; a reduction is the user's call, asked first; the `load:`
+    line written before they start (canary: Sonnet skipped SKILL.md's sentence 4/4); the trailer only once they
+    have reported, still last on the line."""
     setUp, status, review, change = (MergedReviewerTest.setUp, MergedReviewerTest.status, MergedReviewerTest.review,
                                      MergedReviewerTest.change)
     rules = ENGINE_RULES + "medium: 100 lines, 6 files\n"
@@ -26,7 +29,8 @@ class NextStepTest(unittest.TestCase):
         start = self.repo.out("rev-parse", "--short=12", "origin/main")
         go_ahead = ", then the user's go-ahead for the one-way door" if level == "critical" else ""
         self.assertTrue(step.startswith("next: review at %s, first round on the whole unit: %s, on `git diff %s..HEAD`"
-                                        "%s; %s%s" % (level, reviewers, start, go_ahead, fewer, TRAILER)), step)
+                                        "%s; %s%s%s" % (level, reviewers, start, go_ahead, fewer, LOAD % (
+                                            "this load" if level == "simple" else "the review: line"), TRAILER)), step)
         self.assertTrue(step.endswith("--trailer \"Review: %s %s\"`" % (level, start)), step)
         return step
 
