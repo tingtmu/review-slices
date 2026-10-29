@@ -6,7 +6,7 @@
 # pylint: skip-file
 # mypy: ignore-errors
 # isort: skip_file
-"""review-slices secret scan (skill version 0.9.4): gitleaks over the commits a push adds.
+"""review-slices secret scan (skill version 0.9.5): gitleaks over the commits a push adds.
 
 The guard loads this file from the commit its own copy comes from (the base branch) and calls scan() when REVIEW.md
 says `secrets: gitleaks`; it is not run on its own. The config comes from that same commit, only the pushed commit's
@@ -22,7 +22,7 @@ import shutil
 import subprocess
 import tempfile
 
-VERSION = "0.9.4"
+VERSION = "0.9.5"
 MIN_GITLEAKS = (8, 19, 0)
 MIN_GIT = (2, 36, 0)  # --diff-merges=remerge, so a secret added in a merge commit is seen
 TIMEOUT = 600

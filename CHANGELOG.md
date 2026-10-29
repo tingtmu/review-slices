@@ -3,6 +3,16 @@
 Each release of the review-slices skill, newest first. Each is tagged `vX.Y.Z`; from 0.9.2 on, each also has a
 GitHub Release with the same notes.
 
+## 0.9.5 (2026-10-29)
+
+The `next:` line now asks for the pre-commitment line itself
+([#26](https://github.com/tingtmu/review-slices/issues/26)): before starting the first round's reviewers, the agent
+writes in its message `load: <the review: line>; starting: <each reviewer, its lenses>` (`<this load>` at Simple,
+where `status` prints no `review:` line). The trailer command stays last on the line. In the 0.9.4 canary every
+agent read SKILL.md step 4's request for that line, but Sonnet wrote it in none of four runs and Haiku in three; the
+`next:` line is where the agent decides. SKILL.md keeps its sentence, since an adopter's vendored guard may be older
+and not ask.
+
 ## 0.9.4 (2026-10-29)
 
 The review load `status` prints is binding where the agent decides ([#26](https://github.com/tingtmu/review-slices/issues/26)):
