@@ -42,6 +42,10 @@ band or tagging a glob as code is a reviewed change to this file.
 | Important | small: one merged reviewer; medium: an adversarial and a conformance reviewer; large: a Standards, a Spec and an adversarial reviewer |
 | Critical | small and only in `critical code:` globs: an adversarial and a conformance reviewer; else the three. Then the user's go-ahead for the one-way door; a review meeting only for a disputed review finding, with the user's yes |
 
+The load `status` prints is binding: fewer reviewers, or lenses merged into fewer, only with the user's go-ahead
+asked before the round (except a second round, as the skill's step 6 says, and a version-swap release this file
+allows on the base branch).
+
 ## Remote checks
 
 Checks that run only in CI or another remote service, outside the suite. Read their result after the push.

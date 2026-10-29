@@ -4,7 +4,8 @@ The guard is a hard stop for honest mistakes, not a lock against an agent set on
 are known; reviewers and the user cover them.
 
 - A review trailer proves a level was declared, not that a review ran. The agent writes its own trailer.
-- Whether one merged reviewer or three ran is invisible too: `status` only says when one may. Its review log
+- Whether one merged reviewer or three ran is invisible too: `status` only says when one may, and an agent that
+  runs fewer reviewers than it printed is caught only by the user (issue #26). Its review log
   (`.git/review-slices/review-log`) holds a unit at the highest load printed, but it is a per-clone file: deleting
   it, another clone or worktree branch copied from this one, or a rebase that moves the unit's start drops the
   hold. A branch deleted and made again under the same name from the same base commit reads as rewritten: three.

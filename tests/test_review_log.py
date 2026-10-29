@@ -7,7 +7,7 @@ import unittest
 from support import MERGED, Repo, read_text
 from test_calibrate import calibrate
 import test_merged_reviewer
-from test_merged_reviewer import LIB_RULES
+from test_merged_reviewer import LIB_RULES, WIDEST_SMALL
 
 MERGED_WHY = "one merged reviewer (small: %s, within the small band's 40 lines, 3 files)"
 
@@ -77,7 +77,7 @@ class ReviewLogTest(unittest.TestCase):
 
     def test_the_trailer_closes_the_unit(self):
         self.change({"lib/a.py": "a\n" * 50})
-        self.assertThree("large: 50 weighted line(s), 1 file(s) in 1 commit(s): over every band")
+        self.assertThree("large: 50 weighted line(s), 1 file(s) in 1 commit(s): over every band" + WIDEST_SMALL)
         self.add_trailer()  # an amend, but it starts the next unit
         self.change({"lib/b.py": "b\n"})
         review = self.review()[0]

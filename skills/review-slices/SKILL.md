@@ -60,6 +60,13 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    the three reviewers, except one merged reviewer where `status` prints `review: merged reviewer allowed` at
    Important.
 
+   Never lower the load, merge its lenses into fewer reviewers, or swap a reviewer for a tool that does less: only
+   the user can, asked before the round with the printed load. "It looks small", "it is mostly moves" and "it is
+   only docs" are not reasons: the measure counted them. A skill counts where it starts the same separate reviewers
+   (the `code-review` skill for Standards and Spec). This holds for the first round on the whole unit; a second round
+   follows step 6, and a version-swap release follows the exception above. Before starting them, write one line in
+   your message: `load: <status's review: line>; starting: <each reviewer, its lenses>`.
+
    Reviewers read `git diff <base>..HEAD`, with `<base>` from the trailer line `status` printed. They are
    read-only, have fresh context and use the strongest model available. Give them the diff command, REVIEW.md,
    the spec path and the level output. If you cannot start a fresh-context reviewer, use, in order: a CLI
@@ -102,8 +109,10 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
 7. **Add the trailer** `status` printed to the last commit the review covered, with exactly
    `git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer "Review: <level> <base-sha>"`
    (`status` prints it filled in): it keeps the message, leaves anything staged out, and replaces an earlier
-   `Review:` trailer instead of adding a second. Each trailer must cover the level of the commits since the previous one; a later commit
-   above Trivial needs its own review and trailer. The hook refuses both otherwise. Never amend new content into
+   `Review:` trailer instead of adding a second. The trailer says the review ran with the load `status` printed,
+   or more; less only with the user's go-ahead, step 4's version-swap exception, or a step 6 second round. Each
+   trailer must cover the level of the commits since the previous one; a later commit above Trivial needs its own
+   review and trailer. The hook refuses both otherwise. Never amend new content into
    a commit that carries a trailer: add a commit.
 8. **Run the suite once:** `python3 .githooks/review_slices.py run-suite`. It runs every `test:` line and stamps
    the working tree only when all pass and no file changed during the run. If it says the working tree is not
@@ -262,8 +271,9 @@ git config (per clone)                 review-slices.base; hook.review-slices.* 
 
 ## Report
 
-End every review with: the level output, the reviewers run and their lenses, each review finding with its tag and
-what happened to it (fixed, rejected and why), any level notes, the shown output for the final state, and any
-incident recorded.
+End every review with: the level output, the load `status` printed beside the reviewers that ran and their lenses
+(a reduction the user allowed named as an exception; any other is a rule break: [record an
+incident](#record-an-incident)), each review finding with its tag and what happened to it (fixed, rejected and
+why), any level notes, the shown output for the final state, and any incident recorded.
 Never a secret's value.
 The guard's known holes are summarized in [references/known-holes.md](references/known-holes.md).

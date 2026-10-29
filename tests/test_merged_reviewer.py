@@ -9,6 +9,9 @@ GUARD = load_guard()
 SIZER = load_script("merged_reviewer", MERGED)
 LIB_RULES = RULES + "important: lib/*\n"
 ENGINE_RULES = LIB_RULES + "critical code: engine/*\ncritical: engine/golden/*\n"
+# What `status` prints: the widest band on, after "over every band"; the first round, in `next:`.
+WIDEST_SMALL, WIDEST_MEDIUM = " (widest on: small, 40 lines, 3 files)", " (widest on: medium, 100 lines, 6 files)"
+FIRST = "first round on the whole unit: "
 
 
 class MergedReviewerTest(unittest.TestCase):
@@ -38,12 +41,12 @@ class MergedReviewerTest(unittest.TestCase):
         review, step = self.review()
         self.assertEqual(review, "review: one merged reviewer (small: %s, within the small band's 40 lines, 3 files)"
                                  % size)
-        self.assertIn("review at important: one merged reviewer", step)
+        self.assertIn("review at important, " + FIRST + "1 merged reviewer", step)
 
     def assertThree(self, why, level="important"):
         review, step = self.review()
         self.assertEqual(review, "review: three reviewers (%s)" % why)
-        self.assertIn("review at %s: a Standards, a Spec and an adversarial reviewer" % level, step)
+        self.assertIn("review at %s, " % level + FIRST + "3 separate reviewers (Standards, Spec, adversarial)", step)
         self.assertNotIn("merged", step)
 
     def test_the_thresholds(self):
@@ -91,14 +94,14 @@ class MergedReviewerTest(unittest.TestCase):
 
     def test_one_weighted_line_or_one_file_over_is_three_reviewers(self):
         self.change({"lib/a.py": "a\n" * 41})
-        self.assertThree("large: 41 weighted line(s), 1 file(s) in 1 commit(s): over every band")
+        self.assertThree("large: 41 weighted line(s), 1 file(s) in 1 commit(s): over every band" + WIDEST_SMALL)
         self.repo.git("switch", "-q", "-c", "files", "origin/main")  # a new unit: a reset is a rewrite
         self.change({"lib/%d.py" % number: "x\n" for number in range(4)})
-        self.assertThree("large: 4 weighted line(s), 4 file(s) in 1 commit(s): over every band")
+        self.assertThree("large: 4 weighted line(s), 4 file(s) in 1 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_few_minified_lines_are_not_small(self):
         self.change({"lib/min.js": ("x" * 1500 + "\n") * 3})
-        self.assertThree("large: 45 weighted line(s), 1 file(s) in 1 commit(s): over every band")
+        self.assertThree("large: 45 weighted line(s), 1 file(s) in 1 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_floor_path_is_never_merged(self):
         self.change({"lib/a.py": "a\n", ".githooks/extra.py": "e\n"})
@@ -120,7 +123,7 @@ class MergedReviewerTest(unittest.TestCase):
     def test_several_small_units_in_one_push_add_up(self):
         self.change({"lib/a.py": "a\n" * 30}, "first unit", self.repo.trailer("important"))
         self.change({"lib/b.py": "b\n" * 20}, "second unit")
-        self.assertThree("large: 50 weighted line(s), 2 file(s) in 2 commit(s): over every band")
+        self.assertThree("large: 50 weighted line(s), 2 file(s) in 2 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_binary_file_is_never_merged(self):
         self.change({"lib/b.bin": "\0\1\n"})
@@ -172,17 +175,17 @@ class MergedReviewerTest(unittest.TestCase):
     def test_a_rename_with_an_edit_counts_in_full(self):
         self.moved(lambda lines: lines[:-1] + ["edited\n"])
         self.change({})
-        self.assertThree("large: 200 weighted line(s), 2 file(s) in 1 commit(s): over every band")
+        self.assertThree("large: 200 weighted line(s), 2 file(s) in 1 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_move_with_two_lines_swapped_counts_in_full(self):  # only git's exact pass, never its similarity
         self.moved(lambda lines: [lines[1], lines[0]] + lines[2:])
         self.change({})
-        self.assertThree("large: 200 weighted line(s), 2 file(s) in 1 commit(s): over every band")
+        self.assertThree("large: 200 weighted line(s), 2 file(s) in 1 commit(s): over every band" + WIDEST_SMALL)
 
     def test_deleted_lines_that_start_with_dashes_count(self):  # review: hunk lengths were never exercised
         self.on_main({"lib/a.sql": "-- note\n" * 45 + "select 1;\n"}, "base")
         self.change({"lib/a.sql": "select 1;\n"})
-        self.assertThree("large: 45 weighted line(s), 1 file(s) in 1 commit(s): over every band")
+        self.assertThree("large: 45 weighted line(s), 1 file(s) in 1 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_submodule_update_is_never_merged(self):  # review: a gitlink bump measured as 2 lines
         sha = self.repo.out("rev-parse", "HEAD")
@@ -248,7 +251,7 @@ class MergedReviewerTest(unittest.TestCase):
         self.change({"lib/a.py": "a\n"})
         review, step = self.review()
         self.assertIsNone(review)
-        self.assertIn("a Standards, a Spec and an adversarial reviewer", step)
+        self.assertIn("review at important, " + FIRST, step)
 
     def test_only_important_and_critical_print_the_line(self):
         self.change({"core/x.py": "x\n"})
@@ -258,7 +261,7 @@ class MergedReviewerTest(unittest.TestCase):
         self.change({"src/x.py": "x\n"})
         review, step = self.review()
         self.assertIsNone(review)
-        self.assertIn("review at simple: 1-2 adversarial reviewers", step)
+        self.assertIn("review at simple, " + FIRST + "1-2 adversarial reviewers", step)
 
 
 class ReviewLoadTest(unittest.TestCase):
@@ -275,16 +278,18 @@ class ReviewLoadTest(unittest.TestCase):
         self.change({"lib/a.py": "a\n" * 41})
         self.assertLoad("adversarial + conformance", "medium: 41 weighted line(s), 1 file(s) in 1 commit(s), within "
                                                      "the medium band's 100 lines, 6 files")
-        self.assertIn("review at important: an adversarial and a conformance reviewer", self.review()[1])
+        self.assertIn("review at important, " + FIRST + "2 separate reviewers (adversarial; conformance",
+                      self.review()[1])
         self.change({"lib/b.py": "b\n" * 60})
-        self.assertLoad("three reviewers", "large: 101 weighted line(s), 2 file(s) in 2 commit(s): over every band")
+        self.assertLoad("three reviewers", "large: 101 weighted line(s), 2 file(s) in 2 commit(s): over every band"
+                                           + WIDEST_MEDIUM)
 
     def test_a_small_critical_change_in_code_globs_alone_takes_the_pair(self):
         self.change({"engine/a.py": "a\n" * 12})
         self.assertLoad("adversarial + conformance", "small: 12 weighted line(s), 1 file(s) in 1 commit(s), within "
                                                      "the small band's 40 lines, 3 files")
         step = self.review()[1]
-        self.assertIn("review at critical: an adversarial and a conformance reviewer", step)
+        self.assertIn("review at critical, " + FIRST + "2 separate reviewers (adversarial; conformance", step)
         self.assertIn("then the user's go-ahead for the one-way door", step)
         self.change({"engine/b.py": "b\n" * 30})  # medium at Critical: three
         self.assertLoad("three reviewers", "medium: 42 weighted line(s), 2 file(s) in 2 commit(s), within the "
@@ -313,7 +318,8 @@ class ReviewLoadTest(unittest.TestCase):
         self.repo.git("push", "-q", "--no-verify", "-u", "origin", "feature")
         self.change({"engine/b.py": "b\n" * 2})
         self.assertIn("new commits: 1 not yet", self.status())
-        self.assertLoad("three reviewers", "large: 202 weighted line(s), 2 file(s) in 2 commit(s): over every band")
+        self.assertLoad("three reviewers", "large: 202 weighted line(s), 2 file(s) in 2 commit(s): over every band"
+                                           + WIDEST_MEDIUM)
 
     def test_a_pushed_merge_with_changes_of_its_own_still_counts(self):
         self.other_work_on_main()

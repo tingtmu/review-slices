@@ -6,7 +6,7 @@ from unittest import mock
 
 from support import ENV, Repo, read_text
 import test_merged_reviewer
-from test_merged_reviewer import ENGINE_RULES, GUARD, LIB_RULES, SIZER
+from test_merged_reviewer import ENGINE_RULES, FIRST, GUARD, LIB_RULES, SIZER, WIDEST_SMALL
 import test_review_log
 
 Helpers = test_merged_reviewer.MergedReviewerTest
@@ -45,7 +45,7 @@ class RestartTest(unittest.TestCase):
         review, step = self.review()
         self.assertEqual(review, "review: one merged reviewer (small: %s, within the small band's 40 lines, 3 files%s)"
                                  % (size, SINCE % trailer[:12]))
-        self.assertIn("review at important: one merged reviewer", step)
+        self.assertIn("review at important, " + FIRST + "1 merged reviewer", step)
 
     def test_a_small_fix_after_a_large_reviewed_unit_takes_one_merged_reviewer(self):
         trailer = self.large_unit()
@@ -101,7 +101,7 @@ class RestartTest(unittest.TestCase):
             self.amend_trailer()
             self.repo.git("push", "-q", "--no-verify", "-u", "origin", "feature")
         self.change({"lib/c.py": "c\n"})
-        self.assertThree("large: 61 weighted line(s), 3 file(s) in 3 commit(s): over every band")
+        self.assertThree("large: 61 weighted line(s), 3 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_unit_grown_past_the_band_after_a_lighter_load_never_restarts(self):  # plan review 1 Blocker
         self.change({"lib/a.py": "a\n" * 35})
@@ -109,7 +109,7 @@ class RestartTest(unittest.TestCase):
         self.change({"lib/b.py": "b\n" * 10}, "a nit fix")
         self.amend_trailer()
         self.change({"lib/c.py": "c\n"})
-        self.assertThree("large: 46 weighted line(s), 3 file(s) in 3 commit(s): over every band")
+        self.assertThree("large: 46 weighted line(s), 3 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
 
     def test_three_printed_while_the_unit_was_small_is_no_evidence(self):  # plan review 2
         self.change({"core/x.py": "x\n"})
@@ -117,7 +117,7 @@ class RestartTest(unittest.TestCase):
         self.change({"lib/a.py": "a\n" * 50}, "grown with no status")
         self.amend_trailer("critical")
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 52 weighted line(s), 3 file(s) in 3 commit(s): over every band")
+        self.assertThree("large: 52 weighted line(s), 3 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_small_unit_three_for_a_floor_path_never_restarts(self):
         self.change({".githooks/x.txt": "x\n"})
@@ -131,7 +131,7 @@ class RestartTest(unittest.TestCase):
         self.assertIn("review: three reviewers (large: 4 weighted line(s), 4 file(s)", self.review()[0])
         self.add_trailer()
         self.change({"lib/e.py": "e\n"})
-        self.assertThree("large: 5 weighted line(s), 5 file(s) in 2 commit(s): over every band")
+        self.assertThree("large: 5 weighted line(s), 5 file(s) in 2 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_pure_move_large_by_files_never_restarts(self):  # plan review 1: nothing for the reviewers to read
         for name in "abcd":
@@ -151,7 +151,7 @@ class RestartTest(unittest.TestCase):
         self.status()
         self.amend_trailer("simple")
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 51 weighted line(s), 2 file(s) in 2 commit(s): over every band")
+        self.assertThree("large: 51 weighted line(s), 2 file(s) in 2 commit(s): over every band" + WIDEST_SMALL)
 
     def test_churn_never_restarts(self):  # the net diff, not the commits summed
         self.change({"lib/a.py": "a\n" * 50})
@@ -160,7 +160,7 @@ class RestartTest(unittest.TestCase):
         self.change({"lib/keep.py": "k\n"}, "take it back")
         self.add_trailer()
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 102 weighted line(s), 3 file(s) in 3 commit(s): over every band")
+        self.assertThree("large: 102 weighted line(s), 3 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_large_simple_unit_never_restarts_even_with_a_logged_three(self):  # the log line is forged
         self.change({"docs/x.txt": "x\n" * 100})
@@ -171,7 +171,7 @@ class RestartTest(unittest.TestCase):
                       % (base, head))
         self.repo.git("commit", "-q", "--amend", "--no-edit", "--trailer", self.repo.trailer("simple"))
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 101 weighted line(s), 2 file(s) in 2 commit(s): over every band")
+        self.assertThree("large: 101 weighted line(s), 2 file(s) in 2 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_logged_lighter_load_is_no_evidence(self):  # only three restarts, whatever the size
         self.large_unit()
@@ -179,7 +179,7 @@ class RestartTest(unittest.TestCase):
         with open(self.log_path(), "w", encoding="utf-8") as log:
             log.write("".join(line + "\n" for line in lines))
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 52 weighted line(s), 2 file(s) in 3 commit(s): over every band")
+        self.assertThree("large: 52 weighted line(s), 2 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
 
     def test_three_logged_at_a_head_the_unit_left_is_no_evidence(self):  # another unit with the same start
         self.change({"lib/a.py": "a\n" * 50})
@@ -188,26 +188,27 @@ class RestartTest(unittest.TestCase):
         self.change({"lib/other.py": "o\n" * 50}, "not what was reviewed")
         self.amend_trailer()
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 51 weighted line(s), 2 file(s) in 2 commit(s): over every band")
+        self.assertThree("large: 51 weighted line(s), 2 file(s) in 2 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_later_unit_never_borrows_an_earlier_unit_s_three(self):  # the logged start must be its own
         first = self.large_unit()
         self.change({"lib/c.py": "c\n" * 50}, "a second large unit, never through status")
         self.repo.git("commit", "-q", "--amend", "--no-edit", "--trailer", self.repo.trailer("important", first))
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 51 weighted line(s), 2 file(s) in 2 commit(s): over every band" + SINCE % first[:12])
+        self.assertThree("large: 51 weighted line(s), 2 file(s) in 2 commit(s): over every band" + WIDEST_SMALL
+                         + SINCE % first[:12])
 
     def test_without_the_log_line_there_is_no_restart(self):  # another clone, a rebase, a deleted log
         self.large_unit()
         os.remove(self.log_path())
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 52 weighted line(s), 2 file(s) in 3 commit(s): over every band")
+        self.assertThree("large: 52 weighted line(s), 2 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
 
     def test_another_branch_s_log_line_is_no_evidence(self):
         self.large_unit()
         self.repo.git("switch", "-q", "-c", "copy")
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 52 weighted line(s), 2 file(s) in 3 commit(s): over every band")
+        self.assertThree("large: 52 weighted line(s), 2 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_restart_from_a_side_branch_still_measures_the_mainline(self):  # only the restart's history drops
         self.repo.git("switch", "-q", "-c", "feature")

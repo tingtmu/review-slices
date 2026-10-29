@@ -152,3 +152,21 @@ each failure class from getting through again. Terms: the skill's
   test tests/test_discover.py::RunTest::test_run_never_runs_a_publishing_script_recipe_or_contributing_line,
   test tests/test_discover.py::RunTest::test_run_never_runs_a_deploy
 - **Recurrences:** none
+
+## I6. The skill leaves a slice's minimum to the agent's reading
+
+- **Date / kind / status:** 2026-10-29 · defect · plugged
+- **What happened:** In an adopter's session (Sonnet 5.5, skill 0.9.1, issue #26), `status` printed
+  `review: three reviewers` for a 17-file docs archive. The agent ran two, an adversarial reviewer and one told to
+  cover Standards and Spec, without asking the user, and said so only afterwards: cost, "it looks mostly like a
+  move", and the load read as a guideline. The `next:` line described the reviewers with no count and no owner of a
+  reduction, SKILL.md never said fewer is the user's call, and the conformance brief offered the shape it picked.
+- **Slice that should have caught it:** 2 Review. Why it did not: the slice itself was thinned, and the guard cannot
+  see how many reviewers ran (a known hole); only the user noticed.
+- **Failure class:** the skill leaves a slice's minimum to the agent's reading
+- **Fix:** `next:` counts the first round's separate reviewers, says a reduction is the user's call asked first and
+  puts the trailer after they report; a large change's `why` names the widest band on; SKILL.md steps 4 and 7, its
+  Report, the conformance brief, templates/REVIEW.md and the known holes say the same.
+- **Plug:** test tests/test_binding_load.py::NextStepTest::test_three_reviewers_are_counted_and_only_the_user_lowers_them,
+  rule REVIEW.md "The skill leaves a slice's minimum to the agent's reading"
+- **Recurrences:** none

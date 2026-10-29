@@ -56,6 +56,7 @@ Checks that run only in CI or another remote service, outside the suite. Read th
 - A push is measured across commits that are not the author's ([I3](docs/INCIDENTS.md#i3-a-push-is-measured-across-other-peoples-commits))
 - A tool runs a one-way door it should only list ([I5](docs/INCIDENTS.md#i5-a-setup-tool-runs-a-one-way-door-it-should-only-list))
 - Setup breaks the host repo's existing hooks or checks ([I4](docs/INCIDENTS.md#i4-setup-breaks-the-host-repos-existing-tooling))
+- The skill leaves a slice's minimum to the agent's reading ([I6](docs/INCIDENTS.md#i6-the-skill-leaves-a-slices-minimum-to-the-agents-reading))
 
 ## Repo rules for reviewers
 

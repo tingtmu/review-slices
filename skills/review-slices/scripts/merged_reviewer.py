@@ -124,8 +124,10 @@ def band(guard, rules, commits, uncommitted, tips):
     one already covers, takes nothing."""
     size, why = measure(guard, commits, uncommitted, tips)
     name = band_of(rules, size)
-    if name == "large":
-        return name, why if not size else "%s: over every band" % why
+    if name == "large":  # name the limit crossed, so "it is only a move" reads as counted (issue #26)
+        on = [(band_name, limit) for band_name, limit in limits(rules).items() if limit]
+        widest = "widest on: %s, %d lines, %d files" % ((on[-1][0],) + tuple(on[-1][1])) if on else "every band is off"
+        return name, why if not size else "%s: over every band (%s)" % (why, widest)
     return name, "%s, within the %s band's %d lines, %d files" % ((why, name) + tuple(limits(rules)[name]))
 
 

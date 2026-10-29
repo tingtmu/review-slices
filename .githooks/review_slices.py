@@ -59,12 +59,20 @@ HANDOFF = "REVIEW_SLICES_HANDOFF"
 # The first guard version that has each command; the base branch's guard runs a command only if it has it.
 SINCE = {"level": (0, 1, 0), "run-suite": (0, 1, 0), "pre-push": (0, 1, 0), "check": (0, 2, 0),
          "status": (0, 3, 0), "ci": (0, 4, 0)}
-THREE = "a Standards, a Spec and an adversarial reviewer"
-SLICE2 = {"trivial": "no review", "simple": "1-2 adversarial reviewers", "important": THREE, "critical": THREE}
+# What `next:` says a first round takes: the separate reviewers, then who may lower it (issue #26). A reduced load is
+# the least, never "enough": step 3, 5 or 6 may still raise it.
+THREE = ("3 separate reviewers (Standards, Spec, adversarial), each its own fresh agent",
+         "fewer, or lenses combined into fewer reviewers, only with the user's go-ahead asked first, or step 4's "
+         "exceptions (size was already counted)")
+LEAST = "the least: more where step 3 raises the level, step 5 escalates, or step 6 after a rebase; "
+SLICE2 = {"simple": ("1-2 adversarial reviewers, each its own fresh agent",
+                     "none only with the user's go-ahead asked first"), "important": THREE, "critical": THREE}
 # The reduced review loads `status` may print, and the most a REVIEW.md size band may say (lines, files).
-LOADS = {"one merged reviewer": "one merged reviewer (the adversarial, Standards and Spec lenses), or " + THREE,
-         "adversarial + conformance": "an adversarial and a conformance reviewer (the Standards and Spec lenses), or "
-                                      + THREE}
+LOADS = {"one merged reviewer": ("1 merged reviewer (the adversarial, Standards and Spec lenses), its own fresh agent",
+                                 LEAST + "none only with the user's go-ahead asked first"),
+         "adversarial + conformance": ("2 separate reviewers (adversarial; conformance: the Standards and Spec "
+                                       "lenses), each its own fresh agent", LEAST + "fewer, or the two combined into "
+                                       "one, only with the user's go-ahead asked first")}
 CEILINGS = {"small": (80, 5), "medium": (400, 20)}
 OVERRIDE = "If the user decides to push anyway, the user runs `git push --no-verify`; an agent never does."
 # Settings in a user's git config that would change what the guard reads.
@@ -549,10 +557,12 @@ def next_step(config, level, start, commits, uncommitted, tips, load=None):
                 "else's edits. Files a tool wrote (build output, caches) belong in .gitignore: ask the user"
                 % (" Edited: %s." % listed(edited) if edited else "", " New: %s." % listed(new) if new else ""))
     if level != "trivial":
-        return ("review at %s: %s%s, on `git diff %s..HEAD`; then add the trailer to the last commit with "
+        reviewers, fewer = LOADS.get(load, SLICE2[level])
+        return ("review at %s, first round on the whole unit: %s, on `git diff %s..HEAD`%s; %s; a second round as "
+                "step 6 says; once they have reported, add the trailer to the last commit with "
                 "`git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer \"Review: %s %s\"`"
-                % (level, LOADS.get(load, SLICE2[level]), ", then the user's go-ahead for the one-way door"
-                   if level == "critical" else "", start[:12], level, start[:12]))
+                % (level, reviewers, start[:12], ", then the user's go-ahead for the one-way door"
+                   if level == "critical" else "", fewer, level, start[:12]))
     problems = review_problems(config, commits, tips)
     if problems:
         return "fix the trailers: " + problems[0]
