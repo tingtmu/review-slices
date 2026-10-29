@@ -65,7 +65,8 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    only docs" are not reasons: the measure counted them. A skill counts where it starts the same separate reviewers
    (the `code-review` skill for Standards and Spec). This holds for the first round on the whole unit; a second round
    follows step 6, and a version-swap release follows the exception above. Before starting them, write one line in
-   your message: `load: <status's review: line>; starting: <each reviewer, its lenses>`.
+   your message: `load: <status's review: line, or the reviewers next: names where there is none>; starting: <each
+   reviewer, its lenses>`.
 
    Reviewers read `git diff <base>..HEAD`, with `<base>` from the trailer line `status` printed. They are
    read-only, have fresh context and use the strongest model available. Give them the diff command, REVIEW.md,
@@ -272,8 +273,8 @@ git config (per clone)                 review-slices.base; hook.review-slices.* 
 ## Report
 
 End every review with: the level output, the load `status` printed beside the reviewers that ran and their lenses
-(a reduction the user allowed named as an exception; any other is a rule break: [record an
-incident](#record-an-incident)), each review finding with its tag and what happened to it (fixed, rejected and
+(a reduction the user allowed, step 4's version-swap exception or a step 6 second round named as such; any other
+is a rule break: [record an incident](#record-an-incident)), each review finding with its tag and what happened to it (fixed, rejected and
 why), any level notes, the shown output for the final state, and any incident recorded.
 Never a secret's value.
 The guard's known holes are summarized in [references/known-holes.md](references/known-holes.md).

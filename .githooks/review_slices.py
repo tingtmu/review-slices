@@ -65,14 +65,15 @@ THREE = ("3 separate reviewers (Standards, Spec, adversarial), each its own fres
          "fewer, or lenses combined into fewer reviewers, only with the user's go-ahead asked first, or step 4's "
          "exceptions (size was already counted)")
 LEAST = "the least: more where step 3 raises the level, step 5 escalates, or step 6 after a rebase; "
-SLICE2 = {"simple": ("1-2 adversarial reviewers, each its own fresh agent",
-                     "none only with the user's go-ahead asked first"), "important": THREE, "critical": THREE}
+SLICE2 = {"simple": ("1-2 adversarial reviewers, each its own fresh agent", "the least: more where step 3 raises "
+                     "the level; none only with the user's go-ahead asked first"),
+          "important": THREE, "critical": THREE}
 # The reduced review loads `status` may print, and the most a REVIEW.md size band may say (lines, files).
 LOADS = {"one merged reviewer": ("1 merged reviewer (the adversarial, Standards and Spec lenses), its own fresh agent",
                                  LEAST + "none only with the user's go-ahead asked first"),
          "adversarial + conformance": ("2 separate reviewers (adversarial; conformance: the Standards and Spec "
                                        "lenses), each its own fresh agent", LEAST + "fewer, or the two combined into "
-                                       "one, only with the user's go-ahead asked first")}
+                                       "one, only with the user's go-ahead asked first, or step 4's exceptions")}
 CEILINGS = {"small": (80, 5), "medium": (400, 20)}
 OVERRIDE = "If the user decides to push anyway, the user runs `git push --no-verify`; an agent never does."
 # Settings in a user's git config that would change what the guard reads.

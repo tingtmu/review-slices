@@ -112,7 +112,8 @@ Finish all three even if the first finds a Blocker.
 
 ## Conformance reviewer (where `status` prints `review: adversarial + conformance`)
 
-It takes the Standards and Spec lenses. Use it only on the `status` line that names it. Start the adversarial
+It takes the Standards and Spec lenses. Use it only on the `status` line that names it, never on a level you
+raised for a planned action. Start the adversarial
 reviewer in the same message, with its own brief (above) ending in the report for a reduced load.
 
 ```

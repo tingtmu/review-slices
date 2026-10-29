@@ -251,7 +251,7 @@ class MergedReviewerTest(unittest.TestCase):
         self.change({"lib/a.py": "a\n"})
         review, step = self.review()
         self.assertIsNone(review)
-        self.assertIn("review at important, " + FIRST, step)
+        self.assertIn("review at important, " + FIRST + "1 merged reviewer", step)  # the load it measured, unprinted
 
     def test_only_important_and_critical_print_the_line(self):
         self.change({"core/x.py": "x\n"})

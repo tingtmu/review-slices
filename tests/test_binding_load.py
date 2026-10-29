@@ -45,14 +45,14 @@ class NextStepTest(unittest.TestCase):
 
     def test_the_conformance_pair_is_two_separate_reviewers_and_the_least(self):
         pair = ("2 separate reviewers (adversarial; conformance: the Standards and Spec lenses), each its own fresh "
-                "agent", LEAST + "fewer, or the two combined into one, " + ASKED)
+                "agent", LEAST + "fewer, or the two combined into one, " + ASKED + ", or step 4's exceptions")
         self.assertStep({"lib/a.py": "a\n" * 41}, "important", *pair)
         self.repo.git("checkout", "-q", "-b", "other", "origin/main")
         self.assertStep({"engine/a.py": "a\n" * 12}, "critical", *pair)
 
     def test_simple_and_trivial(self):
         self.assertStep({"src/a.py": "a\n"}, "simple", "1-2 adversarial reviewers, each its own fresh agent",
-                        "none " + ASKED)
+                        "the least: more where step 3 raises the level; none " + ASKED)
         self.repo.git("checkout", "-q", "-b", "other", "origin/main")
         self.change({"notes/a.md": "a\n"})
         self.assertNotIn("review at", self.review()[1])
@@ -75,6 +75,9 @@ class WhyNamesTheLimitTest(unittest.TestCase):
 
     def test_medium_on(self):
         self.assertWhy("small: 20 lines, 2 files\nmedium: 45 lines, 6 files\n", "widest on: medium, 45 lines, 6 files")
+
+    def test_a_medium_band_narrower_than_small(self):  # review: the widest by its limits, not the last listed
+        self.assertWhy("medium: 30 lines, 6 files\n", "widest on: small, 40 lines, 3 files")
 
     def test_every_band_off(self):
         self.assertWhy("small: off\n", "every band is off")
