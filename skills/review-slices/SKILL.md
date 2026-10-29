@@ -65,7 +65,7 @@ this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py
    only docs" are not reasons: the measure counted them. A skill counts where it starts the same separate reviewers
    (the `code-review` skill for Standards and Spec). This holds for the first round on the whole unit; a second round
    follows step 6, and a version-swap release follows the exception above. Before starting them, write one line in
-   your message: `load: <status's review: line, or the reviewers next: names where there is none>; starting: <each
+   your message: `load: <status's review: line, or the load this step gives where it prints none>; starting: <each
    reviewer, its lenses>`.
 
    Reviewers read `git diff <base>..HEAD`, with `<base>` from the trailer line `status` printed. They are
