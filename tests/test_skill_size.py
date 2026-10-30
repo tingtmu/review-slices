@@ -20,6 +20,11 @@ MOVED = {"A secret turns up": "secrets.md", "Record an incident": "incidents.md"
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 
 
+def slug(heading):
+    """A markdown heading's anchor, as GitHub makes it."""
+    return re.sub(r"[^\w\- ]", "", heading.lstrip("#").strip().lower()).replace(" ", "-")
+
+
 def skill_bytes():
     with open(SKILL, "rb") as handle:
         return handle.read()
@@ -41,14 +46,21 @@ class SkillSizeTest(unittest.TestCase):
         self.assertIn(("`%s`" % MARKER).encode(), text[:guard])
 
     def test_every_relative_link_resolves(self):
-        paths = [SKILL] + [os.path.join(REFERENCES, name) for name in sorted(os.listdir(REFERENCES))]
+        """Templates are left out: their links are relative to the adopting repo."""
+        paths = [SKILL, os.path.join(SKILL_DIR, "GLOSSARY.md"), os.path.join(ROOT, "README.md")] + [
+            os.path.join(REFERENCES, name) for name in sorted(os.listdir(REFERENCES))]
         for path in paths:
             for target in LINK.findall(read_text(path)):
                 if re.match(r"[a-z]+:", target):
                     continue
-                self.assertFalse(target.startswith("#"), "%s: %s, an anchor that a move would break" % (path, target))
-                resolved = os.path.join(os.path.dirname(path), target.split("#")[0])
-                self.assertTrue(os.path.exists(resolved), "%s: %s" % (os.path.relpath(path, ROOT), target))
+                where = "%s: %s" % (os.path.relpath(path, ROOT), target)
+                self.assertFalse(target.startswith("#"), where + ", an anchor that a move would break")
+                name, _, fragment = target.partition("#")
+                resolved = os.path.join(os.path.dirname(path), name)
+                self.assertTrue(os.path.exists(resolved), where)
+                if fragment:
+                    self.assertIn(fragment, [slug(line) for line in read_text(resolved).splitlines()
+                                             if line.startswith("#")], where)
 
     def test_the_guard_s_messages_name_a_heading_that_exists(self):
         named = set()
