@@ -5,6 +5,9 @@ description: "Check an agent's work before it counts as done, Swiss-cheese style
 
 # Review slices
 
+Some hosts load only the start of this file. Its last line is `End of review-slices SKILL.md.`: if you cannot
+see that line, read the whole file before acting.
+
 No single check is reliable. Stack independent slices so a defect ships only when every slice's holes line up,
 and plug a hole every time something gets through. Terms are defined in this skill's [GLOSSARY.md](GLOSSARY.md);
 use them exactly.
@@ -145,3 +148,5 @@ is a rule break: [record an incident](references/incidents.md)), each review fin
 why), any level notes, the shown output for the final state, and any incident recorded.
 Never a secret's value.
 The guard's known holes are summarized in [references/known-holes.md](references/known-holes.md).
+
+End of review-slices SKILL.md.
