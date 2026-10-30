@@ -14,6 +14,7 @@ level's line if no path belongs there yet.
 
 ```review-slices
 test: <one offline check, run from the repo root; repeat the line for each check, all are required>
+# test: bandit -r <package> -q   (optional: a security scanner; gosec for Go, semgrep with local rules elsewhere)
 base: main
 default: simple
 critical: <a path whose change contains or enables a one-way door>

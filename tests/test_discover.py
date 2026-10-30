@@ -173,6 +173,22 @@ class ListTest(unittest.TestCase):
         self.assertEqual(found["npm publish && npm test"][2], "remote: deploys or publishes (publish)")
         self.assertEqual(found["npm run lint"][2], "local")
 
+    def test_a_check_chained_after_setup_is_kept(self):  # #20
+        repo = Repo(self)
+        repo.write(".github/workflows/test.yml",
+                   "on: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n"
+                   "      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n"
+                   "      - run: pip install -e .\n      - run: python -m unittest discover -s tests -q\n"
+                   "      - run: pip install ruff && ruff check notesvc\n"
+                   "      - run: |\n          export LANG=C; cd src && pytest -q\n          mypy .\n"
+                   "      - run: echo 'a && b; c' && npm ci\n")
+        found = self.listing(repo)
+        self.assertEqual(found["ruff check notesvc"], (".github/workflows/test.yml:10", "lint", "local"))
+        self.assertEqual(found["cd src && pytest -q"][0], ".github/workflows/test.yml:12")
+        self.assertEqual(found["cd src && mypy ."][0], ".github/workflows/test.yml:13")
+        self.assertEqual(sorted(found), ["cd src && mypy .", "cd src && pytest -q",
+                                         "python -m unittest discover -s tests -q", "ruff check notesvc"])
+
     def test_comments_setup_flags_and_the_jobs_own_working_directory(self):
         repo = Repo(self)
         repo.write(".github/workflows/ci.yml",
@@ -304,6 +320,27 @@ class ListTest(unittest.TestCase):
         self.assertEqual(found["uv run pytest"], ("CONTRIBUTING.md:4", "test", "local"))
         self.assertEqual(found["cd web && npm test"], ("CONTRIBUTING.md:10", "test", "local"))
         self.assertEqual(sorted(found), ["cd web && npm test", "uv run pytest"])
+
+    def test_a_security_scanner_is_suggested_only_when_no_check_runs_one(self):  # S1
+        def hint(repo):
+            done = discover(repo)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            return [line for line in done.stdout.splitlines() if line.startswith("hint:")]
+
+        python, go, mixed = Repo(self), Repo(self), Repo(self)
+        for repo, files in ((python, ("app/a.py", "app/b.py")), (go, ("go.mod", "main.go")),
+                            (mixed, ("web/a.ts", "web/b.ts", "tools/c.py"))):
+            for name in files:
+                repo.write(name)
+            repo.commit("code")
+        self.assertIn("bandit", " ".join(hint(python)))
+        self.assertIn("gosec", " ".join(hint(go)))
+        self.assertIn("semgrep", " ".join(hint(mixed)))
+        python.write(".github/workflows/ci.yml", "jobs:\n  a:\n    steps:\n      - run: bandit -r src -q\n")
+        self.assertEqual(hint(python), [])
+        go.write(".pre-commit-config.yaml", "repos:\n  - repo: https://github.com/securego/gosec\n"
+                                            "    hooks:\n      - id: gosec\n")
+        self.assertEqual(hint(go), [])
 
     def test_nothing_runs_without_run(self):
         repo = Repo(self)

@@ -140,9 +140,35 @@ def nested(block, index, col):
     return lines
 
 
+def chained(text):
+    """The commands of the shell line TEXT, split at each `&&` and `;` outside quotes and parentheses; splitting
+    stops at a comment."""
+    parts, start, quote, depth, index = [], 0, None, 0, 0
+    while index < len(text):
+        char = text[index]
+        if char == "\\" and quote != "'":
+            index += 2
+            continue
+        if quote:
+            quote = None if char == quote else quote
+        elif char in "'\"":
+            quote = char
+        elif char == "#" and (index == 0 or text[index - 1].isspace()):
+            break
+        elif char in "()":
+            depth = max(depth + (1 if char == "(" else -1), 0)
+        elif depth == 0 and (char == ";" or text.startswith("&&", index)):
+            parts.append(text[start:index])
+            start = index + (1 if char == ";" else 2)
+            index = start
+            continue
+        index += 1
+    return [part.strip() for part in parts + [text[start:]] if part.strip()]
+
+
 def shell_commands(lines, prefix=""):
-    """[(number, command)] of the shell LINES worth checking: `\\` continuations joined, setup lines dropped, and
-    each lone `cd DIR` carried into the commands after it."""
+    """[(number, command)] of the shell LINES worth checking: `\\` continuations joined, setup commands dropped,
+    also from a chain (`pip install ruff && ruff check .`), and each `cd DIR` carried into the commands after it."""
     commands, held = [], None
     for number, text in lines:
         text = text.strip()
@@ -151,11 +177,16 @@ def shell_commands(lines, prefix=""):
         held = (number, text[:-1].rstrip()) if text.endswith("\\") else None
         if held or not text or text.startswith("#"):
             continue
-        cd = re.match(r"cd\s+(\S+)\s*$", text)
-        if cd:
-            prefix += "cd %s && " % cd.group(1)
-        elif not SETUP.match(text):
-            commands.append((number, prefix + text))
+        start, kept = prefix, []
+        for part in chained(text):
+            cd = re.match(r"cd\s+(\S+)$", part)
+            prefix += "cd %s && " % cd.group(1) if cd else ""
+            if cd and not kept:
+                start = prefix
+            elif cd or not SETUP.match(part):
+                kept.append(part)
+        if kept:
+            commands.append((number, start + " && ".join(kept)))
     return commands
 
 

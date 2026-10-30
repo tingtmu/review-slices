@@ -146,6 +146,14 @@ class InstallTest(unittest.TestCase):
         repo.setup("install", "--apply")
         self.assertIn("uncommitted", repo.setup("doctor").stdout)
 
+    def test_doctor_lists_the_agent_hook_once_the_settings_run_it(self):  # #20
+        repo = Repo(self, rules=None, guard=False)
+        repo.write("REVIEW.md", "```review-slices\ntest: true\n```\n")
+        repo.setup("install", "--apply")
+        self.assertNotIn(".githooks/agent_hook.py", repo.setup("doctor").stdout)
+        self.assertEqual(repo.setup("install", "--apply", "--agent-hooks").returncode, 0)
+        self.assertRegex(repo.setup("doctor").stdout, r"uncommitted +\.githooks/agent_hook\.py")
+
     def test_install_twice_changes_nothing_the_second_time(self):
         self.assertEqual(self.repo.setup("install", "--apply").returncode, 0)
         self.assertIn("nothing to change", self.repo.setup("install").stdout)

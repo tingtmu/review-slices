@@ -403,7 +403,7 @@ def cmd_upgrade(args):
     return 0
 
 
-def tree_lines(root, bootstrap, base_has_guard):
+def tree_lines(root, bootstrap, base_has_guard, agent_hook):
     committed = (("REVIEW.md", "the rules"), ("docs/INCIDENTS.md", "incidents and their plugs"),
                  (guard.GUARD_PATH, "the guard; " + ("the base branch's copy judges pushes" if base_has_guard
                                                      else "the base branch has none yet, so this checkout's runs")),
@@ -411,6 +411,8 @@ def tree_lines(root, bootstrap, base_has_guard):
                  (guard.SUITE_PATH, "run-suite: runs the suite and writes the pass stamp"))
     if wants_scanner(root):
         committed += ((guard.SCANNER_PATH, "the secret scan the guard runs (REVIEW.md says secrets:)"),)
+    if agent_hook:
+        committed += ((AGENT_HOOK_PATH, "the agent hook the settings files run"),)
     lines = []
     for path, what in committed:
         tracked = git("ls-files", "--error-unmatch", "--", path, check=False) is not None
@@ -504,7 +506,7 @@ def cmd_doctor(_args):
     print("agent hook: %s" % (", ".join(agent) if agent else "not set up (install --agent-hooks adds it)"))
     print("installed:")
     base_has_guard = bool(tip) and guard.git_raw("show", "%s:%s" % (tip, guard.GUARD_PATH)) is not None
-    print("\n".join(tree_lines(root, bootstrap, base_has_guard)))
+    print("\n".join(tree_lines(root, bootstrap, base_has_guard, bool(agent))))
     for note in notes:
         print("note: " + note)
     for problem in problems:

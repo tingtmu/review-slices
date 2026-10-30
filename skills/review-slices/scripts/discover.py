@@ -4,7 +4,8 @@
 Run it from inside the target repo. It stays in the skill and is never copied into a repo.
 
     discover.py                        list each candidate: where it was found, its kind, the command, and whether
-                                       it runs locally or is a remote check (and why); runs nothing
+                                       it runs locally or is a remote check (and why), and a hint when none
+                                       of them runs a security scanner; runs nothing
     discover.py --run [--timeout S]    on a clean tree, run each local candidate from the repo root (S seconds each,
                                        default 600), then print the `test:` lines to add, the checks already red,
                                        the checks that write files, and the remote checks for REVIEW.md
@@ -28,6 +29,16 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_TIMEOUT = 600
+# Security scanners (SAST). One named in any file a candidate came from (a CI step, a pre-commit hook, a Makefile
+# recipe) counts as the repo already running one.
+SAST = re.compile(r"(?<![\w-])(bandit|semgrep|opengrep|gosec|brakeman|codeql|bearer|njsscan|flawfinder|"
+                  r"eslint-plugin-security)(?![\w-])", re.I)
+# A common scanner for the language most tracked code files are in (the guard's vendored copies aside); semgrep for
+# any other.
+SAST_TOOLS = {".py": "bandit (`bandit -r <package> -q`)", ".go": "gosec (`gosec ./...`)"}
+SEMGREP = "semgrep with rules kept in the repo (`semgrep scan --config <rules file> --error`)"
+CODE = (".py", ".go", ".js", ".jsx", ".ts", ".tsx", ".rb", ".java", ".kt", ".rs", ".c", ".cc", ".cpp", ".cs", ".php",
+        ".swift")
 
 
 def load_sources():
@@ -53,6 +64,20 @@ def print_candidates(found):
     print("discover: %d candidate(s)" % len(found))
     for place, candidate in zip(places, found):
         print("  %-*s  %-6s  %s  [%s]" % (width, place, candidate.kind, candidate.command, where(candidate)))
+
+
+def sast_hint(root, found):
+    """One line suggesting a security scanner when no file a candidate came from names one; None otherwise."""
+    texts = [candidate.command for candidate in found]
+    texts += ["\n".join(text for _number, text in sources.read_lines(root, rel))
+              for rel in sorted({candidate.source for candidate in found})]
+    if any(SAST.search(text) for text in texts):
+        return None
+    counts = collections.Counter(os.path.splitext(path)[1] for path in (guard.git("ls-files", "-z") or "").split("\0")
+                                 if not path.startswith(".githooks/"))
+    tool = SAST_TOOLS.get(max(CODE, key=lambda extension: counts[extension]), SEMGREP)
+    return ("hint: no security scanner (SAST) found among these checks; %s is a common one. It is optional: add it "
+            "as a `test:` line only if the user wants one." % tool)
 
 
 def remote_checks(found):
@@ -218,10 +243,14 @@ def main(argv):
                   "\n  " + "\n  ".join(dirty[:10]), file=sys.stderr)
             return 1
         found = [candidate for source in sources.SOURCES for candidate in source(root)]
+        hint = sast_hint(root, found)
         if not found:
             print("discover: no candidate checks found; write the suite's `test:` lines by hand")
+            print(hint)
             return 0
         print_candidates(found)
+        if hint:
+            print(hint)
         if options.run:
             return cmd_run(root, found, options.timeout)
         print("\nNothing was run. Read the list, then `discover.py --run` on a clean tree tries each local one.")
