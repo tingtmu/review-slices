@@ -85,9 +85,11 @@ report, so the author can apply escalation (SKILL.md step 5) from what it says, 
 
 ```
 Report one part per lens, each with its own verdict (clean, or its review findings). Then:
-- Cannot verify from the diff: each claim or behaviour only shown output or a run could prove, and what would.
+- Cannot verify from the diff: each claim or behaviour only shown output or a run could prove and the author's
+  shown output does not, and what would.
 - Declined to judge: anything you did not review, and why.
-- For each review finding, the REVIEW.md "Failure looks like" entry it falls under (I1, I2, ...), or "none".
+- For each review finding, the REVIEW.md "Failure looks like" entry it falls under: the entry's id (I1, F1)
+  where it has one, else its text quoted; or `none`.
 If the change looks bigger or riskier than this load should take, say so at the top.
 ```
 
@@ -121,6 +123,7 @@ Review this change two ways, in order, and keep the two parts of your report apa
 
 Change: `git diff <base>..HEAD` in <repo path>; commits `git log --oneline <base>..HEAD`.
 Review level output: <paste the `level` output>. Spec: <spec path>.
+Shown output from the author: <paste the commands and summary lines>.
 1. Standards: <the Standards brief from "Check this change against the standards" through its last line>.
 2. Spec: <the Spec brief from "Check that this change does what was asked" through its last line>.
 Finish both even if the first finds a Blocker.

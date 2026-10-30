@@ -55,10 +55,12 @@ Checks that run only in CI or another remote service, outside the suite. Read th
 
 ## Failure looks like
 
-What has gone wrong here before. Reviewers check every change against this list. Each line links its incident.
+What has gone wrong here before, or would hurt most. Reviewers check every change against this list and name the
+entry a review finding falls under by its id. Each line has one: F1, F2, ... until an incident records its class,
+then that incident's, linked.
 
-- <one line per failure class, linked to its incident, e.g. ([I1](docs/INCIDENTS.md#i1-...)); delete this line
-  until the first incident>
+- <one line per failure class, e.g. `F1. A new route skips the token check`, or, once incident I1 records it,
+  `A new route skips the token check ([I1](docs/INCIDENTS.md#i1-...))`; delete this line if there is none yet>
 
 ## Repo rules for reviewers
 

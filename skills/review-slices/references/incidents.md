@@ -25,7 +25,8 @@ one, in your own work or another agent's (`<skill>` is this skill's directory, w
    bands change only by a guard release.
 4. Otherwise choose the plug in this order: a test or guard that fails on the class; else a rule in REVIEW.md's
    "Failure looks like" list. An incident stays open until its plug exists.
-5. A new failure class gets a one-line entry in REVIEW.md's "Failure looks like" list, linked to the incident.
+5. A new failure class gets a one-line entry in REVIEW.md's "Failure looks like" list, linked to the incident; an
+   `F` line of that class takes the incident's id instead.
 6. **Check the log:** `python3 <skill>/scripts/incidents.py` lists open incidents with their age, counts per slice
    and recurrences; `--check` exits 1 when a plugged incident's plug is gone (the hole is open again: reopen it),
    or when a second miss through a reduced load leaves a band of it on (step 3).
