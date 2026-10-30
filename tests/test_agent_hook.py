@@ -80,7 +80,17 @@ class AgentHookTest(unittest.TestCase):
                         "cd nosuch; rm -rf .git/review-slices",
                         # a quoted empty word keeps its place as an argument (phase review)
                         "git -C '' push --no-verify origin main",
-                        "git commit -m '' --no-verify -a"):
+                        "git commit -m '' --no-verify -a",
+                        # a quoted word made only of operator characters (final review)
+                        "git commit -m ';)' --no-verify",
+                        "git commit -m '&&(' --no-verify",
+                        "git commit -m ';' --no-verify",
+                        "git push -o '|' --no-verify",
+                        "git commit -m ')' -n",
+                        # a write by name after a `cd` the hook cannot work out (final review)
+                        'cd "$(git rev-parse --git-dir)" && rm -rf review-slices',
+                        'cd "$G" && rm -rf review-slices',
+                        'cd "$G/hooks" && tee pre-push < /dev/null'):
             with self.subTest(command=command):
                 self.assert_denied(command)
 
@@ -104,7 +114,9 @@ class AgentHookTest(unittest.TestCase):
                         "timeout 60 git push origin main",
                         "if git diff --quiet; then git push origin main; fi",
                         "cd .git && cat review-slices/suite-pass",
-                        "git commit -m 'then; fi'"):
+                        "git commit -m 'then; fi'",
+                        "git commit -m ';'",
+                        'cd "$TMPDIR" && rm -rf build'):
             with self.subTest(command=command):
                 self.assert_allowed(command)
 
@@ -225,7 +237,8 @@ class CdTest(unittest.TestCase):
             "cd %s | true; git commit -a --amend --no-edit",
             "false && cd %s && true; git commit -a --amend --no-edit",
             "if false; then cd %s; fi; git commit -a --amend --no-edit",
-            "case x in y) cd %s;; esac; git commit -a --amend --no-edit")] + [
+            "case x in y) cd %s;; esac; git commit -a --amend --no-edit",
+            "false && cd %s && true || git commit -a --amend --no-edit")] + [
             "cd /nonexistent/review-slices || true; git commit -a --amend --no-edit",
             "cd nosuch; git commit -a --amend --no-edit",
             "cd nosuch\ngit commit -a --amend --no-edit",
@@ -233,6 +246,13 @@ class CdTest(unittest.TestCase):
             'cd ""; git commit -a --amend --no-edit',
             "git -C '' commit -a --amend --no-edit",
             "git commit -m '' --amend -a --allow-empty-message"])
+
+    def test_a_dot_dot_after_a_symlink_is_judged_both_ways(self):
+        link = os.path.join(self.plain.path, "link")
+        os.symlink(os.path.join(self.reviewed.path, "core"), link)
+        self.assert_decisions(self.plain.path, denied=(
+            "git -C link/.. commit -a --amend --no-edit",
+            "cd -P link/.. && git commit -a --amend --no-edit"))
 
     def test_an_amend_after_a_cd_the_hook_cannot_follow_is_denied(self):
         self.assert_decisions(self.plain.path, denied=(

@@ -53,10 +53,9 @@ are known; reviewers and the user cover them.
   Codex's `apply_patch` edits, since its hook sees shell commands only. It follows a `cd`, `pushd` or `git -C` to
   judge an amend or a write where it runs, and judges both places where the `cd` may be skipped or fail; one it
   cannot work out (a variable, `-`, a command's output) refuses an amend that could add content, but a write after
-  it is checked only by the stamp's and bootstrap's names. It does not follow `env -C`, `sudo -D`, `CDPATH` or a
-  `cd` inside a shell function. Since shlex drops quoting, a quoted word made only of operator characters
-  (`-m ';)'`) reads as operators. It runs the copy committed on the base branch, so editing the checkout's copy
-  changes nothing.
+  it is judged only by name (a `review-slices` directory, a `pre-push` file), so `rm -rf hooks` there passes. It
+  does not follow `env -C`, `sudo -D`, `CDPATH` or a `cd` inside a shell function. It runs the copy committed on the
+  base branch, so editing the checkout's copy changes nothing.
 - The hooks run Python isolated and without site (`-I -S`), so a module written beside them or a `.pth` file in a
   virtualenv never runs. They still find `python3` and `git` on PATH: a shim written into a directory already on
   it gets past them, as a fake `gitleaks` does the scan. So does a push whose command line sets `PATH` or git's

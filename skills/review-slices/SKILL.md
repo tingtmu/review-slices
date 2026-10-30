@@ -196,7 +196,8 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
 
 1. **Find the suite.** `python3 <skill>/scripts/discover.py` lists the checks the repo already has (CI files,
    package.json, Makefile, justfile, pyproject, tox, nox, pre-commit, Cargo, go.mod, CONTRIBUTING), each marked
-   local or remote with the reason; it runs nothing. With the user's go-ahead (it runs the repo's commands),
+   local or remote with the reason, and a hint naming a security scanner when none of them runs one (add it as a
+   `test:` line only if the user wants one); it runs nothing. With the user's go-ahead (it runs the repo's commands),
    `discover.py --run` on a clean tree runs each local check and prints the `test:` lines that passed, the checks
    already red (record each as an incident or a roadmap item and leave it out of the suite), the checks that
    write files (with `.gitignore` entries), and the remote checks for REVIEW.md.

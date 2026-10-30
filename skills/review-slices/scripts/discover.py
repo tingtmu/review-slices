@@ -73,9 +73,10 @@ def sast_hint(root, found):
               for rel in sorted({candidate.source for candidate in found})]
     if any(SAST.search(text) for text in texts):
         return None
-    counts = collections.Counter(os.path.splitext(path)[1] for path in (guard.git("ls-files", "-z") or "").split("\0")
-                                 if not path.startswith(".githooks/"))
-    tool = SAST_TOOLS.get(max(CODE, key=lambda extension: counts[extension]), SEMGREP)
+    tracked = (guard.git("-C", root, "ls-files", "-z") or "").split("\0")
+    counts = collections.Counter(os.path.splitext(path)[1] for path in tracked if not path.startswith(".githooks/"))
+    language = max(CODE, key=lambda extension: counts[extension])
+    tool = SAST_TOOLS.get(language, SEMGREP) if counts[language] else SEMGREP
     return ("hint: no security scanner (SAST) found among these checks; %s is a common one. It is optional: add it "
             "as a `test:` line only if the user wants one." % tool)
 

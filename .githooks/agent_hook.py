@@ -57,6 +57,8 @@ CONFIG_READS = {"--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list"
 CONFIG_WRITES = {"--unset", "--unset-all", "--add", "--replace-all", "--remove-section", "--rename-section", "-e",
                  "--edit", "set", "unset", "rename-section", "remove-section", "edit"}
 SKIPS_HOOKS = re.compile(r"(^|\s)(--no-verify|-n)(\s|$)")
+# A quoted word made only of operator characters (`-m ';)'`), which shlex hands back as if it were unquoted.
+QUOTED_OPERATORS = re.compile(r"""(['"])[();<>|&]+\1""")
 FALLBACK = (re.compile(r"\bgit\b[^\n;&|]*\b(push|commit)\b[^\n;&|]*--no-verify"),
             re.compile(r"(>|\btee\b|\brm\b|\bmv\b|\bcp\b)[^\n;&|]*review-slices/(suite-pass|bootstrap\.py)"))
 
@@ -186,12 +188,14 @@ def commit_parts(args):
 
 
 def moved(places, target):
-    """PLACES after changing directory to TARGET, with None for a place that cannot be worked out."""
+    """PLACES after changing directory to TARGET, with None for a place that cannot be worked out. A `..` after a
+    symlink leads to two places, as a shell's `cd` reads it and as `git -C` or `cd -P` does."""
     target = os.path.expanduser(target)
     if target.startswith("~") or re.search(r"[$`*?[]", target):
         return {None}
-    return {os.path.normpath(os.path.join(place or "", target)) if place or os.path.isabs(target) else None
-            for place in places}
+    joined = [os.path.join(place or "", target) if place or os.path.isabs(target) else None for place in places]
+    return ({os.path.normpath(path) for path in joined if path} | {os.path.realpath(path) for path in joined if path}
+            | ({None} if None in joined else set()))
 
 
 def cd_places(words, places):
@@ -264,9 +268,14 @@ def git_reason(words, places):
 
 
 def protected(target, guarded, cwd):
+    """Whether writing TARGET from CWD writes what the guard keeps; CWD None after a `cd` the hook cannot work out,
+    where a relative TARGET is judged by its names."""
     if "review-slices/suite-pass" in target or "review-slices/bootstrap.py" in target:
         return True
-    full = os.path.normpath(os.path.join(cwd, os.path.expanduser(target)))
+    full = os.path.normpath(os.path.join(cwd or "", os.path.expanduser(target)))
+    if cwd is None and not os.path.isabs(full):
+        names = full.split(os.sep)
+        return "review-slices" in names or names[-1] == "pre-push"
     return any(full == path or full.startswith(path + os.sep) or full.startswith(path + ".") for path in guarded)
 
 
@@ -282,7 +291,7 @@ def words_reason(words, guarded, places):
     writes = name in WRITERS and (name != "sed" or any(word.startswith(("-i", "--in-place")) for word in words))
     targets = [words[index + 1] for index in range(len(words) - 1) if words[index] in REDIRECTS]
     targets += words[1:] if writes else []
-    if any(protected(target, guarded, place or "") for target in targets for place in places):
+    if any(protected(target, guarded, place) for target in targets for place in places):
         return "this writes the review-slices pass stamps, bootstrap or push hook"
     return None
 
@@ -298,8 +307,16 @@ def settled(item, before, then, after, nested):
 
 
 def command_reason(command, guarded, places):
-    """Why COMMAND, started in any of PLACES, takes an override, or None. A `cd` moves the commands after it; where
-    the shell may or may not have moved, they are judged in both places, and a subshell's `cd` ends with it."""
+    """Why COMMAND, started in any of PLACES, takes an override, or None. A quoted word of operator characters may be
+    an argument or a separator to shlex, so a command with one is judged both ways."""
+    plain = QUOTED_OPERATORS.sub("x", command)
+    return list_reason(command, guarded, places) or (
+        list_reason(plain, guarded, places) if plain != command else None)
+
+
+def list_reason(command, guarded, places):
+    """command_reason for one reading of COMMAND. A `cd` moves the commands after it; where the shell may or may not
+    have moved, they are judged in both places, and a subshell's `cd` ends with it."""
     try:
         found = segments(command)
     except ValueError:
@@ -314,6 +331,8 @@ def command_reason(command, guarded, places):
         elif item in (";", ";;", "&"):
             places = places | start if loose else places
             start, loose = places, False
+        elif item == "||" and loose:  # what follows runs when a command before the `cd` failed, too
+            places = places | start
         elif not isinstance(item, str):
             after = cd_places(item, places)
             if after is None:

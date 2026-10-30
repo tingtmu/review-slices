@@ -168,7 +168,8 @@ def chained(text):
 
 def shell_commands(lines, prefix=""):
     """[(number, command)] of the shell LINES worth checking: `\\` continuations joined, setup commands dropped,
-    also from a chain (`pip install ruff && ruff check .`), and each `cd DIR` carried into the commands after it."""
+    also from the start of a chain (`pip install ruff && ruff check .`), and each `cd DIR` carried into the commands
+    after it."""
     commands, held = [], None
     for number, text in lines:
         text = text.strip()
@@ -183,8 +184,8 @@ def shell_commands(lines, prefix=""):
             prefix += "cd %s && " % cd.group(1) if cd else ""
             if cd and not kept:
                 start = prefix
-            elif cd or not SETUP.match(part):
-                kept.append(part)
+            elif kept or not SETUP.match(part):
+                kept.append(part)  # from the first check on, the chain stays whole (`go mod tidy && git diff ...`)
         if kept:
             commands.append((number, start + " && ".join(kept)))
     return commands
