@@ -76,7 +76,11 @@ class AgentHookTest(unittest.TestCase):
                         "echo x >& .git/review-slices/suite-pass",
                         # a `cd` before a write (#16)
                         "cd .git/hooks && tee pre-push < /dev/null",
-                        "cd .git && rm -rf review-slices"):
+                        "cd .git && rm -rf review-slices",
+                        "cd nosuch; rm -rf .git/review-slices",
+                        # a quoted empty word keeps its place as an argument (phase review)
+                        "git -C '' push --no-verify origin main",
+                        "git commit -m '' --no-verify -a"):
             with self.subTest(command=command):
                 self.assert_denied(command)
 
@@ -210,7 +214,8 @@ class CdTest(unittest.TestCase):
             "cd %s && git commit -a --amend --no-edit",
             "cd %s; git commit -a --amend --no-edit",
             "git -C %s commit -a --amend --no-edit",
-            "(cd %s && git commit -a --amend --no-edit)")])
+            "(cd %s && git commit -a --amend --no-edit)",
+            "git status && cd %s && git commit -a --amend --no-edit")])
 
     def test_where_the_shell_may_not_have_moved_both_repos_are_judged(self):
         plain = self.plain.path
@@ -218,8 +223,16 @@ class CdTest(unittest.TestCase):
             "(cd %s); git commit -a --amend --no-edit",
             "cd %s || true; git commit -a --amend --no-edit",
             "cd %s | true; git commit -a --amend --no-edit",
-            "git status && cd %s && git commit -a --amend --no-edit")] + [
-            "cd /nonexistent/review-slices || true; git commit -a --amend --no-edit"])
+            "false && cd %s && true; git commit -a --amend --no-edit",
+            "if false; then cd %s; fi; git commit -a --amend --no-edit",
+            "case x in y) cd %s;; esac; git commit -a --amend --no-edit")] + [
+            "cd /nonexistent/review-slices || true; git commit -a --amend --no-edit",
+            "cd nosuch; git commit -a --amend --no-edit",
+            "cd nosuch\ngit commit -a --amend --no-edit",
+            "cd nosuch && true || true; git commit -a --amend --no-edit",
+            'cd ""; git commit -a --amend --no-edit',
+            "git -C '' commit -a --amend --no-edit",
+            "git commit -m '' --amend -a --allow-empty-message"])
 
     def test_an_amend_after_a_cd_the_hook_cannot_follow_is_denied(self):
         self.assert_decisions(self.plain.path, denied=(

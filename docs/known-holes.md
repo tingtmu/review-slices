@@ -51,9 +51,11 @@ are known; reviewers and the user cover them.
   patterns. A command built at run time (`eval`, a script file, an alias already in git config) gets past it; so
   does any agent tool it does not see, Codex until its hooks feature is on and the user trusts the hook, and
   Codex's `apply_patch` edits, since its hook sees shell commands only. It follows a `cd`, `pushd` or `git -C` to
-  judge an amend or a write where it runs; one it cannot work out (a variable, `-`, a command's output) refuses an
-  amend that could add content, but a write after it is checked only by the stamp's and bootstrap's names. It does
-  not follow `env -C` or `sudo -D`. It runs the copy committed on the base branch, so editing the checkout's copy
+  judge an amend or a write where it runs, and judges both places where the `cd` may be skipped or fail; one it
+  cannot work out (a variable, `-`, a command's output) refuses an amend that could add content, but a write after
+  it is checked only by the stamp's and bootstrap's names. It does not follow `env -C`, `sudo -D`, `CDPATH` or a
+  `cd` inside a shell function. Since shlex drops quoting, a quoted word made only of operator characters
+  (`-m ';)'`) reads as operators. It runs the copy committed on the base branch, so editing the checkout's copy
   changes nothing.
 - The hooks run Python isolated and without site (`-I -S`), so a module written beside them or a `.pth` file in a
   virtualenv never runs. They still find `python3` and `git` on PATH: a shim written into a directory already on

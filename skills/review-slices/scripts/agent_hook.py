@@ -30,10 +30,12 @@ REDIRECTS = {">", ">>", ">|", "&>", "&>>", ">&"}
 OPERATORS = sorted(SEPARATORS | REDIRECTS | {"<", "<<", "<<<", "<&", "<>"}, key=len, reverse=True)
 # Words a shell reads before the command they start (`if git ...`, `then git ...`, `{ git ...`).
 KEYWORDS = {"!", "{", "}", "if", "then", "elif", "else", "fi", "do", "done", "while", "until"}
-# Separators that, before a `cd`, start a new list of commands, and after it, run the next command only once the
-# `cd` is done. Anywhere else (a pipeline, `||`, `&`, later in a `&&` list) the next command may run elsewhere.
+# Separators that start a new list of commands, and those after which the next command runs in the shell a `cd`
+# just changed. Anywhere else (a pipeline, `||`, `&`) the next command may run where the shell was.
 LIST_STARTS = {None, ";", ";;", "&", "(", ")"}
 CD_FOLLOWS = {None, ";", ";;", "&&", ")"}
+# Words before a `cd` that make it run only on some paths through the command.
+BRANCHES = {"then", "else", "elif", "do"}
 WRITERS = {"tee", "cp", "mv", "rm", "sed", "perl", "truncate", "touch", "ln", "dd", "install", "chmod", "python",
            "python3"}
 # Commands that run another command, with their options that take a value, and how many plain arguments come
@@ -103,8 +105,8 @@ def shell_lines(command):
 
 def operators(token):
     """TOKEN as the shell operators shlex ran together into it, or [TOKEN] for a word."""
-    if token.strip("();<>|&"):
-        return [token]
+    if not token or token.strip("();<>|&"):
+        return [token]  # a word; a quoted empty one too, which still takes its place as an argument
     found = []
     while token:
         found.append(next(operator for operator in OPERATORS if token.startswith(operator)))
@@ -285,6 +287,16 @@ def words_reason(words, guarded, places):
     return None
 
 
+def settled(item, before, then, after, nested):
+    """Whether the command after the `cd` ITEM surely runs where it moved to (AFTER): the `cd` runs whenever the
+    command list does, outside any branch, the next command runs in the same shell after it, and the directory is
+    there (a failed `cd` leaves the shell where it was, and `;` or `||` goes on from there)."""
+    branch = item[0] in BRANCHES or (before == ")" and not nested)  # `then cd`, or a `case` pattern's `x)`
+    ran = before in LIST_STARTS or (before == "&&" and then == "&&")
+    done = then in CD_FOLLOWS and all(place and os.path.isdir(place) for place in after)
+    return ran and done and not branch
+
+
 def command_reason(command, guarded, places):
     """Why COMMAND, started in any of PLACES, takes an override, or None. A `cd` moves the commands after it; where
     the shell may or may not have moved, they are judged in both places, and a subshell's `cd` ends with it."""
@@ -292,21 +304,28 @@ def command_reason(command, guarded, places):
         found = segments(command)
     except ValueError:
         return "this command matches an override pattern" if any(p.search(command) for p in FALLBACK) else None
-    saved = []
+    saved, start, loose = [], places, False  # START: where this list began; LOOSE: a `cd` in it may be skipped
     for index, item in enumerate(found):
         if item == "(":
-            saved.append(places)
+            saved.append((places, start, loose))
+            start, loose = places, False
         elif item == ")":
-            places = saved.pop() if saved else places
+            places, start, loose = saved.pop() if saved else (places, start, loose)
+        elif item in (";", ";;", "&"):
+            places = places | start if loose else places
+            start, loose = places, False
         elif not isinstance(item, str):
             after = cd_places(item, places)
             if after is None:
                 reason = words_reason(item, guarded, places)
                 if reason:
                     return reason
+                continue
+            before, then = found[index - 1] if index else None, (found[index + 1:] or [None])[0]
+            if settled(item, before, then, after, saved):
+                places, loose = after, loose or before == "&&"
             else:
-                before, then = found[index - 1] if index else None, (found[index + 1:] or [None])[0]
-                places = after if before in LIST_STARTS and then in CD_FOLLOWS else places | after
+                places = places | after
     return None
 
 
