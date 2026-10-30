@@ -10,10 +10,11 @@ one, in your own work or another agent's (`<skill>` is this skill's directory, w
 3. If the slice that should have caught it was a reduced load, name it in the Slice field
    (`2 Review (merged reviewer)`, `2 Review (adversarial + conformance)`), or in the recurrence's line, and tell the
    user. Where nothing records which load reviewed it, take the one `status` would have printed for that unit (the
-   clone's review log; else `python3 <skill>/scripts/calibrate.py --list-candidates <lines> <files>` with the small
-   band's limits, which lists by sha the Important units that take one merged reviewer, or the medium band's for
-   adversarial + conformance, with `--rules` set to REVIEW.md as of that unit if it changed since); never write that
-   it was not recorded. Its plug, best first: a test for the class; else narrow that band in REVIEW.md
+   clone's review log; else `python3 <skill>/scripts/calibrate.py --list-candidates <lines> <files>`, with `--rules`
+   set to REVIEW.md as of that unit if it changed since: with the small band's limits, a listed candidate took one
+   merged reviewer, and a unit under "small critical units" tagged `code` took adversarial + conformance; with the
+   medium band's limits, a candidate not listed under the small band's took adversarial + conformance); never write
+   that it was not recorded. Its plug, best first: a test for the class; else narrow that band in REVIEW.md
    (`small: 20 lines, 2 files`), written as a `rule REVIEW.md "<line>"` plug so `--check` notices if it is loosened
    again (narrowing it further edits that plug line in the same change); else a "Failure looks like" rule. A second
    miss through the same reduced load: turn off every band that gives that load until each miss has a test plug (a
