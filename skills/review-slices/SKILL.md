@@ -130,7 +130,9 @@ Three sections live in their own files. Read each one in full when it applies:
    HEAD's, commit what is yours and ask the user about the rest; never stash, revert or commit someone else's
    edits. The suite can be slow: use a long tool timeout or run it in the background. If it fails, the fix is a
    new commit and goes through step 6's second round.
-9. **Push** only when `status` says `next: ask the user's go-ahead, then push`, and only with that go-ahead. The pre-push hook checks the stamp and the trailers in about a second.
+9. **Push** only when `status` says `next: ask the user's go-ahead, then push`, and only with that go-ahead. Ask
+   with a line `Door: one-way` (a one-way door, such as a push to the base branch) or `Door: two-way`, and the
+   reason in a few words. The pre-push hook checks the stamp and the trailers in about a second.
    If it refuses, fix what it names. `git push --no-verify`, changing the hook's git config, an edited guard or
    bootstrap and a hand-written stamp are the user's override, never yours; using one is an incident. Where the
    repo has the agent hook, it refuses these for you.
@@ -146,7 +148,7 @@ Three sections live in their own files. Read each one in full when it applies:
 End every review with: the level output, the load `status` printed beside the reviewers that ran and their lenses
 (a reduction the user allowed, step 4's version-swap exception or a step 6 second round named as such; any other
 is a rule break: [record an incident](references/incidents.md)), each review finding with its tag and what happened to it (fixed, rejected and
-why), any level notes, the shown output for the final state, and any incident recorded.
+why), any level notes, the shown output for the final state, the Door line (step 9), and any incident recorded.
 Never a secret's value.
 The guard's known holes are summarized in [references/known-holes.md](references/known-holes.md).
 

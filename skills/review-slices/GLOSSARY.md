@@ -141,8 +141,9 @@ A multi-agent decision meeting limited to disputed review findings, held only wi
 _Avoid_: verifier voting, voting panel
 
 **One-way door**:
-An action or change that cannot be cleanly undone, such as deleting data, a release tag, a persisted format or a
-live cloud action.
+An action or change that cannot be cleanly undone, such as deleting data, a push to the base branch, a release tag,
+a migration, a public contract, a persisted format or a live cloud action. A go-ahead request says which kind of
+door it opens on a `Door: one-way` or `Door: two-way` line.
 _Avoid_: irreversible change
 
 **Go-ahead**:
