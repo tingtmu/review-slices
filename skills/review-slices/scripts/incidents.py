@@ -50,18 +50,20 @@ SLICES = ("0 Shown output", "1 Offline suite", "2 Review", "3 Go-ahead", "4 Acce
 SLICE_NAMES = (("shown output",), ("offline suite", "offline tests", "offline test"), ("review",),
                ("go-ahead", "go ahead"), ("acceptance",))
 UNKNOWN_SLICE = "unknown"
-# Reduced review loads a Slice 2 miss may name, as in "2 Review (merged reviewer)"; a second miss turns them off.
+# Reduced review loads a Slice 2 miss may name, as in "2 Review (merged reviewer)"; misses from a second review
+# unit turn them off.
 MERGED, PAIR = "merged reviewer", "adversarial + conformance"
 REDUCED_LOADS = (MERGED, PAIR)
 # A load that opens a parenthesis, as SKILL.md writes it or `status` prints it, with anything after it, parentheses
 # included: "(merged reviewer)", "(one merged reviewer (small: ...))". A mention in prose is no miss.
 LOAD_NAMES = {MERGED: re.compile(r"\((?:one\s+)?merged\s+reviewers?\b", re.I),
               PAIR: re.compile(r"\(adversarial\s*(?:\+|and)\s*conformance\b", re.I)}
-# The bands each load comes from, which a second miss turns off until a test plug exists. The pair also comes from
-# the small band at Critical while REVIEW.md has a `critical code:` line.
+# The bands each load comes from, which misses from a second review unit turn off until a test plug exists. The pair
+# also comes from the small band at Critical while REVIEW.md has a `critical code:` line.
 LOAD_BANDS = {MERGED: ("small",), PAIR: ("medium",)}
-# The review unit a miss went through, after its load: "unit <sha>" (the commit that carries the unit's trailer).
-UNIT = re.compile(r"\bunit\s+`?([0-9a-f]{7,40})\b", re.I)
+# The review unit a miss went through, right after its load's parentheses: ", unit <sha>" (the commit that carries
+# the unit's trailer). A sha anywhere else names no unit.
+UNIT = re.compile(r"\s*,?\s*unit\s+`?([0-9a-f]{7,40})\b", re.I)
 STATUSES = ("open", "plugged")
 KINDS = ("defect", "process")
 REOPEN = "the hole is open again; reopen the incident"
@@ -364,7 +366,7 @@ def plug_problem(root, plug):
         return "%s cannot be read (%s)" % (plug.path, error.strerror or error)
     band = BAND_RULE.match(flat(plug.names[0])) if plug.kind == "rule" else None
     if band and (band.group(1), "off") in block_settings(text):
-        return None  # off is narrower than any band the plug names: a second miss turned it off
+        return None  # off is narrower than any band the plug names: misses from a second review unit turned it off
     if plug.kind == "rule" and flat(plug.names[0]) not in flat(text):
         return "%s does not contain %r" % (plug.path, plug.names[0])
     if band and flat(plug.names[0]) not in block_lines(text):
@@ -414,15 +416,20 @@ def misses(incident):
 
 
 def named_loads(text):
-    """[(load, unit), ...] for each reduced load TEXT names, in order, with the unit named before the next load."""
+    """[(load, unit), ...] for each reduced load TEXT names, in order, with the unit named right after it."""
     found = sorted((match.start(), load) for load in REDUCED_LOADS for match in LOAD_NAMES[load].finditer(text))
-    ends = [start for start, _load in found[1:]] + [len(text)]
-    return [(load, unit_named(text[start:end])) for (start, load), end in zip(found, ends)]
+    return [(load, unit_after(text, start)) for start, load in found]
 
 
-def unit_named(text):
-    match = UNIT.search(text)
-    return match.group(1).lower() if match else None
+def unit_after(text, start):
+    """The unit named right after the parentheses that open at START in TEXT, or None."""
+    depth = 0
+    for index in range(start, len(text)):
+        depth += {"(": 1, ")": -1}.get(text[index], 0)
+        if depth == 0:
+            match = UNIT.match(text, index + 1)
+            return match.group(1).lower() if match else None
+    return None
 
 
 def unit_count(units):
@@ -558,7 +565,7 @@ def main(argv):
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--path", help="the incident log (default: docs/INCIDENTS.md at the repo root)")
     parser.add_argument("--check", action="store_true", help="exit 1 on any problem: a plug missing or unreadable, "
-                        "or a band a second miss through a reduced load needs off")
+                        "or a band that misses from a second review unit through a reduced load need off")
     args = parser.parse_args(argv[1:])
     root = repo_root()
     try:

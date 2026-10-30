@@ -344,13 +344,14 @@ def suite_change(old, new):
     return "this change edits the suite; reviewers must confirm it is not weaker:\n" + "\n".join(lines or ["  (order)"])
 
 
-def unmatched_new_files(config, start):
+def unmatched_new_files(config, start, paths):
     """A note naming the files the open unit adds that no glob matches, when the default level is below important,
-    or None: new code is where new risk shows up, and the glob table was written for the files of its day."""
+    or None: new code is where new risk shows up, and the glob table was written for the files of its day. Only the
+    unit's own PATHS count, so a file a merge brought in from the base branch is not named."""
     if rank(config["default"]) >= rank("important"):
         return None
     added = set(split_nul(git("diff", "--diff-filter=A", *DIFF_PATHS, start))) | set(untracked_paths())
-    found = sorted(path for path in added if path_level(config, path)[1] == "no glob: default")
+    found = sorted(path for path in added & set(paths) if path_level(config, path)[1] == "no glob: default")
     if not found:
         return None
     more = " and %d more" % (len(found) - 10) if len(found) > 10 else ""
@@ -645,7 +646,7 @@ def cmd_status(args):
     mismatch = base_mismatch(working, tip_name)
     if mismatch:
         print("note: " + mismatch)
-    for note in (suite_change(config, working), unmatched_new_files(config, start)):
+    for note in (suite_change(config, working), unmatched_new_files(config, start, paths)):
         if note:
             print("note: " + note)
     print_rule_messages(config, working, (standing or start)[:12])

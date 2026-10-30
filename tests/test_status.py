@@ -142,6 +142,22 @@ class StatusTest(unittest.TestCase):
         other.write("src/new.py")
         self.assertNotIn("match no glob", other.guard("status").stdout)
 
+    def test_a_new_file_a_merge_brought_in_is_not_noted(self):  # review: someone else's file was named
+        repo = self.repo
+        repo.git("switch", "-q", "-c", "feature")
+        repo.write("src/mine.py")
+        repo.commit("mine")
+        repo.git("switch", "-q", "main")
+        repo.write("src/theirs.py")
+        repo.commit("theirs", trailer=repo.trailer("simple"))
+        repo.git("push", "-q", "--no-verify", "origin", "main")
+        repo.git("fetch", "-q")
+        repo.git("switch", "-q", "feature")
+        repo.git("merge", "-q", "--no-edit", "main")
+        out = self.status()
+        self.assertIn("take default: simple: src/mine.py; raise", out)
+        self.assertNotIn("theirs", out)
+
     def test_an_unwired_clone_is_named(self):
         repo = Repo(self)
         self.assertIn("NOT WIRED", repo.guard("status").stdout)

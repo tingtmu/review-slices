@@ -287,6 +287,21 @@ class ReportTest(unittest.TestCase):
             done = LogRepo(self, entry(1, slice_text=slice_text, recurrences=recurrences)).run("--check")
             self.assertEqual(done.returncode, int(refused), recurrences + done.stdout)
 
+    def test_a_unit_counts_only_right_after_its_load(self):  # review: a later line's unit merged two units
+        slice_text = "2 Review (merged reviewer), unit 1a2b3c4d"
+        later = "\n  - 2026-10-09, 3 Go-ahead, unit 1a2b3c4d: pushed anyway."
+        for first, recurrences in ((slice_text, "\n  - 2026-10-01, 2 Review (merged reviewer): again." + later),
+                                   ("2 Review (one merged reviewer (small band)), unit 1a2b3c4d",
+                                    "\n  - 2026-10-01, 2 Review (merged reviewer) again; the unit 1a2b3c4d test"),
+                                   ("2 Review (merged reviewer). Why: the unit 1a2b3c4d test was skipped",
+                                    "\n  - 2026-10-01, 2 Review (merged reviewer), unit 1a2b3c4d: again.")):
+            done = LogRepo(self, entry(1, slice_text=first, recurrences=recurrences)).run("--check")
+            self.assertEqual(done.returncode, 1, first + recurrences + done.stdout)
+        done = LogRepo(self, entry(1, slice_text="2 Review (one merged reviewer (small band)), unit 1a2b3c4d",
+                                   recurrences="\n  - 2026-10-01, 2 Review (merged reviewer), unit 1A2B3C4D9: again.")
+                       ).run("--check")
+        self.assertEqual(done.returncode, 0, done.stdout)
+
     def test_a_band_plug_must_be_a_line_the_guard_reads(self):  # review: a commented-out band passed the check
         plug = 'rule REVIEW.md "small: off"'
         for rules, refused in (("small: off\n", False), ("small: off  # incident I1\n", False),
