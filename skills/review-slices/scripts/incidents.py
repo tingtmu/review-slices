@@ -27,10 +27,13 @@ open incident older than 30 days is a note.
 
 A miss through a reduced review load is a Slice field at 2 Review, or a recurrence, that names the load in
 parentheses: `2 Review (merged reviewer)` (or `one merged reviewer`, as `status` prints it, with more after it),
-`2 Review (adversarial + conformance)` (or `and`). Two or more misses through one load are a problem until each
-incident they belong to is plugged with a distinct working test per miss, unless REVIEW.md's review-slices block
-turns off the bands the load comes from: `small: off` for the merged reviewer; `medium: off` for adversarial +
-conformance, and `small: off` too while the block has a `critical code:` line. Standard library only, Python 3.8+.
+`2 Review (adversarial + conformance)` (or `and`). A miss may name the review unit it went through, the commit
+that carries the unit's trailer, after the load: `2 Review (merged reviewer), unit 1a2b3c4d`. Misses that name the
+same unit count as one; a miss that names none counts alone. Misses from two or more review units through one load
+are a problem until each incident they belong to is plugged with a distinct working test per miss, unless
+REVIEW.md's review-slices block turns off the bands the load comes from: `small: off` for the merged reviewer;
+`medium: off` for adversarial + conformance, and `small: off` too while the block has a `critical code:` line.
+Standard library only, Python 3.8+.
 """
 import argparse
 import ast
@@ -57,6 +60,8 @@ LOAD_NAMES = {MERGED: re.compile(r"\((?:one\s+)?merged\s+reviewers?\b", re.I),
 # The bands each load comes from, which a second miss turns off until a test plug exists. The pair also comes from
 # the small band at Critical while REVIEW.md has a `critical code:` line.
 LOAD_BANDS = {MERGED: ("small",), PAIR: ("medium",)}
+# The review unit a miss went through, after its load: "unit <sha>" (the commit that carries the unit's trailer).
+UNIT = re.compile(r"\bunit\s+`?([0-9a-f]{7,40})\b", re.I)
 STATUSES = ("open", "plugged")
 KINDS = ("defect", "process")
 REOPEN = "the hole is open again; reopen the incident"
@@ -397,12 +402,37 @@ def has_recurrences(incident):
 
 
 def misses(incident):
-    """[load, ...]: one for each miss of INCIDENT through a reduced review load, from its Slice field at 2 Review
-    and from each recurrence that names the load in parentheses."""
+    """[(load, unit), ...]: one for each miss of INCIDENT through a reduced review load, from its Slice field at
+    2 Review and from each recurrence that names the load in parentheses; UNIT is the review unit named after it,
+    or None."""
     slice_text, recurrences = (incident.fields.get(label, "") for label in ("slice that should have caught it",
                                                                             "recurrences"))
-    found = [load for load in REDUCED_LOADS if incident.slice == SLICES[2] and LOAD_NAMES[load].search(slice_text)]
-    return found + [load for load in REDUCED_LOADS for _ in LOAD_NAMES[load].findall(recurrences)]
+    first = {}
+    for load, unit in named_loads(slice_text) if incident.slice == SLICES[2] else ():
+        first.setdefault(load, unit)
+    return list(first.items()) + named_loads(recurrences)
+
+
+def named_loads(text):
+    """[(load, unit), ...] for each reduced load TEXT names, in order, with the unit named before the next load."""
+    found = sorted((match.start(), load) for load in REDUCED_LOADS for match in LOAD_NAMES[load].finditer(text))
+    ends = [start for start, _load in found[1:]] + [len(text)]
+    return [(load, unit_named(text[start:end])) for (start, load), end in zip(found, ends)]
+
+
+def unit_named(text):
+    match = UNIT.search(text)
+    return match.group(1).lower() if match else None
+
+
+def unit_count(units):
+    """How many review units UNITS (sha or None, one per miss) are: a miss that names none counts alone, and a short
+    sha is the unit of a longer one it starts."""
+    distinct = []
+    for unit in sorted({unit for unit in units if unit}, key=len, reverse=True):
+        if not any(other.startswith(unit) for other in distinct):
+            distinct.append(unit)
+    return len(distinct) + sum(1 for unit in units if not unit)
 
 
 def tested(root, incident):
@@ -440,15 +470,17 @@ def bands_on(settings, load):
 
 
 def band_problems(root, incidents):
-    """A problem for each reduced load that two or more misses went through while one of their incidents lacks a
-    test plug for each of its misses and REVIEW.md leaves a band of that load on."""
+    """A problem for each reduced load that misses from two or more review units went through while one of their
+    incidents lacks a test plug for each of its misses and REVIEW.md leaves a band of that load on."""
     settings, error = review_settings(root)
     problems = []
     for load in REDUCED_LOADS:
-        through = [incident for incident in incidents for found in misses(incident) if found == load]
+        pairs = [(incident, unit) for incident in incidents for found, unit in misses(incident) if found == load]
+        through = [incident for incident, _unit in pairs]
         ids = list(dict.fromkeys(incident.id for incident in through))
         untested = list(dict.fromkeys(incident.id for incident in through if not tested(root, incident)))
-        missing = bands_on(settings, load) if len(through) > 1 and untested else []
+        units = unit_count([unit for _incident, unit in pairs])
+        missing = bands_on(settings, load) if units > 1 and untested else []
         if missing:
             problems.append("%d misses went through the %s load (%s) and %s has no working test plug for each, so "
                             "%s's review-slices block needs %s until each has one%s"
@@ -456,6 +488,12 @@ def band_problems(root, incidents):
                                " and ".join("`%s`" % line for line in missing),
                                " (%s cannot be read: %s)" % (RULE_FILE, error) if error else ""))
     return problems
+
+
+def miss_count(load, units):
+    """`<load> <misses>`, and the review units they came from where those are fewer."""
+    count = unit_count(units)
+    return "%s %d%s" % (load, len(units), " in %d review unit(s)" % count if count < len(units) else "")
 
 
 def print_report(where, incidents, skipped, today):
@@ -471,10 +509,10 @@ def print_report(where, incidents, skipped, today):
     print("by slice that should have caught it:")
     for name in SLICES + ((UNKNOWN_SLICE,) if counts[UNKNOWN_SLICE] else ()):
         print("  %-16s %d" % (name, counts[name]))
-    loads = collections.Counter(load for incident in incidents for load in misses(incident))
-    if loads:
+    found = [miss for incident in incidents for miss in misses(incident)]
+    if found:
         print("  misses through a reduced load, recurrences included: " + ", ".join(
-            "%s %d" % (load, loads[load]) for load in REDUCED_LOADS))
+            miss_count(load, [unit for named, unit in found if named == load]) for load in REDUCED_LOADS))
     recurring = [incident for incident in incidents if has_recurrences(incident)]
     print("recurrences (each means a weak plug):" + ("" if recurring else " none"))
     for incident in recurring:

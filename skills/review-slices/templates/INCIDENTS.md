@@ -13,11 +13,11 @@ each failure class from getting through again. Terms: the review-slices skill's 
 
 - **Date / kind / status:** <YYYY-MM-DD> · <defect or process> · <open or plugged>
 - **What happened:** <one to three sentences>
-- **Slice that should have caught it:** <slice; for Slice 2, which reviewers, or the reduced load, as in
-  `2 Review (merged reviewer)` or `2 Review (adversarial + conformance)`>. Why it did not: <the hole>
+- **Slice that should have caught it:** <slice; for Slice 2, which reviewers, or the reduced load and the unit's
+  trailer commit, as in `2 Review (merged reviewer), unit 1a2b3c4d`>. Why it did not: <the hole>
 - **Failure class:** <the general shape of the mistake>
 - **Fix:** <what repaired this instance, or "not yet">
 - **Plug:** <test / guard / rule, or "none yet">
-- **Recurrences:** <none, or ID and date each, with why the plug missed it; name a reduced load as in the Slice
-  field, and add its test to the Plug field>
+- **Recurrences:** <none, or ID and date each, with why the plug missed it; name a reduced load and its unit as
+  in the Slice field, and add its test to the Plug field>
 - **Record:** <links>

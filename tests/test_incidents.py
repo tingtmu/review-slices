@@ -268,6 +268,25 @@ class ReportTest(unittest.TestCase):
             self.assertIn("recurrences included: merged reviewer %d," % count, done.stdout)
             self.assertEqual(done.returncode, int(count > 1), done.stdout)
 
+    def test_misses_from_one_review_unit_count_once(self):  # #21: one bad review is not a second miss
+        unit = "2 Review (merged reviewer), unit %s"
+        for first, second, refused in ((unit % "1a2b3c4d", unit % "1A2B3C4D5E6F", False),
+                                       (unit % "1a2b3c4d", unit % "9f8e7d6c", True),
+                                       (unit % "1a2b3c4d", "2 Review (merged reviewer)", True),
+                                       ("2 Review (merged reviewer)", "2 Review (merged reviewer)", True)):
+            done = LogRepo(self, entry(1, slice_text=first), entry(2, slice_text=second)).run("--check")
+            self.assertEqual(done.returncode, int(refused), first + second + done.stdout)
+            self.assertEqual("merged reviewer 2 in 1 review unit(s)," in done.stdout, not refused, done.stdout)
+
+    def test_a_recurrence_names_its_own_unit(self):
+        recurrence = "\n  - 2026-10-01, 2 Review (merged reviewer), unit %s: the same class again."
+        slice_text = "2 Review (adversarial + conformance), unit 1a2b3c4d; then (merged reviewer), unit 1a2b3c4d"
+        for recurrences, refused in ((recurrence % "1a2b3c4", False), (recurrence % "abcdef12", True),
+                                     ("\n  - 2026-10-01, 2 Review (merged reviewer): no unit" + recurrence
+                                      % "1a2b3c4d", True)):
+            done = LogRepo(self, entry(1, slice_text=slice_text, recurrences=recurrences)).run("--check")
+            self.assertEqual(done.returncode, int(refused), recurrences + done.stdout)
+
     def test_a_band_plug_must_be_a_line_the_guard_reads(self):  # review: a commented-out band passed the check
         plug = 'rule REVIEW.md "small: off"'
         for rules, refused in (("small: off\n", False), ("small: off  # incident I1\n", False),

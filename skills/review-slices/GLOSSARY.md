@@ -163,8 +163,8 @@ _Avoid_: duplicate, repeat
 
 **Miss**:
 An incident, or a recurrence, whose Slice 2 review had a reduced load and named it, as in
-`2 Review (merged reviewer)`. A second miss through one load turns off every band that gives that load until each
-miss has a test plug.
+`2 Review (merged reviewer), unit 1a2b3c4d`. Misses from one review unit count once: a miss from a second unit
+through one load turns off every band that gives that load until each miss has a test plug.
 _Avoid_: slip, escape
 
 **Failure class**:
