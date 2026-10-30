@@ -90,7 +90,11 @@ class AgentHookTest(unittest.TestCase):
                         # a write by name after a `cd` the hook cannot work out (final review)
                         'cd "$(git rev-parse --git-dir)" && rm -rf review-slices',
                         'cd "$G" && rm -rf review-slices',
-                        'cd "$G/hooks" && tee pre-push < /dev/null'):
+                        'cd "$G/hooks" && tee pre-push < /dev/null',
+                        'cd "$R" && echo ok > suite-pass',
+                        'cd "$R" && cp /tmp/x bootstrap.py',
+                        'cd "$ROOT" && rm -rf .git/review-slices',
+                        'cd "$ROOT" && tee .git/hooks/pre-push < /dev/null'):
             with self.subTest(command=command):
                 self.assert_denied(command)
 
@@ -116,7 +120,8 @@ class AgentHookTest(unittest.TestCase):
                         "cd .git && cat review-slices/suite-pass",
                         "git commit -m 'then; fi'",
                         "git commit -m ';'",
-                        'cd "$TMPDIR" && rm -rf build'):
+                        'cd "$TMPDIR" && rm -rf build',
+                        'cd "$(git rev-parse --show-toplevel)" && sed -i s/a/b/ skills/review-slices/SKILL.md'):
             with self.subTest(command=command):
                 self.assert_allowed(command)
 

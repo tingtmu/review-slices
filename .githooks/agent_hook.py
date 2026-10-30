@@ -269,13 +269,17 @@ def git_reason(words, places):
 
 def protected(target, guarded, cwd):
     """Whether writing TARGET from CWD writes what the guard keeps; CWD None after a `cd` the hook cannot work out,
-    where a relative TARGET is judged by its names."""
+    where a relative TARGET is judged by the guarded layout's names (`review-slices` in a git dir, `hooks/pre-push`,
+    or a bare stamp, bootstrap or hook name)."""
     if "review-slices/suite-pass" in target or "review-slices/bootstrap.py" in target:
         return True
     full = os.path.normpath(os.path.join(cwd or "", os.path.expanduser(target)))
     if cwd is None and not os.path.isabs(full):
         names = full.split(os.sep)
-        return "review-slices" in names or names[-1] == "pre-push"
+        in_git_dir = names[0] == "review-slices" or any(
+            outer.endswith(".git") and inner == "review-slices" for outer, inner in zip(names, names[1:]))
+        return (in_git_dir or names[-2:] == ["hooks", "pre-push"]
+                or names in (["pre-push"], ["suite-pass"], ["bootstrap.py"], ["review-log"]))
     return any(full == path or full.startswith(path + os.sep) or full.startswith(path + ".") for path in guarded)
 
 

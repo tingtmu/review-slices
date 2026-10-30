@@ -53,7 +53,8 @@ are known; reviewers and the user cover them.
   Codex's `apply_patch` edits, since its hook sees shell commands only. It follows a `cd`, `pushd` or `git -C` to
   judge an amend or a write where it runs, and judges both places where the `cd` may be skipped or fail; one it
   cannot work out (a variable, `-`, a command's output) refuses an amend that could add content, but a write after
-  it is judged only by name (a `review-slices` directory, a `pre-push` file), so `rm -rf hooks` there passes. It
+  it is judged only by the names of the guarded layout (`review-slices` in a git dir, `hooks/pre-push`, a bare
+  stamp, bootstrap or hook name), so `rm -rf hooks` or `rm -rf .` there passes. It
   does not follow `env -C`, `sudo -D`, `CDPATH` or a `cd` inside a shell function. It runs the copy committed on the
   base branch, so editing the checkout's copy changes nothing.
 - The hooks run Python isolated and without site (`-I -S`), so a module written beside them or a `.pth` file in a
