@@ -118,6 +118,30 @@ class StatusTest(unittest.TestCase):
         repo.write("build/out.o", "binary\n")
         self.assertIn("again. New: build/out.o. Commit only", self.next_step())
 
+    def test_a_new_file_no_glob_matches_is_noted_and_keeps_its_level(self):
+        repo = self.repo
+        repo.write("src/admin.py")
+        repo.commit("a new module")
+        repo.write("src/draft.py")
+        out = self.status()
+        self.assertIn("level: simple", out)
+        self.assertIn("note: new file(s) match no glob and take default: simple: src/admin.py, src/draft.py; "
+                      "raise the level if they deserve it", out)
+
+    def test_an_edited_file_or_an_important_default_is_not_noted(self):
+        repo = self.repo
+        repo.write("src/old.py")
+        repo.write("notes/n.md")
+        repo.commit("an existing module")
+        repo.git("push", "-q", "--no-verify", "origin", "main")
+        repo.git("fetch", "-q")
+        repo.write("src/old.py", "edited\n")
+        self.assertNotIn("match no glob", self.status())
+        other = Repo(self, rules=RULES.replace("default: simple", "default: important"))
+        other.install()
+        other.write("src/new.py")
+        self.assertNotIn("match no glob", other.guard("status").stdout)
+
     def test_an_unwired_clone_is_named(self):
         repo = Repo(self)
         self.assertIn("NOT WIRED", repo.guard("status").stdout)

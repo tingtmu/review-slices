@@ -344,6 +344,20 @@ def suite_change(old, new):
     return "this change edits the suite; reviewers must confirm it is not weaker:\n" + "\n".join(lines or ["  (order)"])
 
 
+def unmatched_new_files(config, start):
+    """A note naming the files the open unit adds that no glob matches, when the default level is below important,
+    or None: new code is where new risk shows up, and the glob table was written for the files of its day."""
+    if rank(config["default"]) >= rank("important"):
+        return None
+    added = set(split_nul(git("diff", "--diff-filter=A", *DIFF_PATHS, start))) | set(untracked_paths())
+    found = sorted(path for path in added if path_level(config, path)[1] == "no glob: default")
+    if not found:
+        return None
+    more = " and %d more" % (len(found) - 10) if len(found) > 10 else ""
+    return "new file(s) match no glob and take default: %s: %s%s; raise the level if they deserve it" % (
+        config["default"], ", ".join(found[:10]), more)
+
+
 def vendored(judge, head, path):
     """(at, source): PATH as committed where the judging guard comes from: JUDGE, or the base branch's last commit
     with a guard if it lost it; HEAD's own copy only where the base branch never had a guard. SOURCE is None if
@@ -631,9 +645,9 @@ def cmd_status(args):
     mismatch = base_mismatch(working, tip_name)
     if mismatch:
         print("note: " + mismatch)
-    note = suite_change(config, working)
-    if note:
-        print("note: " + note)
+    for note in (suite_change(config, working), unmatched_new_files(config, start)):
+        if note:
+            print("note: " + note)
     print_rule_messages(config, working, (standing or start)[:12])
     secret, notes = secret_scan(config, base_tip()[1], "HEAD", tips) if commits else ([], [])
     print("secrets: " + ("\n  ".join(secret + notes) or ("no new commits to scan" if config.get("secrets") else
