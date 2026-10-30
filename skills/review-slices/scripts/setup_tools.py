@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""review-slices setup tools (skill version 0.9.5): install the guard in a clone, upgrade it, check the setup.
+"""review-slices setup tools (skill version 0.10.0): install the guard in a clone, upgrade it, check the setup.
 
 Run it from inside the target repo. It stays in the skill and is never copied into a repo.
 

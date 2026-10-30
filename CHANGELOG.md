@@ -3,6 +3,34 @@
 Each release of the review-slices skill, newest first. Each is tagged `vX.Y.Z`; from 0.9.2 on, each also has a
 GitHub Release with the same notes.
 
+## 0.10.0 (2026-10-30)
+
+The agent hook follows `cd`, `pushd` and `git -C` through a command before it judges an amend or a write
+([#16](https://github.com/tingtmu/review-slices/issues/16)): before, `cd <reviewed repo> && git commit -a --amend`
+passed. Where the shell may or may not have moved (a pipeline, `||`, a `cd` that may fail, one later in a `&&` list or
+in a `then`, `do` or `case` arm), both places are judged; a `cd` it cannot work out refuses an amend that could add
+content, and a write after one is judged by the guarded layout's names. Found on the way: commands after a shell keyword
+(`if`, `then`, `do`, `{`, `!`), after operators shlex runs together (`;(`, `&&(`) or around a quoted word made only of
+operator characters went unread, so `if true; then git push --no-verify; fi` passed (an I2 recurrence).
+`docs/known-holes.md` names `CDPATH`, `env -C` and a `cd` inside a shell function. `discover` drops setup only from the
+start of a chain, so `pip install ruff && ruff check notesvc` keeps its check
+([#20](https://github.com/tingtmu/review-slices/issues/20)), and prints one SAST hint (bandit, gosec or semgrep) when
+nothing names a security scanner; the REVIEW.md template gets a commented `test:` example, and `doctor` lists the agent
+hook. Some hosts load only the start of a long skill (Codex 8,000 bytes, Claude Code 5,000 tokens after compaction), so
+SKILL.md moves "A secret turns up", "Record an incident" and "Set up a repo" verbatim to `references/secrets.md`,
+`incidents.md` and `set-up.md`, says near its top how to tell it was cut short, and puts Report after step 10; a test
+keeps it under 14,000 bytes and checks every relative link. Recording an incident always names the load that missed, and
+a review finding is never an incident ([#23](https://github.com/tingtmu/review-slices/issues/23)); Set up a repo lists
+every file install copies and what to do when calibrate finds fewer than 20 commits
+([#24](https://github.com/tingtmu/review-slices/issues/24)). `status` names the open unit's new files that match no glob
+when `default:` is below important ([#17](https://github.com/tingtmu/review-slices/issues/17)); the level is unchanged.
+A reduced load's report tags each finding with a "Failure looks like" entry's id (I1, F1), its quoted text, or `none`
+([#18](https://github.com/tingtmu/review-slices/issues/18)): the template gives entries F ids, and the conformance
+reviewer gets the author's shown output. A miss names the review unit it went through (`2 Review (merged reviewer), unit
+1a2b3c4d`), and misses naming one unit count once toward turning a band off
+([#21](https://github.com/tingtmu/review-slices/issues/21)); a miss naming no unit counts alone. Step 9's go-ahead
+request and the Report carry a `Door: one-way` or `Door: two-way` line, and GLOSSARY's "One-way door" gives examples.
+
 ## 0.9.5 (2026-10-29)
 
 The `next:` line now asks for the pre-commitment line itself
