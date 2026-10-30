@@ -85,8 +85,8 @@ publish it. With `secrets: gitleaks` in REVIEW.md's block, `status`, the pre-pus
 commits a push adds with [gitleaks](https://github.com/gitleaks/gitleaks) 8.19+ (and git 2.36+, to read merge
 commits). The scanner, `.githooks/secret_scan.py`, and its `.gitleaks.toml` come from the base branch like the
 guard. Settings, attributes and `gitleaks:allow` markers cannot hide a line, only the pushed commit's committed
-`.gitleaksignore` fingerprints that name a commit apply, and a missing or failed scan refuses the push. SKILL.md's
-"A secret turns up" says how to remove one. The CI template installs a pinned, checksum-verified gitleaks.
+`.gitleaksignore` fingerprints that name a commit apply, and a missing or failed scan refuses the push. The skill's
+"A secret turns up" ([references/secrets.md](skills/review-slices/references/secrets.md)) says how to remove one. The CI template installs a pinned, checksum-verified gitleaks.
 
 To also stop a secret before it is committed, a hook of your own in `.git/hooks/pre-commit` (setup never installs
 one) can run the staged scan:
