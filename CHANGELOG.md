@@ -20,11 +20,12 @@ hook. Some hosts load only the start of a long skill (Codex 8,000 bytes, Claude 
 SKILL.md moves "A secret turns up", "Record an incident" and "Set up a repo" verbatim to `references/secrets.md`,
 `incidents.md` and `set-up.md`, says near its top how to tell it was cut short, and puts Report after step 10; a test
 keeps it under 14,000 bytes and checks every relative link. Recording an incident always names the load that missed, and
-a review finding is never an incident ([#23](https://github.com/tingtmu/review-slices/issues/23)); Set up a repo lists
-every file install copies and what to do when calibrate finds fewer than 20 commits
-([#24](https://github.com/tingtmu/review-slices/issues/24)). `status` names the open unit's new files that match no glob
-when `default:` is below important ([#17](https://github.com/tingtmu/review-slices/issues/17)); the level is unchanged.
-A reduced load's report tags each finding with a "Failure looks like" entry's id (I1, F1), its quoted text, or `none`
+a Blocker, Fix or Nit is never an incident (a Pre-existing finding still may be)
+([#23](https://github.com/tingtmu/review-slices/issues/23)); Set up a repo lists every file install copies and what to
+do when calibrate finds fewer than 20 commits ([#24](https://github.com/tingtmu/review-slices/issues/24)). `status`
+names the open unit's new files that match no glob when `default:` is below important
+([#17](https://github.com/tingtmu/review-slices/issues/17)); the level is unchanged. A reduced load's report tags each
+finding with a "Failure looks like" entry's id (I1, F1), its quoted text, or `none`
 ([#18](https://github.com/tingtmu/review-slices/issues/18)): the template gives entries F ids, and the conformance
 reviewer gets the author's shown output. A miss names the review unit it went through (`2 Review (merged reviewer), unit
 1a2b3c4d`), and misses naming one unit count once toward turning a band off
