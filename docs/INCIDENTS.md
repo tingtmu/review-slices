@@ -76,7 +76,9 @@ each failure class from getting through again. Terms: the skill's
   test tests/test_merges.py::MergePathsTest::test_a_dropped_change_is_counted,
   test tests/test_merges.py::MergePathsTest::test_an_octopus_merge_that_drops_a_change_is_counted,
   test tests/test_agent_hook.py::AgentHookTest::test_overrides_are_denied,
-  test tests/test_agent_hook.py::AmendTest::test_staging_and_amending_in_one_command_is_denied
+  test tests/test_agent_hook.py::AmendTest::test_staging_and_amending_in_one_command_is_denied,
+  test tests/test_agent_hook.py::CdTest::test_an_amend_after_a_cd_into_a_reviewed_repo_is_denied,
+  test tests/test_agent_hook.py::CdTest::test_an_amend_after_a_cd_the_hook_cannot_follow_is_denied
 - **Recurrences:**
   - 2026-10-23, review finding on 0.2.0: a push to `refs/for/main` (Gerrit) went unchecked. The plug tested
     branches and tags only, the two ref kinds the fix had in mind.
@@ -87,6 +89,11 @@ each failure class from getting through again. Terms: the skill's
     on the newest git and plain commands only; the fallback is now tested directly, and the wrappers by name.
   - 2026-10-24, final review: `git add -A && git commit --amend` put unreviewed content under a trailer, because
     the agent hook read the index before the command staged anything. The plug staged the content beforehand.
+  - 2026-10-30, canary finding (#16) and S1: the agent hook judged an amend in the session's repo, not the one a
+    `cd <dir> &&` before it moved to, so an amend under a trailer passed; it also missed commands after a shell
+    keyword (`if`, `then`, `do`, `{`, `!`) or after operators shlex runs together (`;(`). The plugs tested plain
+    commands in the session's repo only; the `cd` cases are now plugs, and the keyword cases are in the overrides
+    test.
 
 ## I3. A push is measured across other people's commits
 

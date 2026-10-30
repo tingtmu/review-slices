@@ -64,7 +64,19 @@ class AgentHookTest(unittest.TestCase):
                         "echo main | xargs -n 1 git push --no-verify origin",
                         "git -c alias.p='push --no-verify' p",
                         "git config alias.p 'push --no-verify'",
-                        "sed -i 's/a/b/' .git/review-slices/suite-pass"):
+                        "sed -i 's/a/b/' .git/review-slices/suite-pass",
+                        # shell keywords before the command, and operators shlex runs together (S1)
+                        "if true; then git push --no-verify; fi",
+                        "{ git push --no-verify; }",
+                        "! git push --no-verify",
+                        "for x in a; do git push --no-verify; done",
+                        "until git push --no-verify; do :; done",
+                        "true;(git push --no-verify)",
+                        "true&&(git push --no-verify)",
+                        "echo x >& .git/review-slices/suite-pass",
+                        # a `cd` before a write (#16)
+                        "cd .git/hooks && tee pre-push < /dev/null",
+                        "cd .git && rm -rf review-slices"):
             with self.subTest(command=command):
                 self.assert_denied(command)
 
@@ -85,7 +97,10 @@ class AgentHookTest(unittest.TestCase):
                         "git config core.hooksPath",
                         "git config alias.st status",
                         "sed -n 1p .git/review-slices/suite-pass",
-                        "timeout 60 git push origin main"):
+                        "timeout 60 git push origin main",
+                        "if git diff --quiet; then git push origin main; fi",
+                        "cd .git && cat review-slices/suite-pass",
+                        "git commit -m 'then; fi'"):
             with self.subTest(command=command):
                 self.assert_allowed(command)
 
@@ -141,6 +156,81 @@ class AmendTest(unittest.TestCase):
         self.repo.write("src/c.py")
         self.repo.git("add", "src/c.py")
         self.assertIsNone(self.decide("git commit --amend --no-edit"))
+
+
+class CdTest(unittest.TestCase):
+    """#16: an amend is judged in the repo a `cd` before it moved to, not the session's repo."""
+
+    def setUp(self):
+        self.plain = Repo(self)
+        self.plain.install()
+        self.plain.commit("not reviewed yet")
+        self.reviewed = Repo(self)
+        self.reviewed.install()
+        self.reviewed.write("core/a.py")
+        self.reviewed.commit("reviewed", trailer=self.reviewed.trailer("critical"))
+
+    def decide(self, command, cwd):
+        payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}, "cwd": cwd})
+        done = subprocess.run((sys.executable, AGENT_HOOK), input=payload, capture_output=True, text=True,
+                              cwd=cwd, env=ENV)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stderr, "")
+        return done.stdout.strip() or None
+
+    def assert_decisions(self, cwd, denied=(), allowed=()):
+        for command in denied:
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.decide(command, cwd), "not blocked")
+        for command in allowed:
+            with self.subTest(command=command):
+                self.assertIsNone(self.decide(command, cwd), "blocked")
+
+    def test_an_amend_after_a_cd_into_a_reviewed_repo_is_denied(self):
+        reviewed = self.reviewed.path
+        worktree = os.path.join(self.reviewed.tmp, "worktree")
+        self.reviewed.git("worktree", "add", "-q", "--detach", worktree, "HEAD")
+        self.assert_decisions(self.plain.path, denied=[command % {"r": reviewed} for command in (
+            "git -C %(r)s commit -a --amend --no-edit",
+            "cd %(r)s && git commit -a --amend --no-edit",
+            "cd '%(r)s'; git commit -a --amend --no-edit",
+            "cd %(r)s\ngit commit -a --amend --no-edit",
+            "(cd %(r)s && git commit -a --amend --no-edit)",
+            "cd -- %(r)s && git add -A && git commit --amend --no-edit",
+            "cd %(r)s/core && git commit -a --amend --no-edit",
+            "bash -c 'cd %(r)s && git commit -a --amend --no-edit'",
+            "if cd %(r)s; then git commit -a --amend --no-edit; fi",
+            "pushd %(r)s && git commit -a --amend --no-edit")] + [
+            "cd %s && git commit -a --amend --no-edit" % os.path.relpath(reviewed, self.plain.path),
+            "cd %s && git commit -a --amend --no-edit" % worktree])
+
+    def test_an_amend_after_a_cd_out_of_a_reviewed_repo_is_allowed(self):
+        plain = self.plain.path
+        self.assert_decisions(self.reviewed.path, allowed=[command % plain for command in (
+            "cd %s && git commit -a --amend --no-edit",
+            "cd %s; git commit -a --amend --no-edit",
+            "git -C %s commit -a --amend --no-edit",
+            "(cd %s && git commit -a --amend --no-edit)")])
+
+    def test_where_the_shell_may_not_have_moved_both_repos_are_judged(self):
+        plain = self.plain.path
+        self.assert_decisions(self.reviewed.path, denied=[command % plain for command in (
+            "(cd %s); git commit -a --amend --no-edit",
+            "cd %s || true; git commit -a --amend --no-edit",
+            "cd %s | true; git commit -a --amend --no-edit",
+            "git status && cd %s && git commit -a --amend --no-edit")] + [
+            "cd /nonexistent/review-slices || true; git commit -a --amend --no-edit"])
+
+    def test_an_amend_after_a_cd_the_hook_cannot_follow_is_denied(self):
+        self.assert_decisions(self.plain.path, denied=(
+            'cd "$REPO" && git commit -a --amend --no-edit',
+            "cd - && git commit -a --amend --no-edit",
+            "cd $(git rev-parse --show-toplevel) && git commit -a --amend --no-edit",
+            "popd && git commit -a --amend --no-edit",
+            'git -C "$REPO" commit -a --amend --no-edit'), allowed=(
+            'cd "$REPO" && git commit --amend --only --no-edit',
+            'cd "$REPO" && git status',
+            'cd "$REPO" && git commit -m new'))
 
 
 class SettingsTest(unittest.TestCase):

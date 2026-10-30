@@ -25,7 +25,15 @@ import sys
 
 PROTECTED_KEY = re.compile(r"^(hook\.review-slices(\..*)?|review-slices\..*|core\.hookspath)$", re.I)
 SEPARATORS = {";", "&&", "||", "|", "&", "|&", "(", ")", ";;"}
-REDIRECTS = {">", ">>", ">|", "&>", "&>>"}
+REDIRECTS = {">", ">>", ">|", "&>", "&>>", ">&"}
+# The operators shlex can run together into one token (`;(` is `;` then `(`), longest first.
+OPERATORS = sorted(SEPARATORS | REDIRECTS | {"<", "<<", "<<<", "<&", "<>"}, key=len, reverse=True)
+# Words a shell reads before the command they start (`if git ...`, `then git ...`, `{ git ...`).
+KEYWORDS = {"!", "{", "}", "if", "then", "elif", "else", "fi", "do", "done", "while", "until"}
+# Separators that, before a `cd`, start a new list of commands, and after it, run the next command only once the
+# `cd` is done. Anywhere else (a pipeline, `||`, `&`, later in a `&&` list) the next command may run elsewhere.
+LIST_STARTS = {None, ";", ";;", "&", "(", ")"}
+CD_FOLLOWS = {None, ";", ";;", "&&", ")"}
 WRITERS = {"tee", "cp", "mv", "rm", "sed", "perl", "truncate", "touch", "ln", "dd", "install", "chmod", "python",
            "python3"}
 # Commands that run another command, with their options that take a value, and how many plain arguments come
@@ -52,7 +60,10 @@ FALLBACK = (re.compile(r"\bgit\b[^\n;&|]*\b(push|commit)\b[^\n;&|]*--no-verify")
 
 
 def git(cwd, *args):
-    done = subprocess.run(("git",) + args, capture_output=True, text=True, cwd=cwd)
+    try:
+        done = subprocess.run(("git",) + args, capture_output=True, text=True, cwd=cwd)
+    except OSError:  # CWD is missing or not a directory, so no repo is there
+        return None
     return done.stdout.strip() if done.returncode == 0 else None
 
 
@@ -90,26 +101,37 @@ def shell_lines(command):
     return "".join(out)
 
 
+def operators(token):
+    """TOKEN as the shell operators shlex ran together into it, or [TOKEN] for a word."""
+    if token.strip("();<>|&"):
+        return [token]
+    found = []
+    while token:
+        found.append(next(operator for operator in OPERATORS if token.startswith(operator)))
+        token = token[len(found[-1]):]
+    return found
+
+
 def segments(command):
-    """The simple commands in COMMAND, each a list of words."""
+    """COMMAND as its simple commands, each a list of words, with the separators between them as strings."""
     lexer = shlex.shlex(shell_lines(command.replace("\\\n", " ")), posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     found, current = [], []
-    for token in lexer:
+    for token in (operator for word in lexer for operator in operators(word)):
         if token in SEPARATORS:
-            found, current = found + [current] if current else found, []
+            found, current = found + ([current] if current else []) + [token], []
         else:
             current = current + [token]
     return found + [current] if current else found
 
 
 def command_words(tokens):
-    """TOKENS without leading variable assignments and the wrappers that run the real command (env, sudo, timeout,
-    xargs and the like), with their options."""
+    """TOKENS without leading variable assignments, shell keywords and the wrappers that run the real command (env,
+    sudo, timeout, xargs and the like), with their options."""
     index = 0
     while index < len(tokens):
         name = os.path.basename(tokens[index])
-        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[index]):
+        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[index]) or tokens[index] in KEYWORDS:
             index += 1
             continue
         if name not in WRAPPERS:
@@ -161,14 +183,38 @@ def commit_parts(args):
     return flags, paths
 
 
-def amend_reason(flags, paths, cwd):
-    """On a commit that carries a review trailer, only a message amend (`--only` with no paths) is allowed: the same
-    command line may stage new content first (`git add -A && git commit --amend`), so the index proves nothing."""
-    if "--amend" not in flags:
+def moved(places, target):
+    """PLACES after changing directory to TARGET, with None for a place that cannot be worked out."""
+    target = os.path.expanduser(target)
+    if target.startswith("~") or re.search(r"[$`*?[]", target):
+        return {None}
+    return {os.path.normpath(os.path.join(place or "", target)) if place or os.path.isabs(target) else None
+            for place in places}
+
+
+def cd_places(words, places):
+    """Where the `cd` (or `pushd`, `popd`) in WORDS leaves the shell from any of PLACES; None if WORDS is no cd."""
+    words = command_words(words)
+    if not words or words[0] not in ("cd", "pushd", "popd"):
         return None
-    message_only = flags & {"-o", "--only"} and not paths and not flags & {"-a", "--all", "-i", "--include"}
-    trailer = git(cwd, "log", "-1", "--no-show-signature", "--format=%(trailers:key=Review,valueonly)", "HEAD")
-    if trailer and not message_only:
+    args = [word for word in words[1:] if word != "--" and not re.match(r"-[LPe@]+$", word)]
+    if words[0] == "popd" or (words[0] == "pushd" and not args) or args[:1] and args[0][:1] in ("-", "+"):
+        return {None}  # the directory stack or $OLDPWD
+    return moved(places, args[0] if args else "~")
+
+
+def amend_reason(flags, paths, place):
+    """On a commit that carries a review trailer, only a message amend (`--only` with no paths) is allowed: the same
+    command line may stage new content first (`git add -A && git commit --amend`), so the index proves nothing.
+    PLACE is the directory the amend runs in, None when a `cd` before it cannot be worked out."""
+    if "--amend" not in flags or (flags & {"-o", "--only"} and not paths
+                                  and not flags & {"-a", "--all", "-i", "--include"}):
+        return None
+    if place is None:
+        return ("this amend runs in a directory the hook cannot work out (a `cd` to a variable, `-` or a command's "
+                "output), so it could put new content under a review trailer; name the directory, or use `git -C`")
+    trailer = git(place, "log", "-1", "--no-show-signature", "--format=%(trailers:key=Review,valueonly)", "HEAD")
+    if trailer:
         return ("this amend could put new content under a review trailer that covers other content; add a new "
                 "commit, or amend only the message with `git commit --amend --only`")
     return None
@@ -196,19 +242,20 @@ def config_reason(args):
     return setting_reason(key, " ".join(plain[1:])) if key else None
 
 
-def git_reason(words, cwd):
+def git_reason(words, places):
     settings, where, sub, args = git_parts(words)
     reasons = [setting_reason(key, value) for key, value in settings]
     if any(reasons):
         return next(reason for reason in reasons if reason)
-    cwd = os.path.join(cwd, where) if where else cwd
+    places = moved(places, where) if where else places
     if sub == "push" and "--no-verify" in args:
         return "`git push --no-verify` skips the review-slices guard"
     if sub == "commit":
         flags, paths = commit_parts(args)
         if flags & {"--no-verify", "-n"}:
             return "`git commit --no-verify` skips the repo's commit hooks"
-        return amend_reason(flags, paths, cwd)
+        return next((reason for reason in (amend_reason(flags, paths, place) for place in sorted(places, key=str))
+                     if reason), None)
     if sub == "config":
         return config_reason(args)
     return None
@@ -221,29 +268,46 @@ def protected(target, guarded, cwd):
     return any(full == path or full.startswith(path + os.sep) or full.startswith(path + ".") for path in guarded)
 
 
-def words_reason(words, guarded, cwd):
+def words_reason(words, guarded, places):
     words = command_words(words)
     if not words:
         return None
     name = os.path.basename(words[0])
     if name in SHELLS and len(words) > 2 and words[1] in ("-c", "-lc", "-ic"):
-        return command_reason(words[2], guarded, cwd)
+        return command_reason(words[2], guarded, places)
     if name == "git":
-        return git_reason(words, cwd)
+        return git_reason(words, places)
     writes = name in WRITERS and (name != "sed" or any(word.startswith(("-i", "--in-place")) for word in words))
     targets = [words[index + 1] for index in range(len(words) - 1) if words[index] in REDIRECTS]
     targets += words[1:] if writes else []
-    if any(protected(target, guarded, cwd) for target in targets):
+    if any(protected(target, guarded, place or "") for target in targets for place in places):
         return "this writes the review-slices pass stamps, bootstrap or push hook"
     return None
 
 
-def command_reason(command, guarded, cwd):
+def command_reason(command, guarded, places):
+    """Why COMMAND, started in any of PLACES, takes an override, or None. A `cd` moves the commands after it; where
+    the shell may or may not have moved, they are judged in both places, and a subshell's `cd` ends with it."""
     try:
         found = segments(command)
     except ValueError:
         return "this command matches an override pattern" if any(p.search(command) for p in FALLBACK) else None
-    return next((reason for reason in (words_reason(words, guarded, cwd) for words in found) if reason), None)
+    saved = []
+    for index, item in enumerate(found):
+        if item == "(":
+            saved.append(places)
+        elif item == ")":
+            places = saved.pop() if saved else places
+        elif not isinstance(item, str):
+            after = cd_places(item, places)
+            if after is None:
+                reason = words_reason(item, guarded, places)
+                if reason:
+                    return reason
+            else:
+                before, then = found[index - 1] if index else None, (found[index + 1:] or [None])[0]
+                places = after if before in LIST_STARTS and then in CD_FOLLOWS else places | after
+    return None
 
 
 def guarded_paths(common, cwd):
@@ -269,7 +333,7 @@ def reason_for(payload):
     if isinstance(command, list):
         command = command[2] if len(command) > 2 and command[1] in ("-c", "-lc") else " ".join(map(shlex.quote,
                                                                                                     command))
-    return command_reason(command, guarded, cwd) if isinstance(command, str) else None
+    return command_reason(command, guarded, {cwd}) if isinstance(command, str) else None
 
 
 def main():
