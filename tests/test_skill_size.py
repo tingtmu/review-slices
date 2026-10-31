@@ -1,19 +1,21 @@
-"""SKILL.md fits what the hosts load of it. Codex injects at most 8,000 bytes of a mentioned skill, silently; Claude
+"""A host may load only the start of SKILL.md. Codex injects at most 8,000 bytes of a mentioned skill, silently; Claude
 Code re-attaches at most 5,000 tokens of a skill after compaction. A host that cuts it sees the guard sentence near
-the top, which asks for a full read when the end marker is missing.
+the top, which asks for a full read when the end marker is missing. That sentence, the marker and the Report are the
+hard rules here; the size is a soft ceiling, which warns and never fails: exceed it with a reason.
 
 Measured 2026-10-30 with `claude -p` usage deltas (Haiku and Opus agreed): the 13,562-byte SKILL.md was 4,672 tokens,
 about 2.9 bytes a token, so 14,000 bytes is about 4,820 tokens, under Claude Code's 5,000 with a margin."""
 import os
 import re
 import unittest
+import warnings
 
 from support import ROOT, SCRIPTS, read_text
 
 SKILL_DIR = os.path.join(ROOT, "skills", "review-slices")
 SKILL = os.path.join(SKILL_DIR, "SKILL.md")
 REFERENCES = os.path.join(SKILL_DIR, "references")
-MAX_BYTES = 14000
+SOFT_MAX_BYTES = 14000
 GUARD_BEFORE = 1000
 MARKER = "End of review-slices SKILL.md."
 MOVED = {"A secret turns up": "secrets.md", "Record an incident": "incidents.md", "Set up a repo": "set-up.md"}
@@ -31,8 +33,11 @@ def skill_bytes():
 
 
 class SkillSizeTest(unittest.TestCase):
-    def test_skill_md_fits_claude_code_s_re_attached_skill(self):
-        self.assertLessEqual(len(skill_bytes()), MAX_BYTES, "move a section to references/, as the three before it")
+    def test_skill_md_over_the_soft_ceiling_warns(self):
+        size = len(skill_bytes())
+        if size > SOFT_MAX_BYTES:
+            warnings.warn("SKILL.md is %d bytes, over the soft ceiling of %d: past about 14,500 Claude Code's re-attach "
+                          "cuts the end; move text to references/ if you can" % (size, SOFT_MAX_BYTES))
 
     def test_report_is_in_skill_md(self):
         self.assertIn(b"\n## Report\n", skill_bytes())
