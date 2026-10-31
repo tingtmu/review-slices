@@ -27,17 +27,25 @@ def slug(heading):
     return re.sub(r"[^\w\- ]", "", heading.lstrip("#").strip().lower()).replace(" ", "-")
 
 
+def warn_if_over(size):
+    if size > SOFT_MAX_BYTES:
+        warnings.warn("SKILL.md is %d bytes, over the soft ceiling of %d: past about 14,500 Claude Code's re-attach "
+                      "cuts the end; move text to references/ if you can" % (size, SOFT_MAX_BYTES))
+
+
 def skill_bytes():
     with open(SKILL, "rb") as handle:
         return handle.read()
 
 
 class SkillSizeTest(unittest.TestCase):
-    def test_skill_md_over_the_soft_ceiling_warns(self):
-        size = len(skill_bytes())
-        if size > SOFT_MAX_BYTES:
-            warnings.warn("SKILL.md is %d bytes, over the soft ceiling of %d: past about 14,500 Claude Code's re-attach "
-                          "cuts the end; move text to references/ if you can" % (size, SOFT_MAX_BYTES))
+    def test_the_size_never_fails_and_warns_only_over_the_soft_ceiling(self):
+        warn_if_over(len(skill_bytes()))
+        with self.assertWarnsRegex(UserWarning, "soft ceiling"):
+            warn_if_over(SOFT_MAX_BYTES + 1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            warn_if_over(SOFT_MAX_BYTES)
 
     def test_report_is_in_skill_md(self):
         self.assertIn(b"\n## Report\n", skill_bytes())
