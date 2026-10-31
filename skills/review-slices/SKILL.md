@@ -93,6 +93,7 @@ Three sections live in their own files. Read each one in full when it applies:
    - Blocker (any security problem is one): fix it before the trailer.
    - Fix: fix it, or reject it with a written reason in your report.
    - Pre-existing: record it as an incident or a roadmap item, never just a label.
+   - `spec-mandated`: ask the user.
    - Level note (a reviewer's line that the level looks too high): put it in your report; the level of this change
      stays. Acting on one is a change to REVIEW.md's table of its own, reviewed, never part of the change that
      raised it.
@@ -146,8 +147,8 @@ Three sections live in their own files. Read each one in full when it applies:
 
 End every review with: the level output, the load `status` printed beside the reviewers that ran and their lenses
 (a reduction the user allowed, step 4's version-swap exception or a step 6 second round named as such; any other
-is a rule break: [record an incident](references/incidents.md)), each review finding with its tag and what happened to it (fixed, rejected and
-why), any level notes, the shown output for the final state, the Door line (step 9), and any incident recorded.
+is a rule break: [record an incident](references/incidents.md)), each review finding with its tag, what happened to it (fixed, rejected and
+why) and, for a Blocker or Fix, one line on how you verified it, each `spec-mandated` one and the user's answer, any level notes, the shown output for the final state, the Door line (step 9), and any incident recorded.
 Never a secret's value.
 The guard's known holes are summarized in [references/known-holes.md](references/known-holes.md).
 

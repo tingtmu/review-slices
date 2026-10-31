@@ -115,6 +115,11 @@ _Avoid_: level finding, downgrade
 One defect a reviewer reports, with file and line, tagged Blocker, Fix or Pre-existing.
 _Avoid_: comment, issue, finding (unqualified)
 
+**Spec-mandated**:
+A label on a review finding whose defect the spec itself requires. It keeps the tag it would get anyway, a security
+one stays a Blocker, and the author asks the user.
+_Avoid_: spec bug, as designed
+
 **Adversarial reviewer**:
 A reviewer with fresh context told to assume the change is wrong and to show how it fails.
 _Avoid_: red team, devil's advocate

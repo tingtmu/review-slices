@@ -87,7 +87,8 @@ Spec: <path to the spec: the issue, the plan or roadmap item, or the user's requ
 Read the spec first, then the change.
 Report each requirement the change misses or gets wrong (Fix or Blocker), anything it adds that the spec did not
 ask for (Fix if it changes behaviour, else leave it out), and each requirement nobody can check from the change (say what
-shown output would prove it).
+shown output would prove it). A defect the spec itself mandates keeps the tag it would get anyway (a security one
+stays a Blocker) and adds the label `spec-mandated`: the author asks the user.
 <the rules every brief carries>
 ```
 
@@ -101,6 +102,7 @@ Report one part per lens, each with its own verdict (clean, or its review findin
 - Cannot verify from the diff: each claim or behaviour only shown output or a run could prove and the author's
   shown output does not, and what would.
 - Declined to judge: anything you did not review, and why.
+- Spec-mandated: each review finding labelled `spec-mandated`, or `none`.
 - For each review finding, the REVIEW.md "Failure looks like" entry it falls under: the entry's id (I1, F1)
   where it has one, else its text quoted; or `none`.
 If the change looks bigger or riskier than this load should take, say so at the top.
