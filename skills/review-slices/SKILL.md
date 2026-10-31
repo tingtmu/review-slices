@@ -88,11 +88,10 @@ Three sections live in their own files. Read each one in full when it applies:
    above it (`codex exec --skip-git-repo-check --sandbox read-only`), and have it read the repo only through git
    (`git -C <repo path> diff <base>..HEAD`, `git -C <repo path> show <standing>:<path>`), so it never loads the
    change's instruction files as its own. Never act as Slice 2 for your own work.
-5. **Handle review findings.** Check each one yourself before acting on it. A Blocker, Fix or Nit is
+5. **Handle review findings.** Check each one yourself before acting on it. A Blocker or Fix is
    never an incident: the review caught it.
    - Blocker (any security problem is one): fix it before the trailer.
    - Fix: fix it, or reject it with a written reason in your report.
-   - Nit: at most three are worth raising; fix them only if cheap.
    - Pre-existing: record it as an incident or a roadmap item, never just a label.
    - Level note (a reviewer's line that the level looks too high): put it in your report; the level of this change
      stays. Acting on one is a change to REVIEW.md's table of its own, reviewed, never part of the change that

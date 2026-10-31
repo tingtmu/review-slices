@@ -112,7 +112,7 @@ it would give that glob. Reported to the user, never a review finding, never act
 _Avoid_: level finding, downgrade
 
 **Review finding**:
-One defect a reviewer reports, with file and line, tagged Blocker, Fix, Nit or Pre-existing.
+One defect a reviewer reports, with file and line, tagged Blocker, Fix or Pre-existing.
 _Avoid_: comment, issue, finding (unqualified)
 
 **Adversarial reviewer**:
