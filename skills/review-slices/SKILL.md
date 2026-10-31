@@ -78,7 +78,7 @@ Three sections live in their own files. Read each one in full when it applies:
    reviewer, its lenses>`.
 
    Reviewers read `git diff <base>..HEAD`, with `<base>` from the trailer line `status` printed. They are
-   read-only, have fresh context, never a fork of this conversation, and use the strongest model available. Give
+   read-only, have fresh context, never a fork of this session, and use the strongest model available. Give
    them the diff command, REVIEW.md, the spec path and the level output; never tell one what not to flag or how to
    grade. If you cannot start a fresh-context reviewer, use, in order: a CLI
    reviewer in a read-only sandbox (`claude -p`, `codex exec`), an Orca terminal, or ask the user. A subagent of
@@ -149,7 +149,7 @@ Three sections live in their own files. Read each one in full when it applies:
 End every review with: the level output, the load `status` printed beside the reviewers that ran and their lenses
 (a reduction the user allowed, step 4's version-swap exception or a step 6 second round named as such; any other
 is a rule break: [record an incident](references/incidents.md)), each review finding with its tag, what happened to it (fixed, rejected and
-why) and, for a Blocker or Fix, one line on how you verified it, each `spec-mandated` one and the user's answer,
+why) and, for a Blocker or Fix, a line on how you verified it, each `spec-mandated` one and the user's answer,
 any level notes, the shown output for the final state, the Door line (step 9), and any incident recorded.
 Never a secret's value.
 The guard's known holes are summarized in [references/known-holes.md](references/known-holes.md).
