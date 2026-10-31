@@ -78,20 +78,21 @@ Three sections live in their own files. Read each one in full when it applies:
    reviewer, its lenses>`.
 
    Reviewers read `git diff <base>..HEAD`, with `<base>` from the trailer line `status` printed. They are
-   read-only, have fresh context and use the strongest model available. Give them the diff command, REVIEW.md,
-   the spec path and the level output. If you cannot start a fresh-context reviewer, use, in order: a CLI
+   read-only, have fresh context, never a fork of this conversation, and use the strongest model available. Give
+   them the diff command, REVIEW.md, the spec path and the level output; never tell one what not to flag or how to
+   grade. If you cannot start a fresh-context reviewer, use, in order: a CLI
    reviewer in a read-only sandbox (`claude -p`, `codex exec`), an Orca terminal, or ask the user. A subagent of
    this session (the `code-review` skill's included) loads the checkout's AGENTS.md, CLAUDE.md and `.claude/`
    settings as they are now: if `git diff --name-only <standing>..HEAD` (`<standing>` from the `standing rules:`
    line) touches any of those at any depth, or `.codex/`, use a CLI reviewer even when you can start a subagent.
-   Start a CLI or terminal reviewer in a new empty directory (`mktemp -d`), never the checkout or a directory
-   above it (`codex exec --skip-git-repo-check --sandbox read-only`), and have it read the repo only through git
-   (`git -C <repo path> diff <base>..HEAD`, `git -C <repo path> show <standing>:<path>`), so it never loads the
-   change's instruction files as its own. Never act as Slice 2 for your own work.
+   Start a CLI or terminal reviewer as the briefs' "Starting a CLI or terminal reviewer" says. Never act as Slice 2
+   for your own work.
 5. **Handle review findings.** Check each one yourself before acting on it. A Blocker or Fix is
-   never an incident: the review caught it.
-   - Blocker (any security problem is one): fix it before the trailer.
-   - Fix: fix it, or reject it with a written reason in your report.
+   never an incident: the review caught it. You may re-grade a finding upward only. To dispute a tag or a finding,
+   reject it, citing the mitigation you found and read, or the line or output that shows the claim wrong; a comment
+   that claims safety is not one. The reviewer rules on it in round two (step 6).
+   - Blocker (any security problem is one): fix it before the trailer, unless its reviewer upholds your rejection.
+   - Fix: fix it, or reject it, with the reason in your report.
    - Pre-existing: record it as an incident or a roadmap item, never just a label.
    - `spec-mandated`: ask the user.
    - Level note (a reviewer's line that the level looks too high): put it in your report; the level of this change
@@ -148,7 +149,8 @@ Three sections live in their own files. Read each one in full when it applies:
 End every review with: the level output, the load `status` printed beside the reviewers that ran and their lenses
 (a reduction the user allowed, step 4's version-swap exception or a step 6 second round named as such; any other
 is a rule break: [record an incident](references/incidents.md)), each review finding with its tag, what happened to it (fixed, rejected and
-why) and, for a Blocker or Fix, one line on how you verified it, each `spec-mandated` one and the user's answer, any level notes, the shown output for the final state, the Door line (step 9), and any incident recorded.
+why) and, for a Blocker or Fix, one line on how you verified it, each `spec-mandated` one and the user's answer,
+any level notes, the shown output for the final state, the Door line (step 9), and any incident recorded.
 Never a secret's value.
 The guard's known holes are summarized in [references/known-holes.md](references/known-holes.md).
 

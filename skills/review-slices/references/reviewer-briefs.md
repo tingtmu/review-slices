@@ -6,6 +6,14 @@ they run in parallel. `<base>` is the commit in the trailer line `level` prints;
 `git diff <base>..HEAD` shows all of it. `<standing>` is the commit in its `standing rules:` line (REVIEW.md where
 the branch left the base branch); where that line names none, use `<base>` and say so in the brief.
 
+## Starting a CLI or terminal reviewer
+
+Start it in a new empty directory (`mktemp -d`), never the checkout or a directory above it (`codex exec
+--skip-git-repo-check --sandbox read-only`), and have it read the repo only through git
+(`git -C <repo path> diff <base>..HEAD`, `git -C <repo path> show <standing>:<path>`), so it never loads the change's
+instruction files as its own. Give it its brief from a file or stdin, never inside a shell-quoted argument: a `$(...)`
+in pasted output would run.
+
 ## Rules every brief carries
 
 ```
@@ -86,8 +94,8 @@ Change: `git diff <base>..HEAD` in <repo path>; commits `git log --oneline <base
 Spec: <path to the spec: the issue, the plan or roadmap item, or the user's request saved to a file>.
 Read the spec first, then the change.
 Report each requirement the change misses or gets wrong (Fix or Blocker), anything it adds that the spec did not
-ask for (Fix if it changes behaviour, else leave it out), and each requirement nobody can check from the change (say what
-shown output would prove it). A defect the spec itself mandates keeps the tag it would get anyway (a security one
+ask for (Fix if it changes behaviour, else leave it out), and each requirement nobody can check from the change
+(say what shown output would prove it). A defect the spec itself mandates keeps the tag it would get anyway (a security one
 stays a Blocker) and adds the label `spec-mandated`: the author asks the user.
 <the rules every brief carries>
 ```
@@ -156,5 +164,6 @@ adversarial reviewer in the same message.
 Run `status` first: a higher load than round one's is escalation, the three reviewers on the whole unit (SKILL.md
 step 6). Otherwise resume the same reviewers, so they keep their model and context; at Important only those SKILL.md
 step 6 names. Brief: "Confirm whether each of your review findings is fixed, on the new commits
-`git diff <old head>..HEAD` only; for one the author rejected, here is the reason: <reason>. Report only new defects
+`git diff <old head>..HEAD` only; for one the author rejected, here is the reason: <reason>; rule on it: a rejection
+stands only on a mitigation the author read, or a line or output that shows the claim wrong. Report only new defects
 tagged Fix or Blocker, including breakage the fix itself brings. If none, say converged."
