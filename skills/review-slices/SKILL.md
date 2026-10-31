@@ -93,6 +93,7 @@ Three sections live in their own files. Read each one in full when it applies:
    that claims safety is not one. Its reviewer rules in round two (step 6; on escalation, the briefs' Second round).
    - Blocker (any security problem is one): fix it before the trailer, unless its reviewer upholds your rejection.
    - Fix: fix it, or reject it with the reason in your report.
+   - Nit: if cheap.
    - Pre-existing: record it as an incident or a roadmap item, never just a label.
    - `spec-mandated`: ask the user first; the answer settles it.
    - Level note (a reviewer's line that the level looks too high): put it in your report; the level of this change
