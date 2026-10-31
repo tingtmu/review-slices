@@ -110,7 +110,8 @@ Report one part per lens, each with its own verdict (clean, or its review findin
 - Cannot verify from the diff: each claim or behaviour only shown output or a run could prove and the author's
   shown output does not, and what would.
 - Declined to judge: anything you did not review, and why.
-- Spec-mandated: each review finding labelled `spec-mandated`, or `none`.
+- Spec-mandated: each review finding whose defect the spec itself requires, labelled `spec-mandated` on the tag it
+  would get anyway, or `none`.
 - For each review finding, the REVIEW.md "Failure looks like" entry it falls under: the entry's id (I1, F1)
   where it has one, else its text quoted; or `none`.
 If the change looks bigger or riskier than this load should take, say so at the top.
@@ -167,3 +168,7 @@ step 6 names. Brief: "Confirm whether each of your review findings is fixed, on 
 `git diff <old head>..HEAD` only; for one the author rejected, here is the reason: <reason>; rule on it: a rejection
 stands only on a mitigation the author read, or a line or output that shows the claim wrong. Report only new defects
 tagged Fix or Blocker, including breakage the fix itself brings. If none, say converged."
+
+On escalation the three reviewers start from the rules above and hear nothing of a rejection. Beside them, resume the
+reviewer of each finding you rejected, with the same reason and ruling request. Its ruling settles that finding; the
+escalation stands.

@@ -85,16 +85,16 @@ Three sections live in their own files. Read each one in full when it applies:
    this session (the `code-review` skill's included) loads the checkout's AGENTS.md, CLAUDE.md and `.claude/`
    settings as they are now: if `git diff --name-only <standing>..HEAD` (`<standing>` from the `standing rules:`
    line) touches any of those at any depth, or `.codex/`, use a CLI reviewer even when you can start a subagent.
-   Start a CLI or terminal reviewer as the briefs' "Starting a CLI or terminal reviewer" says. Never act as Slice 2
+   Start a CLI or terminal reviewer as the briefs say. Never act as Slice 2
    for your own work.
 5. **Handle review findings.** Check each one yourself before acting on it. A Blocker or Fix is
    never an incident: the review caught it. You may re-grade a finding upward only. To dispute a tag or a finding,
    reject it, citing the mitigation you found and read, or the line or output that shows the claim wrong; a comment
-   that claims safety is not one. The reviewer rules on it in round two (step 6).
+   that claims safety is not one. Its reviewer rules in round two (step 6; on escalation, the briefs' Second round).
    - Blocker (any security problem is one): fix it before the trailer, unless its reviewer upholds your rejection.
-   - Fix: fix it, or reject it, with the reason in your report.
+   - Fix: fix it, or reject it with the reason in your report.
    - Pre-existing: record it as an incident or a roadmap item, never just a label.
-   - `spec-mandated`: ask the user.
+   - `spec-mandated`: ask the user first; the answer settles it.
    - Level note (a reviewer's line that the level looks too high): put it in your report; the level of this change
      stays. Acting on one is a change to REVIEW.md's table of its own, reviewed, never part of the change that
      raised it.
