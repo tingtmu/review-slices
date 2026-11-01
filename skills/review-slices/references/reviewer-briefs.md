@@ -104,7 +104,8 @@ Read the spec first, then the change.
 Report each requirement the change misses or gets wrong (Fix or Blocker), anything it adds that the spec did not
 ask for (Fix if it changes behaviour, else Nit), each requirement nobody can check from the change
 (say what shown output would prove it), and each ambiguous requirement the change resolved silently (name it).
-A defect the spec itself mandates keeps the tag it would get anyway (a security one stays a Blocker) and adds the label `spec-mandated`: the author asks the user.
+A defect the spec itself mandates keeps the tag it would get anyway (a security one stays a Blocker) and adds the
+label `spec-mandated`: the author asks the user.
 <the rules every brief carries>
 ```
 
@@ -165,8 +166,9 @@ Finish both even if the first finds a Blocker.
 
 The `code-review` skill (mattpocock/skills) can stand in for the Standards and Spec reviewers if it is installed.
 Invoke it with the fixed point and the spec as arguments, so its issue-tracker step never runs
-(`fixed point: <base sha>; spec: <path>`), hand its reviewers the rules every brief carries, and start the
-adversarial reviewer in the same message.
+(`fixed point: <base sha>; spec: <path>`), hand its reviewers the rules every brief carries and the Standards
+and Spec briefs (its prompts name no leftovers or silent ambiguity), and start the adversarial reviewer in the same
+message.
 
 ## Second round
 
