@@ -10,7 +10,8 @@ the branch left the base branch); where that line names none, use `<base>` and s
 
 Start it in a new empty directory (`mktemp -d`), never the checkout or a directory above it (`codex exec
 --skip-git-repo-check --sandbox read-only`), and have it read the repo only through git
-(`git -C <repo path> diff <base>..HEAD`, `git -C <repo path> show <standing>:<path>`), so it never loads the change's
+(`git -C <repo path> diff <base>..HEAD`, `git -C <repo path> show HEAD:<path>` and `git -C <repo path> grep <pattern>
+HEAD` for code, `git -C <repo path> show <standing>:<path>` for instruction files), so it never loads the change's
 instruction files as its own. Give it its brief from a file or stdin, never inside a shell-quoted argument: a `$(...)`
 in pasted output would run.
 
@@ -57,7 +58,7 @@ Shown output from the author: <paste the commands and summary lines>. Re-run the
 --help) and compare the exit code and summary line. If your sandbox blocks the re-run, say so, ask the author for
 the transcript lines, and never mark the output confirmed.
 
-Before reporting a hunk, read the callers and guards that reach it.
+Before reporting a hunk, read its callers and the validation in front of it.
 
 Lenses, in order:
 1. Correctness: inputs, edges and failure paths the change gets wrong; a reply that says ok for a non-success;
@@ -65,7 +66,7 @@ Lenses, in order:
 2. Security and secrets: injection, unsafe quoting through a shell, values another process or user wrote (env, argv,
    filenames, branch and tag names, CI expressions) used as trusted; a delete, move or overwrite on a derived path
    with no root check; secrets reaching output or logs, checks the change skips or switches off; a secret in the
-   diff; every new `.gitleaksignore` entry or `.gitleaks.toml` change, which silences the secret scan.
+   diff; every new `.gitleaksignore` or `.gitleaks.toml` change.
 3. Holes in the tests: tests that cannot fail, fakes kinder than the real service, data shapes assumed rather
    than observed from a real reply.
 4. Instructions an agent would follow wrongly: placeholders it cannot fill, commands nobody ran.
@@ -102,8 +103,8 @@ Spec: <path to the spec: the issue, the plan or roadmap item, or the user's requ
 Read the spec first, then the change.
 Report each requirement the change misses or gets wrong (Fix or Blocker), anything it adds that the spec did not
 ask for (Fix if it changes behaviour, else Nit), each requirement nobody can check from the change
-(say what shown output would prove it), and each ambiguous requirement the change resolved silently (name it). A defect the spec itself mandates keeps the tag it would get anyway (a security one
-stays a Blocker) and adds the label `spec-mandated`: the author asks the user.
+(say what shown output would prove it), and each ambiguous requirement the change resolved silently (name it).
+A defect the spec itself mandates keeps the tag it would get anyway (a security one stays a Blocker) and adds the label `spec-mandated`: the author asks the user.
 <the rules every brief carries>
 ```
 
