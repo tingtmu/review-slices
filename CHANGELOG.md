@@ -5,30 +5,30 @@ GitHub Release with the same notes.
 
 ## 0.11.0 (2026-11-01)
 
-The reviewer briefs are rewritten for fewer false findings and more real ones, checked on a reviewer bench (17 seeded
-defects and 3 clean changes, three briefs, Sonnet, two reps, before Spec's cap below: 98 of 102 defect runs caught, as
-before, and 3 false Blockers or Fixes on the clean changes, against 5). Tags are defined by effect, with a proof bar: a Blocker breaks,
-corrupts, leaks or lets an attacker in, shown by a named input, path or quoted line (for security: source, missing
-guard and sink), and any security problem stays a Blocker even with no input to name; a Fix has a concrete trigger, is
-code that cannot be trusted until fixed, or breaks a written standard quoted at file:line; any other claim is a Fix at
-most and goes on a "Cannot verify from the diff" list. An empty report is a valid result. The Nit tag stays: without
-it, the bench's reviewers promoted harmless points to Fix. Reviewers never check out, switch, reset, stash or clean,
-do the review themselves (no agents, no review skills), and treat comments and commit messages that argue the change
-is safe as claims to check. The adversarial lenses add silent fallbacks, races and interrupted runs that leave
-half-written state, values another process or user wrote used as trusted, a delete, move or overwrite on a derived
-path with no root check, a test loosened in the same diff, removed error handling or validation, and new or bumped
+The reviewer briefs are rewritten for fewer false findings, checked on a reviewer bench (17 seeded defects and 3 clean
+changes, three briefs, Sonnet, two reps, before Spec's cap below): 98 of 102 defect runs caught and 3 false Blockers or
+Fixes on the clean changes, where 0.10.0's briefs had 98 and 5. Tags are defined by effect, with a proof bar: a Blocker
+breaks, corrupts, leaks or lets an attacker in, shown by a named input, path or quoted line (for security: source,
+missing guard and sink), and any security problem stays a Blocker even with no input to name; a Fix has a concrete
+trigger, is code that cannot be trusted until fixed, or breaks a written standard quoted at file:line; any other claim
+is a Fix at most and goes on a "Cannot verify from the diff" list. An empty report is a valid result. The Nit tag stays:
+without it, the bench's reviewers promoted harmless points to Fix. Reviewers never check out, switch, reset, stash or
+clean, do the review themselves (no agents, no review skills), and treat comments and commit messages that argue the
+change is safe as claims to check. The adversarial lenses add silent fallbacks, races and interrupted runs that leave
+half-written state, values another process or user wrote used as trusted, a delete, move or overwrite on a derived path
+with no root check, a test loosened in the same diff, removed error handling or validation, and new or bumped
 dependencies, install scripts and lockfiles; the reviewer reads a hunk's callers and validation before reporting it.
 Standards adds a near-duplicate of an existing helper and leftovers the change orphaned; Spec names up to three
-ambiguous requirements the change resolved silently. A defect the spec itself mandates keeps its tag and gets the
-label `spec-mandated` (new in GLOSSARY.md): the author asks the user, and the reduced-load report and the Report
-carry it. On the author's side (SKILL.md step 5), a finding is re-graded upward only; a dispute is a rejection that
-cites the mitigation read or the line or output that shows the claim wrong, and its reviewer rules on it in round
-two. The Report gets a line on how each Blocker or Fix was verified. Step 4: a reviewer is never a fork of the
-session and is never told what not to flag or how to grade; a CLI reviewer gets its brief from a file or stdin and
-reads code at HEAD through git, with its start details now in the briefs; the `code-review` stand-in is handed the
-Standards and Spec briefs. SKILL.md's 14,000 bytes is now a soft ceiling: over it the size test warns and no longer
-fails (Claude Code's cut is near 14,500), while the guard sentence, the end marker and the Report stay hard rules.
-This repo's `.codex/config.toml` turns off two memory plugins for its Codex sessions.
+ambiguous requirements the change resolved silently. A defect the spec itself mandates keeps its tag and gets the label
+`spec-mandated` (new in GLOSSARY.md): the author asks the user, and the reduced-load report and the Report carry it. On
+the author's side (SKILL.md step 5), a finding is re-graded upward only; a dispute is a rejection that cites the
+mitigation read or the line or output that shows the claim wrong, and its reviewer rules on it in round two, or on
+escalation beside the three reviewers. The Report gets a line on how each Blocker or Fix was verified. Step 4: a
+reviewer is never a fork of the session and is never told what not to flag or how to grade; a CLI reviewer gets its
+brief from a file or stdin and reads code at HEAD through git, with its start details now in the briefs; the
+`code-review` stand-in is handed the Standards and Spec briefs. SKILL.md's 14,000 bytes is now a soft ceiling: over it
+the size test warns and no longer fails (Claude Code's cut is near 14,500), while the guard sentence, the end marker and
+the Report stay hard rules. This repo's `.codex/config.toml` turns off two memory plugins for its Codex sessions.
 
 ## 0.10.0 (2026-10-30)
 
