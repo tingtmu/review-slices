@@ -57,16 +57,21 @@ Shown output from the author: <paste the commands and summary lines>. Re-run the
 --help) and compare the exit code and summary line. If your sandbox blocks the re-run, say so, ask the author for
 the transcript lines, and never mark the output confirmed.
 
+Before reporting a hunk, read the callers and guards that reach it.
+
 Lenses, in order:
-1. Correctness: inputs, edges and failure paths the change gets wrong; a reply that says ok for a non-success.
-2. Security and secrets: injection, unsafe quoting through a shell, secrets reaching output or logs, checks
-   the change skips or switches off; a secret in the diff; every new `.gitleaksignore` entry or `.gitleaks.toml`
-   change, which silences the secret scan.
+1. Correctness: inputs, edges and failure paths the change gets wrong; a reply that says ok for a non-success;
+   a failure swallowed or a silent fallback; races and interrupted runs that leave half-written state.
+2. Security and secrets: injection, unsafe quoting through a shell, values another process or user wrote (env, argv,
+   filenames, branch and tag names, CI expressions) used as trusted; a delete, move or overwrite on a derived path
+   with no root check; secrets reaching output or logs, checks the change skips or switches off; a secret in the
+   diff; every new `.gitleaksignore` entry or `.gitleaks.toml` change, which silences the secret scan.
 3. Holes in the tests: tests that cannot fail, fakes kinder than the real service, data shapes assumed rather
    than observed from a real reply.
 4. Instructions an agent would follow wrongly: placeholders it cannot fill, commands nobody ran.
 5. Checks weakened elsewhere: the suite's test lines, skip markers, test config (addopts, coverage thresholds),
-   package scripts, CI files.
+   package scripts, CI files; a test loosened in this same diff; error handling or validation removed; new or bumped
+   dependencies, install scripts and lockfiles.
 <the rules every brief carries>
 ```
 
