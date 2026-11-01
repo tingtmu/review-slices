@@ -86,7 +86,8 @@ Change: `git diff <base>..HEAD` in <repo path>; commits `git log --oneline <base
 Read: the repo's agent instructions (AGENTS.md, CLAUDE.md), CONTRIBUTING, lint and format configs, REVIEW.md,
 and the code around each changed hunk.
 Report where the change breaks a written standard or the conventions of the code around it: naming, structure,
-error handling, tests beside the code they test, docs updated with behaviour. Quote the standard (file:line) for
+error handling, tests beside the code they test, docs updated with behaviour, a near-duplicate of an existing helper
+instead of reusing it, leftovers the change orphaned (code, flags, docs, tests). Quote the standard (file:line) for
 each review finding; a preference with no written source is a Nit.
 <the rules every brief carries>
 ```
