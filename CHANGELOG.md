@@ -5,18 +5,18 @@ GitHub Release with the same notes.
 
 ## 0.12.0 (2026-11-02)
 
-A closing third review round, only when round two does not converge or commits followed it (SKILL.md step 6; the
-briefs' "Second round" section becomes "Later rounds"). First a refuter (new in GLOSSARY.md), a fresh-context reviewer,
-rules on each Blocker or Fix still disputed, including one first raised and rejected in round two. It reads the review
-finding's own lines, the lines the rejection cites, REVIEW.md and the spec, and re-runs any output the rejection cites;
-its ruling settles the review finding unless the user overrules it, and it never rules on a `spec-mandated` review
-finding or one an escalation round already ruled on. Then the resumed reviewers confirm the commits since round two's
-head, a step 8 suite fix included. Round three reports a Blocker at most and raises no new scope, except when it is an
+A closing third review round, only when round two does not converge or commits followed it (SKILL.md step 6; the briefs'
+"Second round" section becomes "Later rounds"). First a refuter (new in GLOSSARY.md), a fresh-context reviewer, rules on
+each Blocker or Fix still disputed, including one first raised and rejected in round two. It reads the review finding's
+own lines, the lines the rejection cites, REVIEW.md and the spec, and re-runs any output the rejection cites; its ruling
+settles the review finding unless the user overrules it, and it never rules on a `spec-mandated` review finding or one
+an escalation round already ruled on. Then the resumed reviewers confirm the commits since round two's head, a step 8
+suite fix included. Round three raises no new review finding but a Blocker, and no new scope, except when it is an
 escalation: a load that rises after round two makes round three the three reviewers on the whole unit, who may report a
 Blocker or a Fix. There is no round four: a commit after round three is listed as unreviewed in the Report and the
-go-ahead request, and its trailer needs the user's go-ahead given on it. `status` runs before each later round, and
-step 5's escalation reasons do not apply in round three. The version-swap release exception in this repo's REVIEW.md
-allows a refuter beside its one merged reviewer.
+go-ahead request, and its trailer needs the user's go-ahead given on it. `status` runs before each later round, and step
+5's escalation reasons do not apply in round three. The version-swap release exception in this repo's REVIEW.md allows a
+refuter beside its one merged reviewer.
 
 ## 0.11.0 (2026-11-01)
 
