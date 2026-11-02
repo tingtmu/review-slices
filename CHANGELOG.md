@@ -3,17 +3,6 @@
 Each release of the review-slices skill, newest first. Each is tagged `vX.Y.Z`; from 0.9.2 on, each also has a
 GitHub Release with the same notes.
 
-## Unreleased
-
-A closing third review round, only when round two does not converge (SKILL.md step 6, the briefs' new Later rounds
-section). First a refuter, a fresh-context reviewer new in GLOSSARY.md, rules on each Blocker or Fix still disputed,
-including one first raised and rejected in round two; its ruling settles the finding unless the user overrules it,
-and it never rules on a `spec-mandated` finding or one an escalation round already ruled on. Then the resumed
-reviewers confirm the commits since round two's head, which covers a suite-failure fix too. Round three raises no
-new scope: a Blocker at most, named in the Report as a late Blocker. There is no round four: a commit after round
-three is listed as unreviewed, and the trailer covers it only with the user's go-ahead given on it. `status` runs
-before each later round, so a risen load is still escalation, and an escalation round counts as round two.
-
 ## 0.11.0 (2026-11-01)
 
 The reviewer briefs are rewritten for fewer false findings, checked on a reviewer bench (17 seeded defects and 3 clean

@@ -90,7 +90,8 @@ Three sections live in their own files. Read each one in full when it applies:
 5. **Handle review findings.** Check each one yourself before acting on it. A Blocker, Fix or Nit is
    never an incident: the review caught it. You may re-grade a finding upward only. To dispute a tag or a finding,
    reject it, citing the mitigation you found and read, or the line or output that shows the claim wrong; a comment
-   that claims safety is not one. Its reviewer rules in round two; still disputed, a refuter in round three (step 6).
+   that claims safety is not one. Its reviewer rules in round two (step 6; on escalation, the briefs' Later rounds);
+   still disputed, a refuter in round three.
    - Blocker (any security problem is one): fix it before the trailer, unless its reviewer or refuter upholds your
      rejection.
    - Fix: fix it, or reject it with the reason in your report; it is ruled on as a Blocker is.
@@ -105,7 +106,8 @@ Three sections live in their own files. Read each one in full when it applies:
      finding the reviewer tagged with a "Failure looks like" entry; that the change is too big or risky for its
      load; a "cannot verify from the diff" item your shown output does not close; when `status` no longer prints
      that load; or when history inside the unit was rewritten (amend, squash, rebase) after the round. Each is a
-     tag, a list in the report or a git fact: apply it as written, never by your own reading. Never the reverse.
+     tag, a list in the report or a git fact: apply it as written, never by your own reading. Never the reverse, and
+     never from round three.
    Fix a review finding's whole class at once, not only the line quoted. Fixes are new commits, except a secret
    in unpushed commits, which is removed by rewriting them ([A secret turns up](references/secrets.md)).
 6. **Converge.** Run `status` again before each later round. If the load rose (the unit grew a band, or a floor
@@ -115,18 +117,17 @@ Three sections live in their own files. Read each one in full when it applies:
    (`held:` or `history inside the unit was rewritten` in its `review:` line), but a rebase onto a moved base
    branch moves the unit's start and starts the log over: after one, take the three reviewers yourself.
    Otherwise: one review round, then at most one second round on the new commits only (`git diff <old head>..HEAD`),
-   resuming the reviewers the briefs' Later rounds names. Only if round two did not converge, a closing round three,
-   in order: a refuter for each finding still disputed, then the resumed reviewers on the commits since round two's
-   head. It reports a Blocker at most, never new scope; a commit after it is unreviewed. No round four. Never
-   re-raise a review finding already settled. Still split after that: escalate to the user.
+   resuming the reviewers the briefs' Later rounds names. A closing round three only if round two did not converge
+   or commits followed it, Blocker only, as the briefs' Later rounds says; no round four. Never re-raise a review
+   finding already settled. Still split after that: escalate to the user.
 7. **Add the trailer** `status` printed to the last commit the review covered, with exactly
    `git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer "Review: <level> <base-sha>"`
    (`status` prints it filled in): it keeps the message, leaves anything staged out, and replaces an earlier
    `Review:` trailer instead of adding a second. The trailer says the review ran with the load `status` printed,
-   or more; less only with the user's go-ahead, step 4's version-swap exception, or a step 6 later round; over a
-   commit after round three, only with the user's go-ahead given on it as unreviewed. Each trailer must cover the level of the commits since the previous one; a later commit above Trivial needs its own
-   review and trailer. The hook refuses both otherwise. Never amend new content into
-   a commit that carries a trailer: add a commit.
+   or more; less only with the user's go-ahead, step 4's version-swap exception, or a step 6 later round. Each
+   trailer must cover the level of the commits since the previous one; a later commit above Trivial needs its own
+   review and trailer (after round three: the trailer only, with the go-ahead given on it as unreviewed). The hook
+   refuses both otherwise. Never amend new content into a commit that carries a trailer: add a commit.
 8. **Run the suite once:** `python3 .githooks/review_slices.py run-suite`. It runs every `test:` line and stamps
    the working tree only when all pass and no file changed during the run. If it says the working tree is not
    HEAD's, commit what is yours and ask the user about the rest; never stash, revert or commit someone else's
@@ -150,8 +151,8 @@ Three sections live in their own files. Read each one in full when it applies:
 End every review with: the level output, the load `status` printed beside the reviewers that ran and their lenses
 (a reduction the user allowed, step 4's version-swap exception or a step 6 later round named as such; any other
 is a rule break: [record an incident](references/incidents.md)), each review finding with its tag, what happened to it (fixed, rejected and
-why, with any refuter's ruling) and, for a Blocker or Fix, a line on how you verified it, any late Blocker (found in
-round three), each commit after round three as unreviewed, each `spec-mandated` one and the user's answer,
+why, with any refuter's ruling) and, for a Blocker or Fix, a line on how you verified it, any Blocker found in round
+three, each commit after round three as unreviewed, each `spec-mandated` one and the user's answer,
 any level notes, the shown output for the final state, the Door line (step 9), and any incident recorded.
 Never a secret's value.
 The guard's known holes are summarized in [references/known-holes.md](references/known-holes.md).
