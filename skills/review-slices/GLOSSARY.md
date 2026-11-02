@@ -145,6 +145,11 @@ _Avoid_: upgrade, bump
 A multi-agent decision meeting limited to disputed review findings, held only with the user's go-ahead.
 _Avoid_: verifier voting, voting panel
 
+**Refuter**:
+A fresh-context, read-only reviewer that rules, in round three, on one review finding still disputed after round two.
+Its ruling settles the finding unless the user overrules it.
+_Avoid_: judge, tie-breaker
+
 **One-way door**:
 An action or change that cannot be cleanly undone, such as deleting data, a push to the base branch, a release tag,
 a migration, a public contract, a persisted format or a live cloud action. A go-ahead request says which kind of

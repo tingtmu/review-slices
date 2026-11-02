@@ -44,7 +44,7 @@ band or tagging a glob as code is a reviewed change to this file.
 | Critical | small and only in `critical code:` globs: an adversarial and a conformance reviewer; else the three. Then the user's go-ahead for the one-way door; a review meeting only for a disputed review finding, with the user's yes |
 
 The load `status` prints is binding: fewer reviewers, or lenses merged into fewer, only with the user's go-ahead
-asked before the round (except a second round, as the skill's step 6 says, and a version-swap release this file
+asked before the round (except later rounds, as the skill's step 6 says, and a version-swap release this file
 allows on the base branch).
 
 ## Remote checks

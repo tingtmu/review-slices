@@ -32,7 +32,7 @@ format, or to how the hook is installed, since every adopting clone depends on t
 
 The one exception to the three reviewers a raised level or a floor path takes (the skill's SKILL.md step 4): a
 release commit whose only changed lines outside its notes (the root README.md and CHANGELOG.md) swap the version
-for a newer one (`VERSION = "x"` and `(skill version x)`) takes one merged reviewer, and its second round stays one
+for a newer one (`VERSION = "x"` and `(skill version x)`) takes one merged reviewer, and its later rounds stay one
 merged reviewer while the fix commits touch only those notes. It applies only as written in
 `git show <base>:REVIEW.md`, never as a branch edits it, and only after the author shows that the base's copy of the
 release check, `git show <base>:tests/release_check.py | python3 -I - --base <base>`, prints its

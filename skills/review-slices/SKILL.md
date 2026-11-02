@@ -72,8 +72,8 @@ Three sections live in their own files. Read each one in full when it applies:
    Never lower the load, merge its lenses into fewer reviewers, or swap a reviewer for a tool that does less: only
    the user can, asked before the round with the printed load. "It looks small", "it is mostly moves" and "it is
    only docs" are not reasons: the measure counted them. A skill counts where it starts the same separate reviewers
-   (the `code-review` skill for Standards and Spec). This holds for the first round on the whole unit; a second round
-   follows step 6, and a version-swap release follows the exception above. Before starting them, write one line in
+   (the `code-review` skill for Standards and Spec). This holds for the first round on the whole unit; later rounds
+   follow step 6, and a version-swap release follows the exception above. Before starting them, write one line in
    your message: `load: <status's review: line, or the load this step gives where it prints none>; starting: <each
    reviewer, its lenses>`.
 
@@ -90,9 +90,10 @@ Three sections live in their own files. Read each one in full when it applies:
 5. **Handle review findings.** Check each one yourself before acting on it. A Blocker, Fix or Nit is
    never an incident: the review caught it. You may re-grade a finding upward only. To dispute a tag or a finding,
    reject it, citing the mitigation you found and read, or the line or output that shows the claim wrong; a comment
-   that claims safety is not one. Its reviewer rules in round two (step 6; on escalation, the briefs' Second round).
-   - Blocker (any security problem is one): fix it before the trailer, unless its reviewer upholds your rejection.
-   - Fix: fix it, or reject it with the reason in your report.
+   that claims safety is not one. Its reviewer rules in round two; still disputed, a refuter in round three (step 6).
+   - Blocker (any security problem is one): fix it before the trailer, unless its reviewer or refuter upholds your
+     rejection.
+   - Fix: fix it, or reject it with the reason in your report; it is ruled on as a Blocker is.
    - Nit: fix it only if cheap.
    - Pre-existing: record it as an incident or a roadmap item, never just a label.
    - `spec-mandated`: ask the user first; the answer settles it.
@@ -107,31 +108,30 @@ Three sections live in their own files. Read each one in full when it applies:
      tag, a list in the report or a git fact: apply it as written, never by your own reading. Never the reverse.
    Fix a review finding's whole class at once, not only the line quoted. Fixes are new commits, except a secret
    in unpushed commits, which is removed by rewriting them ([A secret turns up](references/secrets.md)).
-6. **Converge.** Run `status` again before a second round. If the load rose (the unit grew a band, or a floor
+6. **Converge.** Run `status` again before each later round. If the load rose (the unit grew a band, or a floor
    path came in), that is escalation: the three reviewers on the whole unit, `git diff <base>..HEAD`. A unit's
    load is the highest `status` printed since the unit began, and the three reviewers once history inside the unit
    was rewritten; a lower load printed later changes nothing. `status` keeps this itself, in the clone's review log
    (`held:` or `history inside the unit was rewritten` in its `review:` line), but a rebase onto a moved base
    branch moves the unit's start and starts the log over: after one, take the three reviewers yourself.
    Otherwise: one review round, then at most one second round on the new commits only (`git diff <old head>..HEAD`),
-   resuming the same reviewers, so they keep their model and context. At Important, resume only the reviewers
-   whose review finding was fixed or rejected (a rejected one sees your reason), plus the adversarial or merged
-   reviewer always, for new breakage in the fix; resume every reviewer when `git diff --name-only <old head>..HEAD`
-   lists a file no review finding cited, or a floor path. At Critical, resume every reviewer. Never re-raise a
-   review finding already settled. Still split after that: escalate to the user.
+   resuming the reviewers the briefs' Later rounds names. Only if round two did not converge, a closing round three,
+   in order: a refuter for each finding still disputed, then the resumed reviewers on the commits since round two's
+   head. It reports a Blocker at most, never new scope; a commit after it is unreviewed. No round four. Never
+   re-raise a review finding already settled. Still split after that: escalate to the user.
 7. **Add the trailer** `status` printed to the last commit the review covered, with exactly
    `git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer "Review: <level> <base-sha>"`
    (`status` prints it filled in): it keeps the message, leaves anything staged out, and replaces an earlier
    `Review:` trailer instead of adding a second. The trailer says the review ran with the load `status` printed,
-   or more; less only with the user's go-ahead, step 4's version-swap exception, or a step 6 second round. Each
-   trailer must cover the level of the commits since the previous one; a later commit above Trivial needs its own
+   or more; less only with the user's go-ahead, step 4's version-swap exception, or a step 6 later round; over a
+   commit after round three, only with the user's go-ahead given on it as unreviewed. Each trailer must cover the level of the commits since the previous one; a later commit above Trivial needs its own
    review and trailer. The hook refuses both otherwise. Never amend new content into
    a commit that carries a trailer: add a commit.
 8. **Run the suite once:** `python3 .githooks/review_slices.py run-suite`. It runs every `test:` line and stamps
    the working tree only when all pass and no file changed during the run. If it says the working tree is not
    HEAD's, commit what is yours and ask the user about the rest; never stash, revert or commit someone else's
    edits. The suite can be slow: use a long tool timeout or run it in the background. If it fails, the fix is a
-   new commit and goes through step 6's second round.
+   new commit and goes through step 6's next round; after round three, it is unreviewed.
 9. **Push** only when `status` says `next: ask the user's go-ahead, then push`, and only with that go-ahead. Ask
    with a line `Door: one-way` (a one-way door, such as a push to the base branch) or `Door: two-way`, and the
    reason in a few words. The pre-push hook checks the stamp and the trailers in about a second.
@@ -148,9 +148,10 @@ Three sections live in their own files. Read each one in full when it applies:
 ## Report
 
 End every review with: the level output, the load `status` printed beside the reviewers that ran and their lenses
-(a reduction the user allowed, step 4's version-swap exception or a step 6 second round named as such; any other
+(a reduction the user allowed, step 4's version-swap exception or a step 6 later round named as such; any other
 is a rule break: [record an incident](references/incidents.md)), each review finding with its tag, what happened to it (fixed, rejected and
-why) and, for a Blocker or Fix, a line on how you verified it, each `spec-mandated` one and the user's answer,
+why, with any refuter's ruling) and, for a Blocker or Fix, a line on how you verified it, any late Blocker (found in
+round three), each commit after round three as unreviewed, each `spec-mandated` one and the user's answer,
 any level notes, the shown output for the final state, the Door line (step 9), and any incident recorded.
 Never a secret's value.
 The guard's known holes are summarized in [references/known-holes.md](references/known-holes.md).

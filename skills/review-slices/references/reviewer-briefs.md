@@ -171,15 +171,54 @@ Invoke it with the fixed point and the spec as arguments, so its issue-tracker s
 and Spec briefs (its prompts name no leftovers or silent ambiguity), and start the adversarial reviewer in the same
 message.
 
-## Second round
+## Later rounds
 
-Run `status` first: a higher load than round one's is escalation, the three reviewers on the whole unit (SKILL.md
-step 6). Otherwise resume the same reviewers, so they keep their model and context; at Important only those SKILL.md
-step 6 names. Brief: "Confirm whether each of your review findings is fixed, on the new commits
-`git diff <old head>..HEAD` only; for one the author rejected, here is the reason: <reason>; rule on it: a rejection
-stands only on a mitigation the author read, or a line or output that shows the claim wrong. Report only new defects
-tagged Fix or Blocker, including breakage the fix itself brings. If none, say converged."
+Run `status` before each later round: a higher load than the last round's is escalation, the three reviewers on the
+whole unit (SKILL.md step 6), not a round two or three. An escalation round counts as round two, whenever it comes,
+and round three closes it.
+
+**Who to resume.** Resume reviewers, never start new ones, so they keep their model and context. At Critical,
+resume every reviewer. At Important, resume the reviewer of each review finding you fixed or rejected (a rejected
+one sees your reason), plus the adversarial or merged reviewer always, for new breakage in the fix; resume every
+reviewer when `git diff --name-only <old head>..HEAD` lists a file no review finding cited, or a floor path.
+
+### Round two
+
+Brief: "Confirm whether each of your review findings is fixed, on the new commits `git diff <old head>..HEAD` only;
+for one the author rejected, here is the reason: <reason>; rule on it: a rejection stands only on a mitigation the
+author read, or a line or output that shows the claim wrong. Report only new defects tagged Fix or Blocker, including
+breakage the fix itself brings. If none, say converged."
 
 On escalation the three reviewers start from the rules above and hear nothing of a rejection. Beside them, resume the
 reviewer of each finding you rejected, with the same reason and ruling request. Its ruling settles that finding; the
-escalation stands.
+escalation stands, and no refuter rules on that finding in round three.
+
+### Round three: the closing round
+
+Only when round two did not converge, and in this order. It raises no new scope: a Blocker in the lines it reads is
+the only new review finding it may report, and one it does report is a late Blocker (name it so in the Report).
+Anything committed after round three's head no reviewer sees: list each such commit as unreviewed in the Report and in
+the go-ahead request. There is no round four.
+
+1. **Refute**, for each Blocker or Fix you rejected whose reviewer did not uphold the rejection, including one first
+   raised in round two, which no reviewer has ruled on: one refuter per finding, a fresh-context reviewer (never a
+   resumed one or a fork; start it as a CLI reviewer where step 4 says so). Never for a `spec-mandated` finding (the
+   user settles it) or one an escalation round already ruled on. Its ruling settles the finding; only the user can
+   overrule it, at Critical also by a review meeting with the user's yes. Brief:
+
+   ```
+   Rule on one disputed review finding.
+   Finding (from <reviewer>, tag <tag>): <the finding, its file:line and evidence as reported>.
+   The author's rejection: <reason>, citing <the mitigation read, or the line or output that shows the claim wrong>.
+   Read <file:line ranges> in <repo path> (`git diff <base>..HEAD` for the change).
+   Rule: the rejection stands only on a mitigation that is real and covers the finding, or a line or output that
+   shows the claim wrong; otherwise the finding stands. Say which and why, with file:line.
+   Raise nothing else, except a Blocker in the lines you read.
+   <the rules every brief carries>
+   ```
+
+   A finding that stands is fixed, and Confirm covers the fix.
+2. **Confirm**, when `git rev-list <round-two head>..HEAD` is not empty: the reviewers "Who to resume" names, on
+   `git diff <round-two head>..HEAD`. Brief: "This is the closing round. Confirm whether each of your earlier review
+   findings is fixed, on `git diff <round-two head>..HEAD` only. Raise nothing new except a Blocker in these lines,
+   including one the fix itself brings. If none, say converged."
