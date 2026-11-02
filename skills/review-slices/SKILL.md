@@ -118,8 +118,8 @@ Three sections live in their own files. Read each one in full when it applies:
    branch moves the unit's start and starts the log over: after one, take the three reviewers yourself.
    Otherwise: one review round, then at most one second round on the new commits only (`git diff <old head>..HEAD`),
    resuming the reviewers the briefs' Later rounds names. A closing round three only if round two did not converge
-   or commits followed it, Blocker only, as the briefs' Later rounds says; no round four. Never re-raise a review
-   finding already settled. Still split after that: escalate to the user.
+   or commits followed it, Blocker only unless it is an escalation, as the briefs' Later rounds says; no round four.
+   Never re-raise a review finding already settled. Still split after that: escalate to the user.
 7. **Add the trailer** `status` printed to the last commit the review covered, with exactly
    `git -c trailer.ifexists=replace commit --amend --only --no-edit --trailer "Review: <level> <base-sha>"`
    (`status` prints it filled in): it keeps the message, leaves anything staged out, and replaces an earlier

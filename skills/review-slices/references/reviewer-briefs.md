@@ -175,8 +175,10 @@ message.
 
 At most three rounds in all; there is no round four. Run `status` before each later round: a higher load than the
 last round's is escalation, the three reviewers on the whole unit (SKILL.md step 6). Before round two, the escalation
-round is round two. After round two, it is round three, and keeps round three's limits below. In round three, step 5's
-escalation reasons do not apply: a Blocker found there is fixed and goes to the user as below.
+round is round two. After round two, it is round three at full scope: the three reviewers may report a Blocker or a
+Fix anywhere in the unit, and beside them the Refute below still runs. A Fix you do not fix goes to the user, and a
+commit after it is unreviewed, as below. In round three, step 5's escalation reasons do not apply: a Blocker found
+there is fixed and goes to the user as below.
 
 **Who to resume.** For round two and Confirm, resume reviewers, so they keep their model and context; a refuter is
 the one new reviewer. At Critical, resume every reviewer. At Important, resume the reviewer of each review finding
@@ -197,10 +199,10 @@ finding; the escalation stands, and no refuter rules on it in round three.
 
 ### Round three: the closing round
 
-Only when round two did not converge or commits followed it (a fix, or a step 8 suite fix), and in this order. It
-raises no new scope: a Blocker in the lines it reads is the only new review finding it may report; name any in the
-Report as found in round three. No reviewer sees a commit after round three's head: list each as unreviewed in the
-Report and in the go-ahead request.
+Only when round two did not converge or commits followed it (a fix, or a step 8 suite fix), and in this order.
+Except as an escalation (above), it raises no new scope: a Blocker in the lines it reads is the only new review
+finding it may report; name any in the Report as found in round three. No reviewer sees a commit after round three's
+head: list each as unreviewed in the Report and in the go-ahead request.
 
 1. **Refute**, for each Blocker or Fix you rejected whose reviewer did not uphold the rejection, including one first
    raised in round two, which no reviewer has ruled on: one refuter per review finding, a fresh-context reviewer
