@@ -12,9 +12,10 @@ one, in your own work or another agent's (`<skill>` is this skill's directory, w
    `2 Review (adversarial + conformance, large), unit 1a2b3c4d`, naming the pair's size band or Critical), or in the
    recurrence's line, and tell the user; a miss through the pair on a large or Critical unit, before the next one. Where nothing records which load reviewed it, take the one `status` would have printed for that unit (the
    clone's review log; else `python3 <skill>/scripts/calibrate.py --list-candidates <lines> <files>`, with `--rules`
-   set to REVIEW.md as of that unit if it changed since: with the small band's limits, a listed candidate took one
-   merged reviewer, and a unit under "small critical units" tagged `code` took adversarial + conformance; with the
-   medium band's limits, a candidate not listed under the small band's took adversarial + conformance); never write
+   set to REVIEW.md as of that unit if it changed since: with the small band's limits, a listed Important candidate took one
+   merged reviewer and any other Important or Critical unit took adversarial + conformance (three reviewers before
+   0.13.0 on large and on Critical medium, large or content units); its band: listed under the medium band's limits,
+   medium, else large); never write
    that it was not recorded. Its plug, best first: a test for the class; else narrow that band in REVIEW.md
    (`small: 20 lines, 2 files`), written as a `rule REVIEW.md "<line>"` plug so `--check` notices if it is loosened
    again (narrowing it further edits that plug line in the same change); else a "Failure looks like" rule. A miss

@@ -65,6 +65,7 @@ LOAD_NAMES = {MERGED: re.compile(r"\((?:one\s+)?merged\s+reviewers?\b", re.I),
 NEEDED = {MERGED: ("small: off",), PAIR: ("cross-check: on",)}
 # A miss through the pair names the unit's size band, or Critical, after the load: "(adversarial + conformance, large)".
 LARGE = re.compile(r"\b(large|critical)\b", re.I)
+BAND = re.compile(r"\b(small|medium|large|critical)\b", re.I)
 # The review unit a miss went through, right after its load's parentheses: ", unit <sha>" (the commit that carries
 # the unit's trailer). A sha anywhere else names no unit.
 UNIT = re.compile(r"\s*,?\s*unit\s+`?([0-9a-f]{7,40})\b", re.I)
@@ -442,15 +443,16 @@ def unit_after(text, start):
     return match.group(1).lower() if match else None
 
 
-def large_misses(incident):
-    """How many of INCIDENT's misses through the pair, counted as misses() counts them (the Slice field's first,
-    then each recurrence), name the large band or Critical in their parentheses."""
+def pair_bands(incident):
+    """(large, unnamed): how many of INCIDENT's misses through the pair, counted as misses() counts them (the Slice
+    field's first, then each recurrence), name the large band or Critical in their parentheses, and name no band."""
     slice_text, recurrences = (incident.fields.get(label, "") for label in ("slice that should have caught it",
                                                                             "recurrences"))
     found = [(slice_text, match) for match in LOAD_NAMES[PAIR].finditer(slice_text)][:1] if (
         incident.slice == SLICES[2]) else []
     found += [(recurrences, match) for match in LOAD_NAMES[PAIR].finditer(recurrences)]
-    return sum(1 for text, match in found if LARGE.search(text[match.start():closing(text, match.start()) or None]))
+    inner = [text[match.start():closing(text, match.start()) or None] for text, match in found]
+    return sum(1 for part in inner if LARGE.search(part)), sum(1 for part in inner if not BAND.search(part))
 
 
 def unit_count(units):
@@ -515,11 +517,14 @@ def band_problems(root, incidents):
     return problems
 
 
-def miss_count(load, units, large=0):
-    """`<load> <misses>`, the review units they came from where those are fewer, and how many named a large unit."""
+def miss_count(load, units, bands=(0, 0)):
+    """`<load> <misses>`, the review units they came from where those are fewer, and, for the pair, how many named
+    a large unit or Critical and how many named no band (the stop rule cannot see those)."""
     count = unit_count(units)
-    large = " (%d on a large or Critical unit: tell the user before the next one)" % large if large else ""
-    return "%s %d%s%s" % (load, len(units), " in %d review unit(s)" % count if count < len(units) else "", large)
+    notes = ["%d on a large or Critical unit: tell the user before the next one" % bands[0]] if bands[0] else []
+    notes += ["%d name no band: add it" % bands[1]] if bands[1] else []
+    return "%s %d%s%s" % (load, len(units), " in %d review unit(s)" % count if count < len(units) else "",
+                          " (%s)" % "; ".join(notes) if notes else "")
 
 
 def print_report(where, incidents, skipped, today):
@@ -539,7 +544,8 @@ def print_report(where, incidents, skipped, today):
     if found:
         print("  misses through a reduced load, recurrences included: " + ", ".join(
             miss_count(load, [unit for named, unit in found if named == load],
-                       sum(large_misses(incident) for incident in incidents) if load == PAIR else 0)
+                       [sum(part) for part in zip(*(pair_bands(incident) for incident in incidents))] if load == PAIR
+                       else (0, 0))
             for load in REDUCED_LOADS))
     recurring = [incident for incident in incidents if has_recurrences(incident)]
     print("recurrences (each means a weak plug):" + ("" if recurring else " none"))

@@ -71,10 +71,9 @@ class ReviewLogTest(unittest.TestCase):
                                                 "after status printed one merged reviewer at %s; weight=important/"
                                                 "small/none" % old[:12]), self.log()[-1])
         new, base = self.repo.out("rev-parse", "HEAD")[:12], self.repo.out("rev-parse", "--short=12", "origin/main")
-        fresh = ("escalate: history inside the unit was rewritten after status logged it at %s, at %s: a fresh "
-                 "adversarial + conformance pair on the whole unit, `git diff %s..HEAD`, unless a round already "
-                 "reviewed %s (`git merge-base --is-ancestor %s <that round's head>`), or the user decides"
-                 % (old[:12], new, base, new, new))
+        fresh = ("escalate: history inside the unit was rewritten, at %s: a fresh adversarial + conformance pair "
+                 "on the whole unit, `git diff %s..HEAD`, unless a round already reviewed %s (`git merge-base "
+                 "--is-ancestor %s <that round's head>`), or the user decides" % (new, base, new, new))
         self.assertEqual(self.escalation(), fresh)
         self.change({"lib/b.py": "b\n"})  # review: a status at a later commit lost it; it stays, naming its head
         self.assertEqual(self.escalation(), fresh)
@@ -98,6 +97,36 @@ class ReviewLogTest(unittest.TestCase):
         floor = self.change({".githooks/x.txt": "x\n"})  # the path alone: a floor path
         self.assertIn("weight rose (path none -> path), at %s:" % floor[:12], self.escalation())
         self.assertTrue(self.log()[-1].endswith("; weight=critical/large/path"), self.log()[-1])
+
+    def test_a_reset_or_a_line_logged_out_of_order_never_hides_a_rise(self):  # round two B1; Codex's race
+        self.repo = Repo(self, rules=LIB_RULES + "medium: 100 lines, 6 files\n")
+        self.repo.install()
+        reviewed = self.change({"lib/a.py": "a\n" * 41})  # medium; round one reviews it
+        self.status()
+        self.change({"lib/b.py": "b\n" * 60})  # large
+        self.status()
+        stale = self.log()[0]  # a status that read HEAD at the medium head appends after the large one
+        with open(os.path.join(self.repo.path, ".git", "review-slices", "review-log"), "a", encoding="utf-8") as log:
+            log.write(stale + "\n")
+        grown = self.repo.out("rev-parse", "HEAD")
+        self.assertIn("weight rose (band medium -> large), at %s:" % grown[:12], self.escalation())
+        self.repo.git("reset", "-q", "--hard", reviewed)  # back to the reviewed head, then the large work again
+        self.status()
+        regrown = self.change({"lib/b.py": "b\n" * 60})
+        self.assertNotEqual(regrown, grown)
+        self.assertIn("weight rose (band medium -> large), at %s:" % regrown[:12], self.escalation())
+
+    def test_a_weight_that_rises_at_the_same_head_is_logged(self):  # the standing rules changed under it
+        head = self.change({"lib/a.py": "a\n" * 50})  # large: the pair
+        self.status()
+        path = os.path.join(self.repo.path, ".git", "review-slices", "review-log")
+        line = read_text(path).replace("; weight=important/large/none", "; weight=important/medium/none")
+        with open(path, "w", encoding="utf-8") as log:
+            log.write(line)  # as if a medium band had held this head before
+        self.assertIn("weight rose (band medium -> large), at %s:" % head[:12], self.escalation())
+        self.assertEqual(len(self.log()), 2)
+        self.status()
+        self.assertEqual(len(self.log()), 2)  # same head, load and weight: nothing new
 
     def test_the_weight_is_read_from_the_last_suffix_and_old_lines_read_lowest(self):  # r3 F3
         sizer, sha = test_merged_reviewer.SIZER, "a" * 40

@@ -18,8 +18,8 @@ are known; reviewers and the user cover them.
   three reviewers before 0.13.0), so the slices before and after it are never measured together: about one band of
   lightly reviewed work per stretch. Any unit over the line limit buys that restart, filler or not: a deleted file, a
   file moved with a one-character edit (it counts in full) or one very long line reads as little as a pure move;
-  reviewers see them. The restart needs this
-  branch's log line, so another clone, a deleted log or a rebase measures the branch whole again (the pair); a forged
+  reviewers see them. A pair logged at a medium head also restarts once the line limit is tightened under it. The
+  restart needs this branch's log line, so another clone, a deleted log or a rebase measures the branch whole again (the pair); a forged
   log line restarts only a unit that is large on its own anyway.
 - The pair is the most `status` prints (0.13.0), on large and Critical changes too; one reviewer fewer than before
   was never benched there, and the owner accepted that risk. A miss through it on a large or Critical unit goes to

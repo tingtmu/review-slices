@@ -60,8 +60,8 @@ Three sections live in their own files. Read each one in full when it applies:
    | Important | `review: one merged reviewer` (small band); else `adversarial + conformance`: an adversarial and a conformance reviewer, in parallel |
    | Critical | `adversarial + conformance`. Then the user's go-ahead for the one-way door, given with the review findings. A [review meeting](references/review-meeting.md) only for a disputed review finding, only if the user says yes |
 
-   `plus a cross-check` (the base branch's REVIEW.md has `cross-check: on`) adds one cross-check reviewer after
-   round one, also to a pair you run on a raised level (not to an escalation's fresh pair); `three reviewers` (Standards, Spec, adversarial) only where `status` prints it, unable to measure.
+   `plus a cross-check` (the base branch's REVIEW.md has `cross-check: on`) adds one cross-check reviewer to a
+   unit's first pair round, raised levels and escalations from one merged reviewer included; `three reviewers` (Standards, Spec, adversarial) only where `status` prints it, unable to measure.
    The load is the least review the change needs; more is always allowed. A level you raised for a planned action
    takes the pair whatever `status` prints for the computed level. The one exception: a release whose only changes outside its release notes swap the version
    takes one merged reviewer where REVIEW.md as committed on the base branch (`git show <base>:REVIEW.md`) says so
@@ -99,8 +99,8 @@ Three sections live in their own files. Read each one in full when it applies:
    - Level note (a reviewer's line that the level looks too high): put it in your report; the level of this change
      stays. Acting on one is a change to REVIEW.md's table of its own, reviewed, never part of the change that
      raised it.
-   - **Escalation:** a fresh adversarial + conformance pair on the whole unit (`git diff <base>..HEAD`), as its
-     round two. From one merged reviewer: when that round reports a Blocker; a review finding the reviewer tagged
+   - **Escalation:** a fresh adversarial + conformance pair on the whole unit (`git diff <base>..HEAD`), as the
+     next round. From one merged reviewer: when that round reports a Blocker; a review finding the reviewer tagged
      with a "Failure looks like" entry; that the change is too big or risky for its load; a "cannot verify from the
      diff" item your shown output does not close; or when `status` no longer prints that load. From the pair: only
      on a "too big or risky" line or a "Failure looks like" tag, once per unit (a second goes to the user); its

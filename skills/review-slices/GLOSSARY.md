@@ -79,8 +79,8 @@ of paths and actions, never chosen by feel.
 _Avoid_: tier, risk level, priority
 
 **Review load**:
-The reviewers a review unit gets at its review level, computed by `status` from the level, the size band and the
-glob kind of the paths that set the level. Never chosen by the agent; never recorded in the trailer. A unit's load is
+The reviewers a review unit gets at its review level, computed by `status` from the level and the size band (the glob
+kind of the paths that set the level counts toward the unit weight). Never chosen by the agent; never recorded in the trailer. A unit's load is
 the highest one `status` printed since the unit began; after rewriting history inside a unit (amend, squash,
 rebase) it is the pair. `status` holds both through the clone's review log. The adversarial + conformance pair is
 the ceiling; three reviewers only where `status` cannot measure, or the user asks.

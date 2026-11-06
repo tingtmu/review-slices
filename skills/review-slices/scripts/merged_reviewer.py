@@ -232,26 +232,39 @@ def rise(old, new):
 
 
 def escalation(guard, start):
-    """The last git fact that escalated the unit that starts at START, from the review log, or None: history inside
-    it was rewritten (a logged head is not in the next one's history), or its weight rose above every weight logged
-    for it before. It names the head `status` saw it at and shows until a new fact, so a round can tell, by git
-    alone, whether it already reviewed that head."""
-    ref = unit_ref(guard)
+    """The newest git fact in HEAD's history that escalates the unit that starts at START, from the review log, or
+    None: history inside it was rewritten (a logged head has left HEAD's history; named at the first head logged
+    after it that is still there), or its weight rose above every weight logged before at a head in its own
+    history. Heads that left HEAD's history never hide a rise, so a reset or lines logged out of order cannot
+    suppress one. It shows until a newer fact, so a round can tell, by git alone, whether it reviewed that head."""
+    ref, head = unit_ref(guard), guard.git("rev-parse", "HEAD")
     mine = [entry for entry in read_log(guard, log_path(guard)) if (entry.ref, entry.start) == (ref, start)]
-    heads = [entry for index, entry in enumerate(mine) if index == 0 or entry.head != mine[index - 1].head]
-    fact = None
-    for index, entry in enumerate(heads[1:], 1):
-        before = heads[index - 1].head
-        if guard.git("merge-base", "--is-ancestor", before, entry.head, check=False) is None:
-            fact = entry.head, "history inside the unit was rewritten after status logged it at %s" % before[:12]
+    known = {}
+
+    def within(old, new):  # OLD is NEW or in its history
+        if (old, new) not in known:
+            known[old, new] = guard.git("merge-base", "--is-ancestor", old, new, check=False) is not None
+        return known[old, new]
+
+    facts, gone = [], False
+    for index, entry in enumerate(mine):
+        if not within(entry.head, head):
+            gone = True
             continue
-        parts = rise([weight(seen) for seen in heads[:index]], weight(entry))
-        fact = (entry.head, "the unit's weight rose (%s)" % ", ".join(parts)) if parts else fact
-    if not fact:
+        if gone:
+            facts.append((entry.head, "history inside the unit was rewritten"))
+            gone = False
+        parts = rise([weight(seen) for seen in mine[:index] if within(seen.head, entry.head)], weight(entry))
+        if parts:
+            facts.append((entry.head, "the unit's weight rose (%s)" % ", ".join(parts)))
+    if not facts:
         return None
+    newest = facts[-1]
+    for fact in facts:  # the fact at the head furthest along HEAD's history; a later line may name an older head
+        newest = fact if within(newest[0], fact[0]) else newest
     return ("%s, at %s: a fresh adversarial + conformance pair on the whole unit, `git diff %s..HEAD`, unless a "
             "round already reviewed %s (`git merge-base --is-ancestor %s <that round's head>`), or the user decides"
-            % (fact[1], fact[0][:12], start[:12], fact[0][:12], fact[0][:12]))
+            % (newest[1], newest[0][:12], start[:12], newest[0][:12], newest[0][:12]))
 
 
 def allowed(guard, commits, uncommitted, tips):
@@ -307,7 +320,8 @@ def hold(guard, start, level, found, rules=None):
         found = top.load, "held: status printed it for this unit at %s (%s); now %s" % (top.time, top.why, found[1])
     if found[0] == PAIR and (rules or {}).get("cross-check") == "on" and not found[1].endswith(CROSS_CHECK):
         found = PAIR, found[1] + CROSS_CHECK
-    if not mine or (mine[-1].head, mine[-1].load) != (head, found[0]):
+    now = WEIGHT.findall(found[1])
+    if not mine or (mine[-1].head, mine[-1].load) != (head, found[0]) or (now and weight(mine[-1]) != now[-1]):
         fields = (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), ref, start, head, level) + tuple(found)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "a", encoding="utf-8", errors="surrogateescape") as handle:

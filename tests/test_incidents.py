@@ -163,7 +163,7 @@ class ReportTest(unittest.TestCase):
                        entry(3, slice_text="2 Review (merged reviewer)"), entry(4)).run()
         self.assertIn("  2 Review         4\n", done.stdout)
         self.assertIn("\n  misses through a reduced load, recurrences included: merged reviewer 2, "
-                      "adversarial + conformance 1\n", done.stdout)
+                      "adversarial + conformance 1 (1 name no band: add it)\n", done.stdout)
         self.assertNotIn("reduced load", LogRepo(self, entry(1)).run().stdout)
 
     def test_a_second_miss_through_the_merged_reviewer_needs_the_small_band_off(self):
@@ -265,7 +265,7 @@ class ReportTest(unittest.TestCase):
         self.assertIn("adversarial + conformance 3 (2 on a large or Critical unit: tell the user before the next "
                       "one)\n", done.stdout)
         done = LogRepo(self, entry(1, slice_text="2 Review (adversarial + conformance), large later")).run()
-        self.assertIn("adversarial + conformance 1\n", done.stdout)
+        self.assertIn("adversarial + conformance 1 (1 name no band: add it)\n", done.stdout)  # review r2 F3
 
     def test_a_recurrence_that_names_a_load_is_a_miss_through_it(self):
         recurrence = "\n  - 2026-10-01, 2 Review (merged reviewer): the same class again."
