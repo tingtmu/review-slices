@@ -14,6 +14,7 @@ test: python3 -m unittest discover -s tests -q
 test: python3 skills/review-slices/scripts/incidents.py --check
 secrets: gitleaks
 base: main
+cross-check: on
 default: simple
 important: skills/review-slices/*
 important: .githooks/*
