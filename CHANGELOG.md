@@ -3,6 +3,29 @@
 Each release of the review-slices skill, newest first. Each is tagged `vX.Y.Z`; from 0.9.2 on, each also has a
 GitHub Release with the same notes.
 
+## 0.13.0 (2026-11-06)
+
+The adversarial + conformance pair is now the ceiling review load: Important medium and large, every Critical unit, a
+level raised for a planned action, a floor path and history rewritten inside a unit all take the pair, where large and
+most Critical units took three reviewers. Three reviewers stay only as `status`'s fallback where it cannot measure (no
+measure on the base branch, a BASE given), and what the user asks for; a miss never restores them. Since the load no
+longer rises past the pair, the review log's why now ends with the unit's weight (`; weight=<level>/<band>/<path>`;
+Unit weight is new in GLOSSARY.md), and `status` prints an `escalate:` line when the weight rose or history inside the
+unit was rewritten, naming the head it saw it at: a fresh pair on the whole unit, unless a round already reviewed that
+head (`git merge-base --is-ancestor`). Escalation from the pair on its own tags ("too big or risky", a "Failure looks
+like" tag) is once per unit; a Blocker goes to an ordinary round two. New `cross-check: on` in the base branch's
+REVIEW.md: every pair unit adds one cross-check reviewer after its first pair round, a fresh adversarial reviewer from
+another model family where one is available (an Orca worker, else `codex exec`), else the same family with a new brief
+for the angles the pair did not take; the report names the runner (Cross-check is new in GLOSSARY.md). `status`
+prints `adversarial + conformance, plus a cross-check`, the log keeps the load the pair with a `; cross-check` suffix,
+and `next:` counts it. `incidents.py --check` now asks for `cross-check: on` while misses from two review units through
+the pair lack a test plug (it asked for `medium: off`); a miss names the pair's band, `2 Review (adversarial +
+conformance, large)`, and the report counts misses on a large or Critical unit and those that name no band. The
+`code-review` skill no longer stands in for the Standards and Spec reviewers, and fix commits name each finding's
+lens. A guard older than 0.13.0 that runs itself (the base branch lost its guard) keeps the old table. **Upgrade the
+base branch's guard before adding `cross-check: on`:** an older guard stops on the unknown key. Rollback: remove the
+`cross-check:` line first; the log keeps 7 fields and loads older guards know.
+
 ## 0.12.0 (2026-11-02)
 
 A closing third review round, only when round two does not converge or commits followed it (SKILL.md step 6; the briefs'
