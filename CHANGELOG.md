@@ -3,6 +3,22 @@
 Each release of the review-slices skill, newest first. Each is tagged `vX.Y.Z`; from 0.9.2 on, each also has a
 GitHub Release with the same notes.
 
+## 0.14.0 (2026-11-06)
+
+New `copy-credit: <glob> ...` in the base branch's REVIEW.md: in a commit that moves a file under those globs (it
+deletes one and adds one there, as a spec archive does), a changed line whose trimmed text the other side's files
+under the globs already hold (an added line the parent's, a deleted line the commit's) counts no lines, and files
+under the globs count lines but no file. Every other commit is measured as before, so a live spec edit or a spec file
+deleted on its own still counts in full. It lowers the size band only (no new load, `review:` text or log field;
+floor paths, `critical:` content paths, binaries and submodules keep their handling), reads git objects only and
+never runs repo code, and knows nothing of the tool that made the copy. The `why` names the credited lines (`; N
+weighted line(s) credited as copies`), and `calibrate.py` sizes units with the same credit. On five OpenSpec archive
+commits in an adopting repo the measure fell from 31-1912 weighted lines to 0-20, and 0 files. Name only text
+whose copies cannot change behaviour (specs, docs); `docs/known-holes.md` lists what text matching cannot see.
+**Upgrade the base branch's guard before adding `copy-credit:`:** an older guard reads the rules as unreadable
+(every path Critical, the pair), and stops on the line in a working copy. Rollback: remove the line; the log is
+unchanged.
+
 ## 0.13.0 (2026-11-06)
 
 The adversarial + conformance pair is now the ceiling review load: Important medium and large, every Critical unit, a
