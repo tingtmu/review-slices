@@ -47,6 +47,7 @@ CROSS_CHECK = "; cross-check"
 PATCH_ARGS = ("--patch", "-U0", "--inter-hunk-context=0", "--find-renames=100%", "--no-ext-diff", "--no-textconv",
               "--no-color", "--submodule=short", "--ignore-submodules=none", "--no-relative", "--src-prefix=a/",
               "--dst-prefix=b/")
+COMMIT_MARK = "\0commit "  # what credited_size() asks git to print before each commit's patch
 LFS_POINTER = "version https://git-lfs.github.com/spec/"
 HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
 RANK = {MERGED: 0, PAIR: 1, THREE: 2}
@@ -67,15 +68,47 @@ def read_patch(guard, *args):
 def patch_size(guard, text):
     """(weighted lines, files, binary) of a `--patch -U0` listing; a Git LFS pointer counts as binary. Hunk lengths
     come from the hunk headers, so a deleted line that starts with `--` is never taken for a header."""
-    lines, files, binary, old, new = 0, set(), False, 0, 0
+    lines, files, binary, _credited = sized(guard, text)
+    return lines, len(files), binary
+
+
+def weighted(line):
+    return max(1, -(-(len(line) - 1) // LINE_WIDTH))
+
+
+def sized(guard, text, credit=None):
+    """(weighted lines, file set, binary, weighted lines credited) of a `--patch -U0` listing, one file set across
+    every commit in it. CREDIT, if given, is called with the sha after each COMMIT_MARK line and returns that
+    commit's copy test, or None: a function (old path, new path) -> a line test or None. A file diff with a line
+    test adds only the lines it fails, never a file; any other adds a file, as before."""
+    lines, files, binary, credited, old, new = 0, set(), False, 0, 0, 0
+    commit_test = header = line_test = None
+    paths = [None, None]
+
+    def close():
+        if header is not None and line_test is None:
+            files.add(header)
+
     for line in text.split("\n"):
         if old > 0 or new > 0:
             if not line.startswith("\\"):  # "\ No newline at end of file"
                 old, new = old - (not line.startswith("+")), new - (not line.startswith("-"))
-                lines += max(1, -(-(len(line) - 1) // LINE_WIDTH)) if line.startswith(("+", "-")) else 0
+                if line.startswith(("+", "-")) and line_test and line_test(line):
+                    credited += weighted(line)
+                elif line.startswith(("+", "-")):
+                    lines += weighted(line)
                 binary = binary or line[1:].startswith(LFS_POINTER)  # the file's size is not in the patch
+        elif line.startswith(COMMIT_MARK):
+            close()
+            header, commit_test = None, credit(line[len(COMMIT_MARK):]) if credit else None
         elif line.startswith("diff --git "):
-            files.add(line)
+            close()
+            header, line_test, paths = line, None, [None, None]
+        elif commit_test and line.startswith(("--- ", "+++ ", "rename from ", "rename to ")):
+            side = 0 if line.startswith(("--- ", "rename from ")) else 1
+            paths[side] = copy_path(line)
+            old_path, new_path = (paths[1] if paths[0] == "" else paths[0]), (paths[0] if paths[1] == "" else paths[1])
+            line_test = commit_test(old_path, new_path)
         elif line.startswith("@@ "):
             match = HUNK.match(line)
             if not match:
@@ -83,14 +116,99 @@ def patch_size(guard, text):
             old, new = (int(count) if count is not None else 1 for count in match.groups())
         elif line.startswith("Binary files ") and line.endswith(" differ"):
             binary = True
-    return lines, len(files), binary
+    close()
+    return lines, files, binary, credited
 
 
-def measure(guard, commits, uncommitted, tips):
+def copy_path(line):
+    """The path a `--- `, `+++ `, `rename from ` or `rename to ` header names: "" for /dev/null (the other side's
+    path stands for it), None (never matched) for a quoted path, which core.quotePath=false leaves only for quotes,
+    backslashes and control characters."""
+    path = line.split(" ", 2)[2] if line.startswith("rename ") else line[4:]
+    path = path[:-1] if path.endswith("\t") else path  # git ends a name holding a space with a tab
+    if path.startswith('"'):
+        return None
+    if line.startswith(("--- ", "+++ ")):
+        return "" if path == "/dev/null" else path[2:] if path.startswith(("a/", "b/")) else None
+    return path
+
+
+def matches(globs, path):
+    return path is not None and any(fnmatch.fnmatchcase(path, glob) for glob in globs)
+
+
+def copy_gate(guard, globs, sha):
+    """True if commit SHA moves a file under GLOBS: it deletes one and adds one there (`--no-renames`), as an
+    archive does. A delete alone never opens it, nor does a root commit."""
+    out = guard.git("diff-tree", "-r", "-z", "--no-renames", "--name-status", "--no-commit-id", sha, check=False)
+    fields = (out or "").split("\0")
+    found = {status for status, path in zip(fields[::2], fields[1::2]) if matches(globs, path)}
+    return {"D", "A"} <= found
+
+
+def tree_lines(guard, globs, rev, cache):
+    """The set of whitespace-trimmed lines of the files under GLOBS in REV's tree (empty for no REV)."""
+    if rev not in cache:
+        listing = guard.git("ls-tree", "-r", "-z", "--full-tree", rev, check=False) if rev else ""
+        blobs = [entry.split("\t", 1)[0].split()[2] for entry in (listing or "").split("\0")
+                 if "\t" in entry and entry.split()[1] == "blob" and matches(globs, entry.split("\t", 1)[1])]
+        cache[rev] = {line.strip() for line in batch(guard, blobs).split("\n")}
+    return cache[rev]
+
+
+def batch(guard, blobs):
+    """The contents of BLOBS, one after another, read with one `git cat-file --batch`."""
+    if not blobs:
+        return ""
+    done = subprocess.run(("git",) + guard.GIT_SETTINGS + ("cat-file", "--batch"), capture_output=True,
+                          input=("\n".join(blobs) + "\n").encode())
+    if done.returncode != 0:
+        raise guard.GuardError("git cat-file failed: %s" % done.stderr.decode("utf-8", "replace").strip())
+    return done.stdout.decode("utf-8", "surrogateescape")
+
+
+def renames(text):
+    return sum(line.startswith("rename from ") for line in text.split("\n"))  # -U0: content starts with +/-
+
+
+def credited_size(guard, globs, shas):
+    """(weighted lines, files, binary, weighted lines credited, exact renames) of SHAS' own changes, merges left
+    out, one file set across them. Copy credit: in a commit that moves a file under GLOBS (copy_gate), in a file
+    diff whose paths both match GLOBS, an added line whose trimmed text is a line of a file under GLOBS in the
+    parent's tree, or a deleted line that is one in the commit's tree, counts 0, and such a file adds its other
+    lines but no file. It reads git objects only. Without GLOBS it is patch_size() of the same patch."""
+    if not shas:
+        return 0, 0, False, 0, 0
+    if not globs:
+        text = read_patch(guard, "log", "--no-walk=unsorted", "--no-merges", "--root", "--format=", *PATCH_ARGS,
+                          *shas)
+        return patch_size(guard, text) + (0, renames(text))
+    text = read_patch(guard, "log", "--no-walk=unsorted", "--no-merges", "--root", "--format=%x00commit %H",
+                      *PATCH_ARGS, *shas)
+    cache = {}
+
+    def credit(sha):
+        if not copy_gate(guard, globs, sha):
+            return None
+        parent = guard.git("rev-parse", "--verify", "-q", sha + "^", check=False)
+        before, after = tree_lines(guard, globs, parent, cache), tree_lines(guard, globs, sha, cache)
+
+        def file_test(old, new):
+            if not (matches(globs, old) and matches(globs, new)):
+                return None
+            return lambda line: line[1:].strip() in (before if line.startswith("+") else after)
+        return file_test
+
+    lines, files, binary, credited = sized(guard, text, credit)
+    return lines, len(files), binary, credited, renames(text)
+
+
+def measure(guard, commits, uncommitted, tips, globs=()):
     """((weighted lines, files) or None, why) of COMMITS (per commit then summed, merges left out), so several small
     units add up; None, so no band below large, with uncommitted work, an unfetched base branch, a floor path (so
     no suite change), a merge with changes of its own, a submodule update or a binary file added, edited or
-    deleted, whose size it cannot see (one moved unchanged is an exact rename: no lines)."""
+    deleted, whose size it cannot see (one moved unchanged is an exact rename: no lines). GLOBS: the standing
+    rules' `copy-credit:` globs (credited_size)."""
     if uncommitted or not commits:
         return None, "uncommitted work" if uncommitted else "no new commits"
     if not guard.base_tip()[1]:
@@ -107,13 +225,12 @@ def measure(guard, commits, uncommitted, tips):
                     "--no-renames", "--ignore-submodules=none", *commits)  # whatever .gitmodules or config say
     if any("160000" in line[1:].split()[:2] for line in raw.splitlines() if line.startswith(":")):
         return None, "a submodule update"
-    text = read_patch(guard, "log", "--no-walk=unsorted", "--no-merges", "--root", "--format=", *PATCH_ARGS, *commits)
-    lines, files, binary = patch_size(guard, text)
+    lines, files, binary, credited, moved = credited_size(guard, globs, commits)
     if binary:
         return None, "a binary file"
-    renames = sum(line.startswith("rename from ") for line in text.split("\n"))  # -U0: content starts with +/-
-    return (lines, files), "%d weighted line(s), %d file(s) in %d commit(s)%s" % (
-        lines, files, len(commits), "; %d exact rename(s) counted as 0 lines" % renames if renames else "")
+    return (lines, files), "%d weighted line(s), %d file(s) in %d commit(s)%s%s" % (
+        lines, files, len(commits), "; %d exact rename(s) counted as 0 lines" % moved if moved else "",
+        "; %d weighted line(s) credited as copies" % credited if credited else "")
 
 
 def limits(rules):
@@ -134,7 +251,7 @@ def band_of(rules, size):
 def band(guard, rules, commits, uncommitted, tips):
     """(small, medium or large, why): the size band of COMMITS under RULES. A band that is off, or that a smaller
     one already covers, takes nothing."""
-    size, why = measure(guard, commits, uncommitted, tips)
+    size, why = measure(guard, commits, uncommitted, tips, (rules or {}).get("copy-credit") or ())
     name = band_of(rules, size)
     if name == "large":  # name the limit crossed, so "it is only a move" reads as counted (issue #26)
         on = [(limit, band_name) for band_name, limit in limits(rules).items() if limit]  # medium may be narrower

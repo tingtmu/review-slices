@@ -27,6 +27,7 @@ trivial: <notes and roadmap files no check reads>
 # small: 40 lines, 3 files     (optional size bands of the review load; or off)
 # medium: 200 lines, 10 files
 # cross-check: on     (optional: a cross-check reviewer on every pair unit; needs a 0.13.0+ guard on the base branch)
+# copy-credit: <spec or doc globs>   (optional: text a file move copies there counts no lines; 0.14.0+ guard)
 ```
 
 Planned actions that make a change Critical: <for example a live cloud action, a release tag, a data deletion>.
@@ -36,7 +37,8 @@ branch adds to the base branch, or since its last unit large on its own that got
 and 400/20) and the glob kind. The most it prints is the adversarial and conformance pair. A `critical:` glob is
 content, such as golden outputs, corpora, state tables or CI; a `critical code:` glob is code a reviewer can judge
 from a small diff. A content or floor path coming into a unit makes `status` print `escalate:`. `cross-check: on` adds a cross-check reviewer to every pair unit (`incidents.py --check` asks for
-it after misses through the pair). Loosening a band or tagging a glob as code is a reviewed change to this file.
+it after misses through the pair). In a commit that moves a file under the `copy-credit:` globs, text already there counts no
+lines. Loosening a band, naming copy-credit globs or tagging a glob as code is a reviewed change to this file.
 
 | Level | Slice 2 review |
 |---|---|

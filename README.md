@@ -55,7 +55,11 @@ At important and critical, `status` prints the review load: which reviewers the 
 commit the branch adds to the base branch, so a change pushed in slices is measured whole, and puts it in a size
 band (after a unit that is over every band's line limit on its own and that the clone's review log shows got the
 ceiling load, it measures only what follows that unit, so later small fixes get the lighter load again): small (built in: at most 40 weighted lines and 3 files), medium (none built in) or large. A file moved
-unchanged counts as one file and no lines. Uncommitted work, an unfetched base branch, a floor path, a merge with
+unchanged counts as one file and no lines. Under `copy-credit: <glob> ...` in the base branch's REVIEW.md, a commit
+that moves a file under those globs (deletes one and adds one there, as an archive does) counts no lines for text
+already there: an added line the parent's files under the globs hold, or a deleted line the commit's files under them
+hold; those files add their other lines and no file. Name only text whose copies cannot change behaviour (specs,
+docs). Uncommitted work, an unfetched base branch, a floor path, a merge with
 changes of its own, a submodule update or a binary or Git LFS file added, edited or deleted make it large. Important
 takes one merged reviewer when small, and an adversarial and a conformance (Standards and Spec) reviewer otherwise;
 Critical always takes that pair, the most `status` prints (0.13.0; it printed three reviewers on large and Critical

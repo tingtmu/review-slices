@@ -227,8 +227,10 @@ def measure(config, units):
             continue
         paths = unit_paths(unit)
         level, rows = guard.range_level(config, paths)
-        text = unit_patch(unit)
-        files, size = parse_patch(text), Size(*sizer.patch_size(guard, text))  # status's own measure
+        text = unit_patch(unit)  # status's own measure; a pull request's net diff stays uncredited (status_size)
+        size = Size(*(sizer.patch_size(guard, text) if unit.pull else
+                      sizer.credited_size(guard, copy_globs(config), [commit.sha for commit in unit.commits])[:3]))
+        files = parse_patch(text)
         measured.append(Measured(unit, level, rows[0] if rows else None, paths, size,
                                  quiet(unit, paths, files, size)))
     return measured
@@ -363,7 +365,12 @@ def print_candidates(measured, listing):
                 print("  %s  %d line(s), %d file(s)" % (subject(item), item.size.lines, item.size.files))
 
 
-def status_size(item):
+def copy_globs(config):
+    """CONFIG's `copy-credit:` globs, for the measure `status` would take with them."""
+    return (config or {}).get("copy-credit") or ()
+
+
+def status_size(item, config=None):
     """(weighted lines, files) of a unit as `status` measured it before the push, each commit summed; None where it
     would be large: a floor path, a binary file added, edited or deleted, a submodule update, or a merge with changes
     of its own. A pull request is sized from its branch's commits, not its net diff; a squash's commits are gone, so
@@ -372,8 +379,7 @@ def status_size(item):
     merges = [sha for sha in shas if len(git("rev-list", "--parents", "-n", "1", sha).split()) > 2]
     if floored(item) or any(guard.commit_paths(sha) for sha in merges):
         return None
-    text = log_patch(shas) if item.unit.pull else None
-    size = Size(*sizer.patch_size(guard, text)) if text is not None else item.size
+    size = Size(*sizer.credited_size(guard, copy_globs(config), shas)[:3]) if item.unit.pull else item.size
     plain = log_patch(shas, NO_RENAMES) if item.unit.pull else unit_patch(item.unit, NO_RENAMES)
     gitlink = re.search(r"^[-+]Subproject commit ", plain, re.M)
     return None if size.binary or gitlink else (size.lines, size.files)
@@ -382,7 +388,7 @@ def status_size(item):
 def unit_load(config, item):
     """(band, load, content path or None) of a measured unit, as `status` would give it (status_size); a unit
     declared above its computed level was raised, so it takes the pair, the ceiling."""
-    name = sizer.band_of(config, status_size(item))
+    name = sizer.band_of(config, status_size(item, config))
     content = sizer.content_path(guard, config, item.level, [row.path for row in guard.range_level(config,
                                                                                                     item.paths)[1]])
     raised = item.unit.declared and guard.rank(item.unit.declared) > guard.rank(item.level)

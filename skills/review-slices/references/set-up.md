@@ -30,7 +30,9 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    lines, 3 files, no medium; at most 80/5 and 400/20. Where the base branch's guard is older than 0.9.0, push the
    upgraded guard first: an older guard cannot parse these lines, so pushes count every path as critical and `status`
    stops with a parse error. The same holds for `cross-check: on` and a guard older than 0.13.0: upgrade the base
-   branch's guard before adding the line. Run it again as reviewers' level notes build up.
+   branch's guard before adding the line. `copy-credit: <glob> ...` (a 0.14.0+ guard on the base branch, likewise)
+   lets a commit that moves a file under those globs, such as a spec archive, count no lines for text already there;
+   name only text whose copies cannot change behaviour (specs, docs), never code. Run it again as reviewers' level notes build up.
 4. Run `python3 <skill>/scripts/setup_tools.py install --agent-hooks`, show the user what it would change, and with
    their go-ahead run it again with `--apply`. It copies the guard, `merged_reviewer.py`, `run_suite.py`,
    `secret_scan.py` (where REVIEW.md has `secrets:`) and, with `--agent-hooks`, `agent_hook.py` to `.githooks/` if

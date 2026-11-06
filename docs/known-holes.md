@@ -13,7 +13,10 @@ are known; reviewers and the user cover them.
   fits, so the author raises the level for planned actions and the reviewer's Blocker rule backs that up. A file
   moved unchanged counts as one file and no lines, so content moved from a lower-level path into a `critical code:`
   glob can take the adversarial and conformance pair on a diff that shows none of it; reviewers read the moved file
-  whole.
+  whole. Copy credit (`copy-credit:`) matches text, not context: in a commit that moves a file under its globs, a
+  common line, text copied into a new place, or a live requirement deleted while an archive still holds its text
+  counts no lines. It lowers the band only (one merged reviewer instead of the pair, never no review), and the
+  globs the base branch names bound it.
 - The measure starts over after a unit large on its own that the review log shows got the ceiling load (the pair;
   three reviewers before 0.13.0), so the slices before and after it are never measured together: about one band of
   lightly reviewed work per stretch. Any unit over the line limit buys that restart, filler or not: a deleted file, a

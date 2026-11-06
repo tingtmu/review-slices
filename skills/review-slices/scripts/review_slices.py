@@ -28,6 +28,7 @@ Configuration is the first ```review-slices fenced block in REVIEW.md at the rep
     small: 40 lines, 3 files             # size bands of the review load, up to 80/5 and 400/20; or off
     medium: 200 lines, 10 files
     cross-check: on                      # pair units add a cross-check reviewer (incidents.py --check asks for it)
+    copy-credit: docs/specs/*            # in a commit that moves a file here, text it copies counts no lines
 
 A path takes its highest matching level; REVIEW.md, .githooks/* and .gitleaks* are at least important. A push is
 judged by its new commits (neither the target ref nor the base branch has them), a merge only where it differs from
@@ -139,7 +140,7 @@ def parse_config(text):
     if not match:
         raise GuardError("REVIEW.md has no ```review-slices block")
     config = {"tests": [], "base": None, "default": "simple", "globs": [], "errors": [], "warnings": [],
-              "secrets": None, "small": None, "medium": None, "cross-check": None}
+              "secrets": None, "small": None, "medium": None, "cross-check": None, "copy-credit": []}
     seen, kinds = set(), {"code": set(), "content": set()}
     for number, raw in enumerate(match.group(1).splitlines(), 1):
         line = COMMENT.sub("", raw).strip()
@@ -178,6 +179,8 @@ def parse_config(text):
             config["cross-check"] = "off" if value == "off" and config["cross-check"] != "on" else "on"
             config["errors"] += [] if value in ("on", "off") else ["line %d: cross-check: takes on or off; read as "
                                                                    "on" % number]
+        elif key == "copy-credit":  # globs whose copied text counts no lines (merged_reviewer.credited_size)
+            config["copy-credit"] += value.split()
         elif key == "base" or (key == "default" and value in LEVELS):
             if key in seen:
                 config["errors"].append("line %d repeats %r; the last one counts" % (number, key))
@@ -408,7 +411,7 @@ def lint(config):
     """(errors, warnings) about CONFIG as rules for this repo."""
     errors, warnings = list(config["errors"]), list(config["warnings"])
     tracked = split_nul(git("ls-files", "-z", "--full-name", ":/"))
-    for level, pattern in config["globs"]:
+    for level, pattern in config["globs"] + [("copy-credit", glob) for glob in config.get("copy-credit", ())]:
         matcher = re.compile(fnmatch.translate(pattern))
         if not any(matcher.match(path) for path in tracked):
             warnings.append("%s: %s matches no tracked file" % (level, pattern))

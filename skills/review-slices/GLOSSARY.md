@@ -91,7 +91,7 @@ Small, medium or large, by the weighted lines and files of every commit the bran
 only those a push adds, so a change pushed in slices is measured whole), against the standing rules' `small:` and
 `medium:` lines (built-in defaults where absent). It starts over after a unit large on its own: a closed Important
 or Critical unit with no merge, its trailer at that level or higher, whose net diff is over every band's line limit
-and for which this branch's review log shows the ceiling load printed when it was already that large. A file moved unchanged counts as one file and no lines. A floor
+and for which this branch's review log shows the ceiling load printed when it was already that large. A file moved unchanged counts as one file and no lines; copy credit counts copied text as none. A floor
 path, a binary file added, edited or deleted, a submodule update, uncommitted work or a merge with changes of its own
 puts a change in no band below large.
 _Avoid_: size class, tier
@@ -153,6 +153,12 @@ One fresh adversarial reviewer on the whole unit, after round one, from another 
 available, else the same family with a brief that takes the angles the pair did not. Pair units add it where the
 base branch's REVIEW.md turns it on, which misses through the pair that lack a test plug call for.
 _Avoid_: second opinion, ensemble
+
+**Copy credit**:
+In a commit that moves a file under the globs the base branch's `copy-credit:` line names (it deletes one and adds
+one there, as an archive does), a changed line under those globs whose text the other side's files under them
+already hold counts no lines, and such a file counts no file. It lowers the size band only, read from git objects.
+_Avoid_: mechanical action (a check that would take no review, not built), dedup
 
 **Review meeting**:
 A multi-agent decision meeting limited to disputed review findings, held only with the user's go-ahead.
