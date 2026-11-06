@@ -30,6 +30,10 @@ MERGED, PAIR, THREE = "one merged reviewer", "adversarial + conformance", "three
 # guard's fallback when it cannot measure, and what the user asks for.
 TABLE = {"important": {"small": MERGED, "medium": PAIR, "large": PAIR},
          "critical": {"small": PAIR, "medium": PAIR, "large": PAIR}}
+# The table before 0.13.0, for a guard that cannot print `escalate:` or a cross-check (one without printed_load(),
+# which runs itself where the base branch has lost its guard): the pair's ceiling holds only with them.
+OLD_TABLE = {"important": {"small": MERGED, "medium": PAIR, "large": THREE},
+             "critical": {"small": PAIR, "medium": THREE, "large": THREE}}
 CEILING = (PAIR, THREE)  # loads a unit large on its own may have printed for its measure to restart after it
 # The unit's weight, logged as a suffix of the review log's `why`: level, size band, and whether a floor path or, at
 # Critical, a content path is in it. A rise in any part is an escalation, since the load no longer rises with it.
@@ -209,10 +213,11 @@ def load(guard, rules, level, rows, commits, uncommitted, tips):
     floor = any(fnmatch.fnmatchcase(path, glob) for path in guard.paths_of(commits) + [row.path for row in rows]
                 for glob, _level in guard.FLOOR)
     weight = "; weight=%s/%s/%s" % (level, name, "path" if content or floor else "none")
+    lean = hasattr(guard, "printed_load")
     if content:
-        return PAIR, "%s is not in `critical code:` globs alone%s" % (content, weight)
-    return TABLE[level][name], "%s: %s%s%s" % (name, why, "; since %s, a unit large on its own" % found[-1][:12]
-                                               if found else "", weight)
+        return PAIR if lean else THREE, "%s is not in `critical code:` globs alone%s" % (content, weight)
+    return (TABLE if lean else OLD_TABLE)[level][name], "%s: %s%s%s" % (
+        name, why, "; since %s, a unit large on its own" % found[-1][:12] if found else "", weight)
 
 
 def weight(entry):

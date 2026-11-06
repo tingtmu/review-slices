@@ -128,6 +128,23 @@ class ReviewLogTest(unittest.TestCase):
         self.status()
         self.assertEqual(len(self.log()), 2)  # same head, load and weight: nothing new
 
+    def test_a_guard_that_cannot_print_escalate_keeps_the_old_table(self):  # round three refuter: a 0.12 copy
+        sizer = test_merged_reviewer.SIZER  # runs itself where the base branch lost its guard
+        old = test_merged_reviewer.GUARD.__dict__.copy()
+        old.pop("printed_load")
+        guard = type("Guard", (), {})()
+        guard.__dict__.update(old)
+        self.assertFalse(hasattr(guard, "printed_load"))
+        self.change({"lib/a.py": "a\n" * 50})
+        cwd = os.getcwd()
+        os.chdir(self.repo.path)
+        try:
+            found = sizer.load(guard, None, "important", [], [self.repo.out("rev-parse", "HEAD")], [],
+                               (self.repo.out("rev-parse", "origin/main"),))
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(found[0], "three reviewers", found)
+
     def test_the_weight_is_read_from_the_last_suffix_and_old_lines_read_lowest(self):  # r3 F3
         sizer, sha = test_merged_reviewer.SIZER, "a" * 40
         entry = sizer.Entry("t", "r", sha, sha, "important", "adversarial + conformance",
