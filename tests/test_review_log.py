@@ -112,7 +112,7 @@ class ReviewLogTest(unittest.TestCase):
         self.assertIn("weight rose (band medium -> large), at %s:" % grown[:12], self.escalation())
         self.repo.git("reset", "-q", "--hard", reviewed)  # back to the reviewed head, then the large work again
         self.status()
-        regrown = self.change({"lib/b.py": "b\n" * 60})
+        regrown = self.change({"lib/b.py": "b\n" * 60}, "the large work again")  # same second, same sha otherwise
         self.assertNotEqual(regrown, grown)
         self.assertIn("weight rose (band medium -> large), at %s:" % regrown[:12], self.escalation())
 
