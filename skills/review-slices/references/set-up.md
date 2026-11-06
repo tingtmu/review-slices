@@ -25,11 +25,11 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    a table too loose; one below it, a table stricter than the one that judged it. Small Important units that are
    mostly prose call for a narrower glob, not fewer reviewers. Its review load section shows the reviewers each unit
    would get. Tag a critical glob `critical code:` only where its files are code a reviewer can judge from a small
-   diff; golden outputs, corpora, state tables and CI stay `critical:` (content, the default, which always takes
-   three). `small: N lines, M files` and `medium: N lines, M files` (or `off`) set the size bands; built in: small 40
+   diff; golden outputs, corpora, state tables and CI stay `critical:` (content, the default). `small: N lines, M files` and `medium: N lines, M files` (or `off`) set the size bands; built in: small 40
    lines, 3 files, no medium; at most 80/5 and 400/20. Where the base branch's guard is older than 0.9.0, push the
    upgraded guard first: an older guard cannot parse these lines, so pushes count every path as critical and `status`
-   stops with a parse error. Run it again as reviewers' level notes build up.
+   stops with a parse error. The same holds for `cross-check: on` and a guard older than 0.13.0: upgrade the base
+   branch's guard before adding the line. Run it again as reviewers' level notes build up.
 4. Run `python3 <skill>/scripts/setup_tools.py install --agent-hooks`, show the user what it would change, and with
    their go-ahead run it again with `--apply`. It copies the guard, `merged_reviewer.py`, `run_suite.py`,
    `secret_scan.py` (where REVIEW.md has `secrets:`) and, with `--agent-hooks`, `agent_hook.py` to `.githooks/` if

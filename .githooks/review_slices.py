@@ -27,6 +27,7 @@ Configuration is the first ```review-slices fenced block in REVIEW.md at the rep
     critical code: engine/src/*          # critical code a small diff can be judged from (others are content)
     small: 40 lines, 3 files             # size bands of the review load, up to 80/5 and 400/20; or off
     medium: 200 lines, 10 files
+    cross-check: on                      # pair units add a cross-check reviewer (incidents.py --check asks for it)
 
 A path takes its highest matching level; REVIEW.md, .githooks/* and .gitleaks* are at least important. A push is
 judged by its new commits (neither the target ref nor the base branch has them), a merge only where it differs from
@@ -69,11 +70,18 @@ SLICE2 = {"simple": ("1-2 adversarial reviewers, each its own fresh agent", "the
                      "the level; none only with the user's go-ahead asked first"),
           "important": THREE, "critical": THREE}
 # The reduced review loads `status` may print, and the most a REVIEW.md size band may say (lines, files).
+CROSS_CHECKED = "adversarial + conformance, plus a cross-check"
 LOADS = {"one merged reviewer": ("1 merged reviewer (the adversarial, Standards and Spec lenses), its own fresh agent",
                                  LEAST + "none only with the user's go-ahead asked first"),
          "adversarial + conformance": ("2 separate reviewers (adversarial; conformance: the Standards and Spec "
                                        "lenses), each its own fresh agent", LEAST + "fewer, or the two combined into "
-                                       "one, only with the user's go-ahead asked first, or step 4's exceptions")}
+                                       "one, only with the user's go-ahead asked first, or step 4's exceptions"),
+         CROSS_CHECKED: ("2 separate reviewers (adversarial; conformance: the Standards and Spec lenses), each its "
+                         "own fresh agent, then after round one a cross-check: 1 fresh adversarial reviewer on the "
+                         "whole unit, of another model family where one is available (the briefs' Cross-check "
+                         "reviewer; your report names its runner)", LEAST + "fewer, or the two combined into one, "
+                         "only with the user's go-ahead asked first, or step 4's exceptions; the cross-check only "
+                         "the user drops")}
 CEILINGS = {"small": (80, 5), "medium": (400, 20)}
 OVERRIDE = "If the user decides to push anyway, the user runs `git push --no-verify`; an agent never does."
 # Settings in a user's git config that would change what the guard reads.
@@ -131,7 +139,7 @@ def parse_config(text):
     if not match:
         raise GuardError("REVIEW.md has no ```review-slices block")
     config = {"tests": [], "base": None, "default": "simple", "globs": [], "errors": [], "warnings": [],
-              "secrets": None, "small": None, "medium": None}
+              "secrets": None, "small": None, "medium": None, "cross-check": None}
     seen, kinds = set(), {"code": set(), "content": set()}
     for number, raw in enumerate(match.group(1).splitlines(), 1):
         line = COMMENT.sub("", raw).strip()
@@ -166,6 +174,10 @@ def parse_config(text):
         elif key == "secrets":  # any value turns the scan on; `check` names one it does not know
             config["secrets"] = value
             config["errors"] += [] if value == "gitleaks" else ["line %d: secrets: takes gitleaks" % number]
+        elif key == "cross-check":  # a value it cannot read is on: fail closed
+            config["cross-check"] = "off" if value == "off" and config["cross-check"] != "on" else "on"
+            config["errors"] += [] if value in ("on", "off") else ["line %d: cross-check: takes on or off; read as "
+                                                                   "on" % number]
         elif key == "base" or (key == "default" and value in LEVELS):
             if key in seen:
                 config["errors"].append("line %d repeats %r; the last one counts" % (number, key))
@@ -183,8 +195,10 @@ def unreadable_rules(reason, text=""):
     in its block (not a commented one) keeps the secret scan on."""
     block = re.search(r"^```review-slices[^\n]*\n(.*?)(?:^```|\Z)", text, re.S | re.M)
     secrets = bool(block and re.search(r"^[ \t]*secrets[ \t]*:", block.group(1), re.M))
+    cross = bool(block and re.search(r"^[ \t]*cross-check[ \t]*:", block.group(1), re.M))
     return {"tests": ["?"], "base": None, "default": "critical", "globs": [("critical", "*")], "errors": [reason],
-            "warnings": [], "unreadable": reason, "secrets": "gitleaks" if secrets else None}
+            "warnings": [], "unreadable": reason, "secrets": "gitleaks" if secrets else None,
+            "cross-check": "on" if cross else None}
 
 
 def read_config(root):
@@ -527,32 +541,45 @@ def print_lint(config, where):
 
 
 def review_load(rules, level, rows, uncommitted, start):
-    """(load, why) from .githooks/merged_reviewer.py, loaded as the secret scanner is, over every commit this
-    branch adds to the base branch (its load() may start after a unit large on its own), with the bands and kinds
-    of the standing RULES only (None: the defaults), so a change cannot lighten its own review; its hold() then
-    keeps the unit at the highest load printed since START (the review log). Without the measure, or if it fails,
-    three reviewers; a 0.8.0 measure has no load(), so it judges Important pushes only."""
+    """((load, why), escalation) from .githooks/merged_reviewer.py, loaded as the secret scanner is, over every
+    commit this branch adds to the base branch (its load() may start after a unit large on its own), with the bands,
+    kinds and cross-check of the standing RULES only (None: the defaults), so a change cannot lighten its own review;
+    its hold() then keeps the unit at the highest load printed since START (the review log), and its escalation()
+    names a git fact that escalates the unit, or None. Without the measure, or if it fails, three reviewers, the
+    fallback; a 0.8.0 measure has no load(), so it judges Important pushes only."""
     tip = base_tip()[1]
     if not tip:  # vendored() would fall back to this branch's own copy
-        return "three reviewers", "the base branch is not fetched"
+        return ("three reviewers", "the base branch is not fetched"), None
     at, source = vendored(tip, "HEAD", MERGED_PATH)
     if at == "HEAD":  # the base branch never had a guard: nothing it trusts measures this push
-        return "three reviewers", "the base branch has no guard yet"
+        return ("three reviewers", "the base branch has no guard yet"), None
     if not source:
-        return "three reviewers", "%s has no %s: run the skill's setup_tools.py upgrade" % (at[:12], MERGED_PATH)
+        return ("three reviewers", "%s has no %s: run the skill's setup_tools.py upgrade" % (at[:12], MERGED_PATH)
+                ), None
     module, guard, commits = types.ModuleType("merged_reviewer"), types.SimpleNamespace(**globals()), new_commits(
         "HEAD", (tip,))  # the whole branch, so slices are measured whole; load() may start after a large unit
     try:
         exec(compile(source, MERGED_PATH, "exec"), module.__dict__)
         if hasattr(module, "load"):
             found = module.load(guard, rules, level, rows, commits, uncommitted, (tip,))
-            return module.hold(guard, start, level, found) if hasattr(module, "hold") and not uncommitted else found
+            if not hasattr(module, "hold") or uncommitted:
+                return found, None
+            if not hasattr(module, "escalation"):  # before 0.13.0: no weight, no cross-check
+                return module.hold(guard, start, level, found), None
+            return module.hold(guard, start, level, found, rules), module.escalation(guard, start)
         allowed, why = module.allowed(guard, commits, uncommitted, (tip,)) if level == "important" and not (
             rules or {}).get("small") else (False, "%s at %s has no load(): it measures Important changes, under "
                                                    "no small: line, only" % (MERGED_PATH, at[:12]))
-        return "one merged reviewer" if allowed else "three reviewers", why
+        return ("one merged reviewer" if allowed else "three reviewers", why), None
     except Exception as error:  # a broken measure means three reviewers, not a traceback
-        return "three reviewers", "%s at %s did not run: %r" % (MERGED_PATH, at[:12], error)
+        return ("three reviewers", "%s at %s did not run: %r" % (MERGED_PATH, at[:12], error)), None
+
+
+def printed_load(rules, load, why):
+    """(load, why) as `status` prints them: the pair with a cross-check where the standing RULES turn it on, and
+    WHY without the suffixes the review log keeps (the unit's weight, the cross-check)."""
+    cross = load == "adversarial + conformance" and (rules or {}).get("cross-check") == "on"
+    return CROSS_CHECKED if cross else load, re.sub(r"; weight=[a-z]+/[a-z]+/[a-z]+|; cross-check(?=\)|$)", "", why)
 
 
 def last_trailer(commits):
@@ -629,10 +656,15 @@ def cmd_status(args):
         print("  %s  (%s)" % (row.path, row.pattern))
     print("trailer: Review: %s %s" % (level, start[:12]))
     uncommitted = sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
-    load = (("three reviewers", "a BASE was given, so the branch is not measured whole") if args else review_load(
-        rules, level, rows, uncommitted, start)) if level in ("important", "critical") else None
+    load, escalate = None, None
+    if level in ("important", "critical"):
+        load, escalate = ((("three reviewers", "a BASE was given, so the branch is not measured whole"), None)
+                          if args else review_load(rules, level, rows, uncommitted, start))
+        load = printed_load(rules, *load)
     if load:
         print("review: %s (%s)" % load)
+    if escalate:
+        print("escalate: " + escalate)
     print("new commits: %d not yet on %s or this branch's remote" % (len(commits), tip_name))
     print("standing rules: %s" % ("REVIEW.md at %s, where this branch left %s" % (standing[:12], tip_name)
                                   if rules else "this branch's own REVIEW.md (%s not fetched or without one)"

@@ -10,7 +10,7 @@
 
 The guard loads this file from the commit its own copy comes from (the base branch) and calls load() from `status`
 at Important and Critical, then hold(), which keeps the load per review unit in the review log; it is not run on its
-own. Without it, or if it fails, `status` says three reviewers.
+own. Without it, or if it fails, `status` says three reviewers, the fallback; the most it prints is the pair.
 calibrate.py measures with the skill's copy, so the bands are chosen and enforced by one measure. The guard parses
 REVIEW.md's `small:`, `medium:` and `critical code:` lines; the defaults below apply where they are absent.
 """
@@ -26,10 +26,18 @@ VERSION = "0.12.0"
 # line cannot pass as one) and files; chosen from calibrate.py's data (2026-10-25). No medium band by default.
 MERGED_LINES, MERGED_FILES, LINE_WIDTH = 40, 3, 100
 MERGED, PAIR, THREE = "one merged reviewer", "adversarial + conformance", "three reviewers"
-# The review load table: level -> {size band: load}. A Critical change gets PAIR only when small and every path
-# that sets its level is in `critical code:` globs alone.
-TABLE = {"important": {"small": MERGED, "medium": PAIR, "large": THREE},
-         "critical": {"small": PAIR, "medium": THREE, "large": THREE}}
+# The review load table: level -> {size band: load}. The pair is the ceiling (0.13.0): three reviewers are only the
+# guard's fallback when it cannot measure, and what the user asks for.
+TABLE = {"important": {"small": MERGED, "medium": PAIR, "large": PAIR},
+         "critical": {"small": PAIR, "medium": PAIR, "large": PAIR}}
+CEILING = (PAIR, THREE)  # loads a unit large on its own may have printed for its measure to restart after it
+# The unit's weight, logged as a suffix of the review log's `why`: level, size band, and whether a floor path or, at
+# Critical, a content path is in it. A rise in any part is an escalation, since the load no longer rises with it.
+WEIGHT_PARTS = (("important", "critical"), ("small", "medium", "large"), ("none", "path"))
+WEIGHT = re.compile(r"; weight=(important|critical)/(small|medium|large)/(none|path)")
+# An entry logged before 0.13.0 has no weight: the lowest its level and load had under the old table.
+OLD_BANDS = {("important", PAIR): "medium", ("important", THREE): "large", ("critical", THREE): "medium"}
+CROSS_CHECK = "; cross-check"
 # A file moved unchanged is one file and no lines; 100% finds only byte-identical moves (git's exact pass), whatever
 # diff.renameLimit says, so a move with any edit still counts in full as a delete plus an add.
 PATCH_ARGS = ("--patch", "-U0", "--inter-hunk-context=0", "--find-renames=100%", "--no-ext-diff", "--no-textconv",
@@ -145,8 +153,8 @@ def net_lines(guard, old, new):
 def restarts(guard, rules, commits, tips):
     """The trailer commits among COMMITS after which the measure starts over: each closes a unit with no merge, of
     the standing RULES' Important or Critical level, whose trailer says that level or higher and whose net diff is
-    over every band's line limit, and for which this ref's review log holds three reviewers printed in the unit at
-    or before it, when the unit was already that large. So a slice that is small on its own, a unit grown past the
+    over every band's line limit, and for which this ref's review log holds the ceiling load (the pair, or three
+    reviewers before 0.13.0) printed in the unit at or before it, when the unit was already that large. So a slice that is small on its own, a unit grown past the
     band after a lighter load, a base branch reset under it, rules tightened since, another clone or a rebase never
     restart; the log can only take a restart away. No standing rules, or a guard without the helpers: none."""
     limit = line_limit(rules)
@@ -154,7 +162,7 @@ def restarts(guard, rules, commits, tips):
                                                                               "paths_of", "rank")):
         return []
     ref = unit_ref(guard)
-    logged = [entry for entry in read_log(guard, log_path(guard)) if (entry.ref, entry.load) == (ref, THREE)]
+    logged = [entry for entry in read_log(guard, log_path(guard)) if entry.ref == ref and entry.load in CEILING]
     found = []
     for commit, unit in guard.review_units(commits, tips)[0]:  # a unit's commits newest first, so a chain ends at
         level = guard.range_level(rules, guard.paths_of(unit))[0]  # its oldest
@@ -189,17 +197,56 @@ def content_path(guard, rules, level, paths):
 
 def load(guard, rules, level, rows, commits, uncommitted, tips):
     """(load, why): the reviewers a LEVEL change gets, from the TABLE: its size band over COMMITS since the last
-    restart, if any, and, at Critical, the kind of every path in ROWS (the paths that set the level)."""
+    restart, if any, and, at Critical, the kind of every path in ROWS (the paths that set the level). WHY ends with
+    the unit's weight."""
     content = content_path(guard, rules, level, [row.path for row in rows])
-    if content:
-        return THREE, "%s is not in `critical code:` globs alone" % content
     found = [] if uncommitted else restarts(guard, rules, commits, tips)
     if found:
         kept = set(guard.rev_list("HEAD", tuple(tips) + tuple(found)))
         commits, tips = [commit for commit in commits if commit in kept], tuple(tips) + tuple(found)
     name, why = band(guard, rules, commits, uncommitted, tips)
-    return TABLE[level][name], "%s: %s%s" % (name, why, "; since %s, a unit large on its own" % found[-1][:12]
-                                             if found else "")
+    floor = any(fnmatch.fnmatchcase(path, glob) for path in guard.paths_of(commits) + [row.path for row in rows]
+                for glob, _level in guard.FLOOR)
+    weight = "; weight=%s/%s/%s" % (level, name, "path" if content or floor else "none")
+    if content:
+        return PAIR, "%s is not in `critical code:` globs alone%s" % (content, weight)
+    return TABLE[level][name], "%s: %s%s%s" % (name, why, "; since %s, a unit large on its own" % found[-1][:12]
+                                               if found else "", weight)
+
+
+def weight(entry):
+    """(level, band, flag) of a review log ENTRY: its last `weight=` suffix (a `held:` line quotes an older why
+    first), or for an entry from before 0.13.0 the lowest weight its level and load had."""
+    found = WEIGHT.findall(entry.why)
+    if found:
+        return found[-1]
+    return entry.level, OLD_BANDS.get((entry.level, entry.load), "small"), "none"
+
+
+def rise(old, new):
+    """The parts of weight NEW above every weight in OLD, as `band medium -> large`; empty if none rose."""
+    return ["%s %s -> %s" % (part, max((seen[index] for seen in old), key=order.index), new[index])
+            for index, (part, order) in enumerate(zip(("level", "band", "path"), WEIGHT_PARTS))
+            if all(order.index(new[index]) > order.index(seen[index]) for seen in old)] if old else []
+
+
+def escalation(guard, start):
+    """A git fact that escalates the unit that starts at START, from the review log, or None: history inside it
+    was rewritten since `status` last logged it, or its weight rose above every weight logged for it before. It
+    reads only the line hold() logged for HEAD, so it shows at every `status` until a new commit."""
+    head = guard.git("rev-parse", "HEAD")
+    ref = unit_ref(guard)
+    mine = [entry for entry in read_log(guard, log_path(guard)) if (entry.ref, entry.start) == (ref, start)]
+    if not mine or mine[-1].head != head:
+        return None
+    prior = [entry for entry in mine if entry.head != head]
+    if prior and guard.git("merge-base", "--is-ancestor", prior[-1].head, head, check=False) is None:
+        fact = "history inside the unit was rewritten after status logged it at %s" % prior[-1].head[:12]
+    else:
+        parts = rise([weight(entry) for entry in prior], weight(mine[-1]))
+        fact = "the unit's weight rose (%s)" % ", ".join(parts) if parts else None
+    return fact and "%s: a fresh adversarial + conformance pair on the whole unit, `git diff %s..HEAD`, as its " \
+                    "round two, or the user decides" % (fact, start[:12])
 
 
 def allowed(guard, commits, uncommitted, tips):
@@ -237,10 +284,11 @@ def read_log(guard, path):
     return entries
 
 
-def hold(guard, start, level, found):
+def hold(guard, start, level, found, rules=None):
     """(load, why): FOUND, the load measured for the unit that starts at START, or what the review log holds for
-    it: the highest load `status` printed since the unit began, and three reviewers once a commit one was printed
-    at has left HEAD's history (amend, squash, rebase). Logs what it returns when it differs from the last line."""
+    it: the highest load `status` printed since the unit began, and the pair once a commit one was printed at has
+    left HEAD's history (amend, squash, rebase). With `cross-check: on` in RULES, the pair's why ends with
+    `; cross-check`. Logs what it returns when it differs from the last line."""
     path, ref, head = log_path(guard), unit_ref(guard), guard.git("rev-parse", "HEAD")
     mine = [entry for entry in read_log(guard, path) if (entry.ref, entry.start) == (ref, start)]
     gone = next((entry for entry in mine if guard.git("merge-base", "--is-ancestor", entry.head, "HEAD",
@@ -248,9 +296,12 @@ def hold(guard, start, level, found):
     top = max((entry for entry in mine if not entry.why.startswith(REWRITTEN)), key=lambda entry: RANK[entry.load],
               default=None)  # the first printed, if several; a rewrite is judged again each time, never held
     if gone:
-        found = THREE, "%s after status printed %s at %s" % (REWRITTEN, gone.load, gone.head[:12])
+        tail = found[1][found[1].rfind("; weight="):] if WEIGHT.search(found[1]) else ""
+        found = PAIR, "%s after status printed %s at %s%s" % (REWRITTEN, gone.load, gone.head[:12], tail)
     elif top and RANK[top.load] > RANK[found[0]]:
         found = top.load, "held: status printed it for this unit at %s (%s); now %s" % (top.time, top.why, found[1])
+    if found[0] == PAIR and (rules or {}).get("cross-check") == "on" and not found[1].endswith(CROSS_CHECK):
+        found = PAIR, found[1] + CROSS_CHECK
     if not mine or (mine[-1].head, mine[-1].load) != (head, found[0]):
         fields = (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), ref, start, head, level) + tuple(found)
         os.makedirs(os.path.dirname(path), exist_ok=True)

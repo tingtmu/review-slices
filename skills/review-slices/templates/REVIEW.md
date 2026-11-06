@@ -26,22 +26,24 @@ trivial: <notes and roadmap files no check reads>
 # secrets: gitleaks   (optional: scan the commits every push adds; needs gitleaks 8.19+ and git 2.36+)
 # small: 40 lines, 3 files     (optional size bands of the review load; or off)
 # medium: 200 lines, 10 files
+# cross-check: on     (optional: a cross-check reviewer on every pair unit; needs a 0.13.0+ guard on the base branch)
 ```
 
 Planned actions that make a change Critical: <for example a live cloud action, a release tag, a data deletion>.
 
 `status` prints the review load (which reviewers) at Important and Critical, from the size band of everything a
-branch adds to the base branch, or since its last unit large on its own that went to three reviewers (`small:` and `medium:`; built in: small 40 lines, 3 files, no medium; at most 80/5
-and 400/20) and the glob kind. A `critical:` glob is content, such as golden outputs, corpora, state tables or CI,
-and always takes three reviewers; a `critical code:` glob is code a reviewer can judge from a small diff. Loosening a
-band or tagging a glob as code is a reviewed change to this file.
+branch adds to the base branch, or since its last unit large on its own that got the ceiling load (`small:` and `medium:`; built in: small 40 lines, 3 files, no medium; at most 80/5
+and 400/20) and the glob kind. The most it prints is the adversarial and conformance pair. A `critical:` glob is
+content, such as golden outputs, corpora, state tables or CI; a `critical code:` glob is code a reviewer can judge
+from a small diff. `cross-check: on` adds a cross-check reviewer to every pair unit (`incidents.py --check` asks for
+it after misses through the pair). Loosening a band or tagging a glob as code is a reviewed change to this file.
 
 | Level | Slice 2 review |
 |---|---|
 | Trivial | none |
 | Simple | 1–2 adversarial reviewers |
-| Important | small: one merged reviewer; medium: an adversarial and a conformance reviewer; large: a Standards, a Spec and an adversarial reviewer |
-| Critical | small and only in `critical code:` globs: an adversarial and a conformance reviewer; else the three. Then the user's go-ahead for the one-way door; a review meeting only for a disputed review finding, with the user's yes |
+| Important | small: one merged reviewer; medium and large: an adversarial and a conformance reviewer |
+| Critical | an adversarial and a conformance reviewer. Then the user's go-ahead for the one-way door; a review meeting only for a disputed review finding, with the user's yes |
 
 The load `status` prints is binding: fewer reviewers, or lenses merged into fewer, only with the user's go-ahead
 asked before the round (except later rounds, as the skill's step 6 says, and a version-swap release this file

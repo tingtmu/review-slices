@@ -15,6 +15,10 @@ THREE = ("3 separate reviewers (Standards, Spec, adversarial), each its own fres
          "counted)")
 
 
+PAIR = ("2 separate reviewers (adversarial; conformance: the Standards and Spec lenses), each its own fresh agent",
+        LEAST + "fewer, or the two combined into one, " + ASKED + ", or step 4's exceptions")
+
+
 class NextStepTest(unittest.TestCase):
     """The first round's reviewers, counted and separate; a reduction is the user's call, asked first; the `load:`
     line written before they start (canary: Sonnet skipped SKILL.md's sentence 4/4); the trailer only once they
@@ -34,25 +38,30 @@ class NextStepTest(unittest.TestCase):
         self.assertTrue(step.endswith("--trailer \"Review: %s %s\"`" % (level, start)), step)
         return step
 
-    def test_three_reviewers_are_counted_and_only_the_user_lowers_them(self):
-        step = self.assertStep({"lib/a.py": "a\n" * 200}, "important", *THREE)
-        for lighter in ("merged", "conformance", "the least"):  # no lighter load named where the agent decides
-            self.assertNotIn(lighter, step)
+    def test_the_ceiling_pair_is_counted_and_only_the_user_lowers_it(self):  # I6; three before 0.13.0
+        step = self.assertStep({"lib/a.py": "a\n" * 200}, "important", *PAIR)
+        self.assertNotIn("merged", step)  # no lighter load named where the agent decides
+        self.assertNotIn("cross-check", step)
 
-    def test_critical_three_add_the_go_ahead_for_the_one_way_door(self):
-        step = self.assertStep({"engine/golden/a.txt": "a\n"}, "critical", *THREE)
+    def test_a_critical_content_path_takes_the_pair_and_the_go_ahead_for_the_one_way_door(self):
+        step = self.assertStep({"engine/golden/a.txt": "a\n"}, "critical", *PAIR)
         self.assertNotIn("merged", step)
+
+    def test_three_reviewers_where_status_cannot_measure_are_counted(self):  # the fallback
+        self.change({"lib/a.py": "a\n"})
+        done = self.repo.guard("status", "origin/main")
+        self.assertIn("review: three reviewers (a BASE was given, so the branch is not measured whole)", done.stdout)
+        self.assertIn("first round on the whole unit: %s, on `git diff " % THREE[0], done.stdout)
+        self.assertIn(THREE[1], done.stdout)
 
     def test_one_merged_reviewer_is_the_least(self):
         self.assertStep({"lib/a.py": "a\n"}, "important", "1 merged reviewer (the adversarial, Standards and Spec "
                         "lenses), its own fresh agent", LEAST + "none " + ASKED)
 
     def test_the_conformance_pair_is_two_separate_reviewers_and_the_least(self):
-        pair = ("2 separate reviewers (adversarial; conformance: the Standards and Spec lenses), each its own fresh "
-                "agent", LEAST + "fewer, or the two combined into one, " + ASKED + ", or step 4's exceptions")
-        self.assertStep({"lib/a.py": "a\n" * 41}, "important", *pair)
+        self.assertStep({"lib/a.py": "a\n" * 41}, "important", *PAIR)
         self.repo.git("checkout", "-q", "-b", "other", "origin/main")
-        self.assertStep({"engine/a.py": "a\n" * 12}, "critical", *pair)
+        self.assertStep({"engine/a.py": "a\n" * 12}, "critical", *PAIR)
 
     def test_simple_and_trivial(self):
         self.assertStep({"src/a.py": "a\n"}, "simple", "1-2 adversarial reviewers, each its own fresh agent",
@@ -72,7 +81,7 @@ class WhyNamesTheLimitTest(unittest.TestCase):
         self.repo = Repo(self, rules=LIB_RULES + rules)
         self.repo.install()
         self.change({"lib/a.py": "a\n" * 50})
-        self.assertEqual(self.review()[0], "review: three reviewers (%s(%s))" % (self.size, widest))
+        self.assertEqual(self.review()[0], "review: adversarial + conformance (%s(%s))" % (self.size, widest))
 
     def test_small_only(self):
         self.assertWhy("", "widest on: small, 40 lines, 3 files")

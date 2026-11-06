@@ -245,19 +245,27 @@ class ReportTest(unittest.TestCase):
                                        recurrences=recurrences)).run("--check")
             self.assertEqual(done.returncode, int(refused), plug + recurrences + done.stdout)
 
-    def test_a_second_miss_by_the_pair_turns_off_every_band_that_gives_it(self):
+    def test_a_second_miss_by_the_pair_needs_the_cross_check(self):  # 0.13.0: no band turned off lightens it
         pair = "2 Review (adversarial + conformance)"
-        for rules, missing in (("", "`medium: off`"), ("medium: off\n", None),
-                               ("critical code: src/*\n", "`medium: off` and `small: off`"),
-                               ("critical code: src/*\nmedium: off\n", "`small: off`"),
-                               ("critical   code: src/*\nmedium: off\nsmall: off\n", None)):
+        for rules, missing in (("", True), ("cross-check: on\n", False), ("cross-check: on  # I1, I2\n", False),
+                               ("medium: off\nsmall: off\n", True), ("cross-check: off\n", True),
+                               ("# cross-check: on\n", True)):
             log = LogRepo(self, entry(1, slice_text=pair), entry(2, slice_text=pair))
             with open(os.path.join(log.path, "REVIEW.md"), "a", encoding="utf-8") as handle:
                 handle.write("\n```review-slices\ndefault: simple\n%s```\n" % rules)
             done = log.run("--check")
-            self.assertEqual(done.returncode, int(bool(missing)), rules + done.stdout)
+            self.assertEqual(done.returncode, int(missing), rules + done.stdout)
             if missing:
-                self.assertIn("review-slices block needs %s until each has one\n" % missing, done.stdout)
+                self.assertIn("review-slices block needs `cross-check: on` until each has one\n", done.stdout)
+
+    def test_misses_through_the_pair_on_a_large_or_critical_unit_are_counted(self):  # the stop rule
+        done = LogRepo(self, entry(1, slice_text="2 Review (adversarial + conformance, large), unit 1a2b3c4d"),
+                       entry(2, slice_text="2 Review (adversarial + conformance, medium)"),
+                       entry(3, slice_text="2 Review (adversarial and conformance, Critical small)")).run()
+        self.assertIn("adversarial + conformance 3 (2 on a large or Critical unit: tell the user before the next "
+                      "one)\n", done.stdout)
+        done = LogRepo(self, entry(1, slice_text="2 Review (adversarial + conformance), large later")).run()
+        self.assertIn("adversarial + conformance 1\n", done.stdout)
 
     def test_a_recurrence_that_names_a_load_is_a_miss_through_it(self):
         recurrence = "\n  - 2026-10-01, 2 Review (merged reviewer): the same class again."

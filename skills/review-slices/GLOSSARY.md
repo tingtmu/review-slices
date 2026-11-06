@@ -38,8 +38,8 @@ _Avoid_: test cache, green flag
 
 **Review log**:
 A per-clone record of the review load `status` printed for committed work, by branch and review unit, through
-which `status` holds a unit's highest load and spots a rewrite inside it, and which shows that a unit large on its
-own went to three reviewers, so the size band starts over after it. Never committed; calibrate reads it.
+which `status` holds a unit's highest load, spots a rewrite inside it or a rise in its weight, and shows that a
+unit large on its own got the ceiling load, so the size band starts over after it. Never committed; calibrate reads it.
 _Avoid_: load history, review record
 
 **Review trailer**:
@@ -82,7 +82,8 @@ _Avoid_: tier, risk level, priority
 The reviewers a review unit gets at its review level, computed by `status` from the level, the size band and the
 glob kind of the paths that set the level. Never chosen by the agent; never recorded in the trailer. A unit's load is
 the highest one `status` printed since the unit began; after rewriting history inside a unit (amend, squash,
-rebase) it is the three reviewers. `status` holds both through the clone's review log.
+rebase) it is the pair. `status` holds both through the clone's review log. The adversarial + conformance pair is
+the ceiling; three reviewers only where `status` cannot measure, or the user asks.
 _Avoid_: sub-level, subgrade, tier, light review
 
 **Size band**:
@@ -90,7 +91,7 @@ Small, medium or large, by the weighted lines and files of every commit the bran
 only those a push adds, so a change pushed in slices is measured whole), against the standing rules' `small:` and
 `medium:` lines (built-in defaults where absent). It starts over after a unit large on its own: a closed Important
 or Critical unit with no merge, its trailer at that level or higher, whose net diff is over every band's line limit
-and for which this branch's review log shows three reviewers printed when it was already that large. A file moved unchanged counts as one file and no lines. A floor
+and for which this branch's review log shows the ceiling load printed when it was already that large. A file moved unchanged counts as one file and no lines. A floor
 path, a binary file added, edited or deleted, a submodule update, uncommitted work or a merge with changes of its own
 puts a change in no band below large.
 _Avoid_: size class, tier
@@ -137,9 +138,21 @@ with a dedicated adversarial reviewer.
 _Avoid_: merged reviewer (that one takes all three lenses), compliance reviewer
 
 **Escalation**:
-Moving a review unit to the three reviewers on the whole unit because a reduced load's round flagged something
-(SKILL.md step 5), or because the load `status` prints rose (step 6). Never the reverse.
+A fresh adversarial + conformance pair on the whole unit, from the merged reviewer or from the pair, because a
+round flagged something (SKILL.md step 5), or because `status` prints that the unit's weight rose or its history was
+rewritten (step 6). Never the reverse.
 _Avoid_: upgrade, bump
+
+**Unit weight**:
+What a review unit is, as the load is computed from it: its review level, its size band, and whether a floor path or
+a critical content path is in it. A rise in any part escalates, since the load no longer rises past the pair.
+_Avoid_: size, risk
+
+**Cross-check**:
+One fresh adversarial reviewer on the whole unit, after round one, from another model family where one is
+available, else the same family with a brief that takes the angles the pair did not. Pair units add it where the
+base branch's REVIEW.md turns it on, which misses through the pair that lack a test plug call for.
+_Avoid_: second opinion, ensemble
 
 **Review meeting**:
 A multi-agent decision meeting limited to disputed review findings, held only with the user's go-ahead.

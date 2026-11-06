@@ -48,8 +48,9 @@ Three sections live in their own files. Read each one in full when it applies:
    example a live cloud action); when unsure, go one higher. A raised level is the level the trailer records.
    Never lower it. Put its output in your report. At Important and Critical it also prints a `review:` line: the
    review load (which reviewers) and why, from the size band of everything the branch adds to the base branch (or,
-   after a unit over every band's line limit on its own that `status` sent to three reviewers, only what follows
-   it: `since <sha>, a unit large on its own`) and, at Critical, the glob kind of the paths that set the level.
+   after a unit over every band's line limit on its own that got the ceiling load, only what follows it: `since
+   <sha>, a unit large on its own`) and, at Critical, the glob kind of the paths that set the level; and an
+   `escalate:` line when a git fact escalates the unit (step 5).
 4. **Review at that level, with the load `status` printed** (briefs in
    [references/reviewer-briefs.md](references/reviewer-briefs.md)):
 
@@ -57,13 +58,13 @@ Three sections live in their own files. Read each one in full when it applies:
    |---|---|
    | Trivial | none |
    | Simple | 1–2 adversarial reviewers |
-   | Important | `review: one merged reviewer` (small band); `adversarial + conformance` (medium band): an adversarial and a conformance reviewer; `three reviewers` (large): a Standards, a Spec and an adversarial reviewer. All of one round in parallel |
-   | Critical | `adversarial + conformance` (small, and every path that sets the level is in `critical code:` globs alone); else the three. Then the user's go-ahead for the one-way door, given with the review findings. A [review meeting](references/review-meeting.md) only for a disputed review finding, only if the user says yes |
+   | Important | `review: one merged reviewer` (small band); else `adversarial + conformance`: an adversarial and a conformance reviewer, in parallel |
+   | Critical | `adversarial + conformance`. Then the user's go-ahead for the one-way door, given with the review findings. A [review meeting](references/review-meeting.md) only for a disputed review finding, only if the user says yes |
 
-   The load is the least review the change needs; more is always allowed. In the adversarial + conformance pair,
-   the adversarial reviewer's brief also ends with the report for a reduced load. A level you raised for a planned
-   action takes the three reviewers whatever `status` prints for the computed level, and a floor path makes
-   `status` print three. The one exception: a release whose only changes outside its release notes swap the version
+   `plus a cross-check` (the base branch's REVIEW.md has `cross-check: on`) adds one cross-check reviewer after
+   round one; `three reviewers` (Standards, Spec, adversarial) only where `status` prints it, unable to measure.
+   The load is the least review the change needs; more is always allowed. A level you raised for a planned action
+   takes the pair whatever `status` prints for the computed level. The one exception: a release whose only changes outside its release notes swap the version
    takes one merged reviewer where REVIEW.md as committed on the base branch (`git show <base>:REVIEW.md`) says so
    beside its planned actions, with the shown output it requires; wording that exists only on your branch never applies. A guard before 0.9.0, or no `review:` line:
    the three reviewers, except one merged reviewer where `status` prints `review: merged reviewer allowed` at
@@ -71,8 +72,7 @@ Three sections live in their own files. Read each one in full when it applies:
 
    Never lower the load, merge its lenses into fewer reviewers, or swap a reviewer for a tool that does less: only
    the user can, asked before the round with the printed load. "It looks small", "it is mostly moves" and "it is
-   only docs" are not reasons: the measure counted them. A skill counts where it starts the same separate reviewers
-   (the `code-review` skill for Standards and Spec). This holds for the first round on the whole unit; later rounds
+   only docs" are not reasons: the measure counted them. This holds for the first round on the whole unit; later rounds
    follow step 6, and a version-swap release follows the exception above. Before starting them, write one line in
    your message: `load: <status's review: line, or the load this step gives where it prints none>; starting: <each
    reviewer, its lenses>`.
@@ -82,7 +82,7 @@ Three sections live in their own files. Read each one in full when it applies:
    them the diff command, REVIEW.md, the spec path and the level output; never tell one what not to flag or how to
    grade. If you cannot start a fresh-context reviewer, use, in order: a CLI
    reviewer in a read-only sandbox (`claude -p`, `codex exec`), an Orca terminal, or ask the user. A subagent of
-   this session (the `code-review` skill's included) loads the checkout's AGENTS.md, CLAUDE.md and `.claude/`
+   this session loads the checkout's AGENTS.md, CLAUDE.md and `.claude/`
    settings as they are now: if `git diff --name-only <standing>..HEAD` (`<standing>` from the `standing rules:`
    line) touches any of those at any depth, or `.codex/`, use a CLI reviewer even when you can start a subagent.
    Start a CLI or terminal reviewer as the briefs say. Never act as Slice 2
@@ -101,21 +101,23 @@ Three sections live in their own files. Read each one in full when it applies:
    - Level note (a reviewer's line that the level looks too high): put it in your report; the level of this change
      stays. Acting on one is a change to REVIEW.md's table of its own, reviewed, never part of the change that
      raised it.
-   - **Escalation** from a reduced load (one merged reviewer, or adversarial + conformance): the review goes to the
-     three reviewers on the whole unit (`git diff <base>..HEAD`) when that round reports a Blocker; a review
-     finding the reviewer tagged with a "Failure looks like" entry; that the change is too big or risky for its
-     load; a "cannot verify from the diff" item your shown output does not close; when `status` no longer prints
-     that load; or when history inside the unit was rewritten (amend, squash, rebase) after the round. Each is a
-     tag, a list in the report or a git fact: apply it as written, never by your own reading. Never the reverse, and
-     never from round three.
-   Fix a review finding's whole class at once, not only the line quoted. Fixes are new commits, except a secret
-   in unpushed commits, which is removed by rewriting them ([A secret turns up](references/secrets.md)).
-6. **Converge.** Run `status` again before each later round. If the load rose (the unit grew a band, or a floor
-   path came in), that is escalation: the three reviewers on the whole unit, `git diff <base>..HEAD`. A unit's
-   load is the highest `status` printed since the unit began, and the three reviewers once history inside the unit
-   was rewritten; a lower load printed later changes nothing. `status` keeps this itself, in the clone's review log
-   (`held:` or `history inside the unit was rewritten` in its `review:` line), but a rebase onto a moved base
-   branch moves the unit's start and starts the log over: after one, take the three reviewers yourself.
+   - **Escalation:** a fresh adversarial + conformance pair on the whole unit (`git diff <base>..HEAD`), as its
+     round two. From one merged reviewer: when that round reports a Blocker; a review finding the reviewer tagged
+     with a "Failure looks like" entry; that the change is too big or risky for its load; a "cannot verify from the
+     diff" item your shown output does not close; or when `status` no longer prints that load. From the pair: only
+     on a "too big or risky" line or a "Failure looks like" tag, once per unit (a second goes to the user); its
+     Blocker or "cannot verify" item goes to an ordinary round two. From either, whenever `status` prints
+     `escalate:` (the unit's weight rose, or history inside it was rewritten), or the user decides. Each is a tag, a
+     list in the report or a git fact: apply it as written, never by your own reading. Never from round three.
+   Fix a review finding's whole class at once, not only the line quoted. Fixes are new commits naming each
+   finding's lens (`Adversarial: ...`), except a secret in unpushed commits, which is
+   removed by rewriting them ([A secret turns up](references/secrets.md)).
+6. **Converge.** Run `status` again before each later round. An `escalate:` line, or a load higher than the last
+   round's, is escalation (step 5). A unit's load is the highest `status` printed since the unit began, and the
+   pair once history inside the unit was rewritten; a lower load printed later changes nothing. `status` keeps this
+   itself, in the clone's review log (`held:` or `history inside the unit was rewritten` in its `review:` line), but
+   a rebase onto a moved base branch moves the unit's start and starts the log over: after one, take a fresh pair on
+   the whole unit yourself.
    Otherwise: one review round, then at most one second round on the new commits only (`git diff <old head>..HEAD`),
    resuming the reviewers the briefs' Later rounds names. A closing round three only if round two did not converge
    or commits followed it, Blocker only unless it is an escalation, as the briefs' Later rounds says; no round four.
@@ -149,7 +151,7 @@ Three sections live in their own files. Read each one in full when it applies:
 ## Report
 
 End every review with: the level output, the load `status` printed beside the reviewers that ran and their lenses
-(a reduction the user allowed, step 4's version-swap exception or a step 6 later round named as such; any other
+(a cross-check's runner named; a reduction the user allowed, step 4's version-swap exception or a step 6 later round named as such; any other
 is a rule break: [record an incident](references/incidents.md)), each review finding with its tag, what happened to it (fixed, rejected and
 why, with any refuter's ruling) and, for a Blocker or Fix, a line on how you verified it, any Blocker found in round
 three, each commit after round three as unreviewed, each `spec-mandated` one and the user's answer,

@@ -9,7 +9,8 @@ one, in your own work or another agent's (`<skill>` is this skill's directory, w
    means the earlier plug is weak: say so.
 3. If the slice that should have caught it was a reduced load, name it and the review unit, by the commit that
    carries the unit's trailer, in the Slice field (`2 Review (merged reviewer), unit 1a2b3c4d`,
-   `2 Review (adversarial + conformance), unit 1a2b3c4d`), or in the recurrence's line, and tell the user. Where nothing records which load reviewed it, take the one `status` would have printed for that unit (the
+   `2 Review (adversarial + conformance, large), unit 1a2b3c4d`, naming the pair's size band or Critical), or in the
+   recurrence's line, and tell the user; a miss through the pair on a large or Critical unit, before the next one. Where nothing records which load reviewed it, take the one `status` would have printed for that unit (the
    clone's review log; else `python3 <skill>/scripts/calibrate.py --list-candidates <lines> <files>`, with `--rules`
    set to REVIEW.md as of that unit if it changed since: with the small band's limits, a listed candidate took one
    merged reviewer, and a unit under "small critical units" tagged `code` took adversarial + conformance; with the
@@ -17,10 +18,10 @@ one, in your own work or another agent's (`<skill>` is this skill's directory, w
    that it was not recorded. Its plug, best first: a test for the class; else narrow that band in REVIEW.md
    (`small: 20 lines, 2 files`), written as a `rule REVIEW.md "<line>"` plug so `--check` notices if it is loosened
    again (narrowing it further edits that plug line in the same change); else a "Failure looks like" rule. A miss
-   from a second review unit through the same reduced load: turn off every band that gives that load until each miss has a test plug (a
-   recurrence adds a test to the Plug field): `small: off` for the merged reviewer; `medium: off` for adversarial +
-   conformance, and `small: off` too while REVIEW.md has a `critical code:` line (or tag those globs `critical:`); a
-   narrowing plug on that band still counts. `--check` makes it a problem until then. Widening a band is never
+   from a second review unit through the same reduced load, until each miss has a test plug (a recurrence adds a
+   test to the Plug field): for the merged reviewer turn off its band, `small: off` (a narrowing plug on that band
+   still counts); for adversarial + conformance, the most `status` prints, add `cross-check: on`, never three
+   reviewers. `--check` makes it a problem until then. Widening a band is never
    automatic: calibrate shows the evidence, and the user changes the line in a reviewed REVIEW.md change. The built-in
    bands change only by a guard release.
 4. Otherwise choose the plug in this order: a test or guard that fails on the class; else a rule in REVIEW.md's

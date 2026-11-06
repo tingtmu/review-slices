@@ -31,8 +31,9 @@ parentheses: `2 Review (merged reviewer)` (or `one merged reviewer`, as `status`
 that carries the unit's trailer, after the load: `2 Review (merged reviewer), unit 1a2b3c4d`. Misses that name the
 same unit count as one; a miss that names none counts alone. Misses from two or more review units through one load
 are a problem until each incident they belong to is plugged with a distinct working test per miss, unless
-REVIEW.md's review-slices block turns off the bands the load comes from: `small: off` for the merged reviewer;
-`medium: off` for adversarial + conformance, and `small: off` too while the block has a `critical code:` line.
+REVIEW.md's review-slices block has the line that load needs: `small: off` for the merged reviewer; `cross-check: on`
+for adversarial + conformance, the most `status` prints since 0.13.0. A miss through the pair names the unit's size
+band or Critical after the load, `2 Review (adversarial + conformance, large)`; the report counts those.
 Standard library only, Python 3.8+.
 """
 import argparse
@@ -58,9 +59,12 @@ REDUCED_LOADS = (MERGED, PAIR)
 # included: "(merged reviewer)", "(one merged reviewer (small: ...))". A mention in prose is no miss.
 LOAD_NAMES = {MERGED: re.compile(r"\((?:one\s+)?merged\s+reviewers?\b", re.I),
               PAIR: re.compile(r"\(adversarial\s*(?:\+|and)\s*conformance\b", re.I)}
-# The bands each load comes from, which misses from a second review unit turn off until a test plug exists. The pair
-# also comes from the small band at Critical while REVIEW.md has a `critical code:` line.
-LOAD_BANDS = {MERGED: ("small",), PAIR: ("medium",)}
+# The review-slices block lines that misses from a second review unit through each load need until a test plug
+# exists: the merged reviewer's band off; for the pair, the most `status` prints since 0.13.0, a cross-check (no band
+# turned off lightens it any more).
+NEEDED = {MERGED: ("small: off",), PAIR: ("cross-check: on",)}
+# A miss through the pair names the unit's size band, or Critical, after the load: "(adversarial + conformance, large)".
+LARGE = re.compile(r"\b(large|critical)\b", re.I)
 # The review unit a miss went through, right after its load's parentheses: ", unit <sha>" (the commit that carries
 # the unit's trailer). A sha anywhere else names no unit.
 UNIT = re.compile(r"\s*,?\s*unit\s+`?([0-9a-f]{7,40})\b", re.I)
@@ -421,15 +425,30 @@ def named_loads(text):
     return [(load, unit_after(text, start)) for start, load in found]
 
 
-def unit_after(text, start):
-    """The unit named right after the parentheses that open at START in TEXT, or None."""
+def closing(text, start):
+    """The index of the parenthesis that closes the one opening at START in TEXT, or None."""
     depth = 0
     for index in range(start, len(text)):
         depth += {"(": 1, ")": -1}.get(text[index], 0)
         if depth == 0:
-            match = UNIT.match(text, index + 1)
-            return match.group(1).lower() if match else None
+            return index
     return None
+
+
+def unit_after(text, start):
+    """The unit named right after the parentheses that open at START in TEXT, or None."""
+    end = closing(text, start)
+    match = UNIT.match(text, end + 1) if end is not None else None
+    return match.group(1).lower() if match else None
+
+
+def large_misses(incident):
+    """How many of INCIDENT's misses through the pair name the large band or Critical in their parentheses."""
+    texts = [incident.fields.get(label, "") for label in ("slice that should have caught it", "recurrences")]
+    if incident.slice != SLICES[2]:
+        texts = texts[1:]
+    return sum(1 for text in texts for match in LOAD_NAMES[PAIR].finditer(text)
+               if LARGE.search(text[match.start():(closing(text, match.start()) or len(text))]))
 
 
 def unit_count(units):
@@ -468,17 +487,14 @@ def review_settings(root):
         return [], error.strerror or str(error)
 
 
-def bands_on(settings, load):
-    """The `small: off` / `medium: off` lines the block SETTINGS lack to stop LOAD (a band with no line is on: small
-    by default)."""
-    code = load == PAIR and any(key == "critical code" for key, _value in settings)
-    return ["%s: off" % band for band in LOAD_BANDS[load] + (("small",) if code else ())
-            if (band, "off") not in settings]
+def lines_needed(settings, load):
+    """The lines of NEEDED[LOAD] the block SETTINGS lack (a band with no line is on: small by default)."""
+    return [line for line in NEEDED[load] if tuple(part.strip() for part in line.partition(":")[::2]) not in settings]
 
 
 def band_problems(root, incidents):
     """A problem for each reduced load that misses from two or more review units went through while one of their
-    incidents lacks a test plug for each of its misses and REVIEW.md leaves a band of that load on."""
+    incidents lacks a test plug for each of its misses and REVIEW.md's block lacks a line NEEDED for that load."""
     settings, error = review_settings(root)
     problems = []
     for load in REDUCED_LOADS:
@@ -487,7 +503,7 @@ def band_problems(root, incidents):
         ids = list(dict.fromkeys(incident.id for incident in through))
         untested = list(dict.fromkeys(incident.id for incident in through if not tested(root, incident)))
         units = unit_count([unit for _incident, unit in pairs])
-        missing = bands_on(settings, load) if units > 1 and untested else []
+        missing = lines_needed(settings, load) if units > 1 and untested else []
         if missing:
             problems.append("%d misses went through the %s load (%s) and %s has no working test plug for each, so "
                             "%s's review-slices block needs %s until each has one%s"
@@ -497,10 +513,11 @@ def band_problems(root, incidents):
     return problems
 
 
-def miss_count(load, units):
-    """`<load> <misses>`, and the review units they came from where those are fewer."""
+def miss_count(load, units, large=0):
+    """`<load> <misses>`, the review units they came from where those are fewer, and how many named a large unit."""
     count = unit_count(units)
-    return "%s %d%s" % (load, len(units), " in %d review unit(s)" % count if count < len(units) else "")
+    return "%s %d%s%s" % (load, len(units), " in %d review unit(s)" % count if count < len(units) else "",
+                          " (%d on a large or Critical unit: tell the user before the next one)" % large if large else "")
 
 
 def print_report(where, incidents, skipped, today):
@@ -519,7 +536,9 @@ def print_report(where, incidents, skipped, today):
     found = [miss for incident in incidents for miss in misses(incident)]
     if found:
         print("  misses through a reduced load, recurrences included: " + ", ".join(
-            miss_count(load, [unit for named, unit in found if named == load]) for load in REDUCED_LOADS))
+            miss_count(load, [unit for named, unit in found if named == load],
+                       sum(large_misses(incident) for incident in incidents) if load == PAIR else 0)
+            for load in REDUCED_LOADS))
     recurring = [incident for incident in incidents if has_recurrences(incident)]
     print("recurrences (each means a weak plug):" + ("" if recurring else " none"))
     for incident in recurring:

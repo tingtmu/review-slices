@@ -381,12 +381,12 @@ def status_size(item):
 
 def unit_load(config, item):
     """(band, load, content path or None) of a measured unit, as `status` would give it (status_size); a unit
-    declared above its computed level was raised, so it takes three."""
+    declared above its computed level was raised, so it takes the pair, the ceiling."""
     name = sizer.band_of(config, status_size(item))
     content = sizer.content_path(guard, config, item.level, [row.path for row in guard.range_level(config,
                                                                                                     item.paths)[1]])
     raised = item.unit.declared and guard.rank(item.unit.declared) > guard.rank(item.level)
-    return name, sizer.THREE if content or raised else sizer.TABLE[item.level][name], content
+    return name, sizer.PAIR if content or raised else sizer.TABLE[item.level][name], content
 
 
 def share(name, count, total):

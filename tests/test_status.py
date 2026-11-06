@@ -29,7 +29,7 @@ class StatusTest(unittest.TestCase):
         step = self.next_step()
         start = repo.out("rev-parse", "--short=12", "origin/main")
         self.assertIn("git diff %s..HEAD" % start, step)  # H12: reviewers see the committed work
-        self.assertIn("3 separate reviewers (Standards, Spec, adversarial)", step)
+        self.assertIn("2 separate reviewers (adversarial; conformance", step)
         command = step[step.index("`git -c"):].strip("`")
         repo.git(*shlex.split(command)[1:])
         self.assertIn("run the suite", self.next_step())

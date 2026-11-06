@@ -16,8 +16,6 @@ npx skills add tingtmu/review-slices -g -a claude-code codex
 No other skill is required. Reviewers are fresh-context agents briefed from
 [references/reviewer-briefs.md](skills/review-slices/references/reviewer-briefs.md):
 
-- [`code-review`](https://github.com/mattpocock/skills) can stand in for the built-in Standards and Spec reviewers at
-  Important and Critical, if it is installed.
 - Orca's [`orca-cli`](https://github.com/stablyai/orca/blob/main/skills/orca-cli/SKILL.md) and
   [`orchestration`](https://github.com/stablyai/orca/blob/main/skills/orchestration/SKILL.md) skills, with a running
   Orca app, are needed only for optional review meetings. Without them, a disputed Critical review finding goes to
@@ -55,22 +53,27 @@ keeps it current.
 
 At important and critical, `status` prints the review load: which reviewers the change needs. It measures every
 commit the branch adds to the base branch, so a change pushed in slices is measured whole, and puts it in a size
-band (after a unit that is over every band's line limit on its own and that the clone's review log shows went to
-three reviewers, it measures only what follows that unit, so later small fixes get the lighter load again): small (built in: at most 40 weighted lines and 3 files), medium (none built in) or large. A file moved
+band (after a unit that is over every band's line limit on its own and that the clone's review log shows got the
+ceiling load, it measures only what follows that unit, so later small fixes get the lighter load again): small (built in: at most 40 weighted lines and 3 files), medium (none built in) or large. A file moved
 unchanged counts as one file and no lines. Uncommitted work, an unfetched base branch, a floor path, a merge with
 changes of its own, a submodule update or a binary or Git LFS file added, edited or deleted make it large. Important
-takes one merged reviewer when small, an adversarial and a conformance (Standards and Spec) reviewer when medium, and
-the three otherwise. Critical takes the adversarial and conformance pair only when small and every path that sets the
-level is in a `critical code:` glob; plain `critical:` globs are content (golden outputs, corpora, CI) and always
-take three. REVIEW.md's `small:` and `medium:` lines set the bands, up to 80/5 and 400/20; the standing rules' lines
-count, never a branch's own. A level the author raised for a planned action, which `status` cannot see, takes three
-(except a version-swap release where the base branch's REVIEW.md says so), and `status BASE` takes three. The
+takes one merged reviewer when small, and an adversarial and a conformance (Standards and Spec) reviewer otherwise;
+Critical always takes that pair, the most `status` prints (0.13.0; it printed three reviewers on large and Critical
+units before). `cross-check: on` in the base branch's REVIEW.md adds one cross-check reviewer to every pair unit:
+a fresh adversarial reviewer from another model family where one is available (an Orca worker, else `codex exec`),
+else the same family with a brief for the angles the pair did not take; `incidents.py --check` asks for the line
+once misses from two review units through the pair lack a test plug. When the unit's weight (level, size band, a
+floor or content path) rises, or history inside it is rewritten, `status` prints an `escalate:` line: a fresh pair
+on the whole unit. REVIEW.md's `small:` and `medium:` lines set the bands, up to 80/5 and 400/20; the standing rules' lines
+count, never a branch's own. A level the author raised for a planned action, which `status` cannot see, takes the pair
+(except a version-swap release where the base branch's REVIEW.md says so), and `status BASE` takes three
+reviewers, the fallback where it cannot measure. The
 measure, `.githooks/merged_reviewer.py`, is copied by `install`, added by `upgrade`, and loaded from the base branch
 like the guard; without it there, `status` says three reviewers. Each load `status` prints for committed work goes
 into the clone's review log, `<git-common-dir>/review-slices/review-log`, by branch and review unit: a unit keeps the
-highest load printed since it began (`held:`), and takes three once a commit a load was printed at leaves the
-branch's history (amend, squash, rebase); a logged three on a unit large on its own also lets the measure start
-after that unit. `calibrate.py`'s logged loads section reads it to show the loads units really got.
+highest load printed since it began (`held:`), and takes the pair once a commit a load was printed at leaves the
+branch's history (amend, squash, rebase); a logged pair (or three) on a unit large on its own also lets the measure
+start after that unit. `calibrate.py`'s logged loads section reads it to show the loads units really got.
 
 `install --agent-hooks` also adds a PreToolUse hook for Claude Code (`.claude/settings.json`) and Codex
 (`.codex/hooks.json`, shell commands only, once its hooks feature is on and the user trusts the hook; a refused

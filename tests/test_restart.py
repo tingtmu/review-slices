@@ -1,4 +1,5 @@
-"""`status`: the measure starts over after a unit large on its own that the review log shows went to three."""
+"""`status`: the measure starts over after a unit large on its own that the review log shows went to the ceiling load
+(the pair; three reviewers before 0.13.0)."""
 import os
 import types
 import unittest
@@ -17,7 +18,7 @@ class RestartTest(unittest.TestCase):
     rules = LIB_RULES
     status, review, change, other_work_on_main = Helpers.status, Helpers.review, Helpers.change, \
         Helpers.other_work_on_main
-    assertThree = Helpers.assertThree
+    assertCeiling = Helpers.assertCeiling
     log, add_trailer = test_review_log.ReviewLogTest.log, test_review_log.ReviewLogTest.add_trailer
 
     def setUp(self):
@@ -34,9 +35,9 @@ class RestartTest(unittest.TestCase):
                       "Review: %s %s" % (level, start[:12]))
 
     def large_unit(self, files=None):
-        """A 50-line unit `status` sends to three reviewers, then a 1-line fix, then the trailer after `status`."""
+        """A 50-line unit `status` sends to the pair, then a 1-line fix, then the trailer after `status`."""
         self.change(files or {"lib/a.py": "a\n" * 50})
-        self.assertIn("review: three reviewers (large: ", self.review()[0])
+        self.assertIn("review: adversarial + conformance (large: ", self.review()[0])
         self.change({"lib/a.py": "a\n" * 51}, "fix")
         self.add_trailer()
         return self.repo.out("rev-parse", "HEAD")
@@ -82,7 +83,7 @@ class RestartTest(unittest.TestCase):
         self.change({"lib/b.py": "b\n"})
         self.assertRestarted(trailer)
         self.change({".githooks/x.txt": "x\n"})
-        self.assertThree("large: .githooks/x.txt is a floor path" + SINCE % trailer[:12])
+        self.assertCeiling("large: .githooks/x.txt is a floor path" + SINCE % trailer[:12])
 
     def test_a_merge_with_changes_of_its_own_after_the_restart_is_three(self):
         self.other_work_on_main()
@@ -91,7 +92,7 @@ class RestartTest(unittest.TestCase):
         self.repo.write("lib/evil.py", "made in the merge\n")
         self.repo.commit("merge")
         merge = self.repo.out("rev-parse", "HEAD")
-        self.assertThree("large: merge %s has changes of its own%s" % (merge[:12], SINCE % trailer[:12]))
+        self.assertCeiling("large: merge %s has changes of its own%s" % (merge[:12], SINCE % trailer[:12]))
 
     def test_slices_that_add_up_never_restart(self):  # the 0.9.0 Blocker, pushed slice by slice
         self.repo.git("checkout", "-q", "-b", "feature")
@@ -101,7 +102,7 @@ class RestartTest(unittest.TestCase):
             self.amend_trailer()
             self.repo.git("push", "-q", "--no-verify", "-u", "origin", "feature")
         self.change({"lib/c.py": "c\n"})
-        self.assertThree("large: 61 weighted line(s), 3 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
+        self.assertCeiling("large: 61 weighted line(s), 3 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_unit_grown_past_the_band_after_a_lighter_load_never_restarts(self):  # plan review 1 Blocker
         self.change({"lib/a.py": "a\n" * 35})
@@ -109,29 +110,29 @@ class RestartTest(unittest.TestCase):
         self.change({"lib/b.py": "b\n" * 10}, "a nit fix")
         self.amend_trailer()
         self.change({"lib/c.py": "c\n"})
-        self.assertThree("large: 46 weighted line(s), 3 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
+        self.assertCeiling("large: 46 weighted line(s), 3 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
 
     def test_three_printed_while_the_unit_was_small_is_no_evidence(self):  # plan review 2
         self.change({"core/x.py": "x\n"})
-        self.assertIn("review: three reviewers (", self.review()[0])
+        self.assertIn("review: adversarial + conformance (", self.review()[0])
         self.change({"lib/a.py": "a\n" * 50}, "grown with no status")
         self.amend_trailer("critical")
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 52 weighted line(s), 3 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
+        self.assertCeiling("large: 52 weighted line(s), 3 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_small_unit_three_for_a_floor_path_never_restarts(self):
         self.change({".githooks/x.txt": "x\n"})
-        self.assertIn("review: three reviewers (large: .githooks/x.txt is a floor path)", self.review()[0])
+        self.assertIn("review: adversarial + conformance (large: .githooks/x.txt is a floor path)", self.review()[0])
         self.add_trailer()
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: .githooks/x.txt is a floor path")
+        self.assertCeiling("large: .githooks/x.txt is a floor path")
 
     def test_four_one_line_edits_never_restart(self):  # large by files only
         self.change({"lib/%s.py" % name: "%s\n" % name for name in "abcd"})
-        self.assertIn("review: three reviewers (large: 4 weighted line(s), 4 file(s)", self.review()[0])
+        self.assertIn("review: adversarial + conformance (large: 4 weighted line(s), 4 file(s)", self.review()[0])
         self.add_trailer()
         self.change({"lib/e.py": "e\n"})
-        self.assertThree("large: 5 weighted line(s), 5 file(s) in 2 commit(s): over every band" + WIDEST_SMALL)
+        self.assertCeiling("large: 5 weighted line(s), 5 file(s) in 2 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_pure_move_large_by_files_never_restarts(self):  # plan review 1: nothing for the reviewers to read
         for name in "abcd":
@@ -141,17 +142,17 @@ class RestartTest(unittest.TestCase):
         for name in "abcd":
             self.repo.git("mv", "lib/%s.py" % name, "lib/moved_%s.py" % name)
         self.change({}, "move")
-        self.assertIn("review: three reviewers (large: ", self.review()[0])
+        self.assertIn("review: adversarial + conformance (large: ", self.review()[0])
         self.add_trailer()
         self.change({"lib/e.py": "e\n"})
-        self.assertIn("review: three reviewers (large: 1 weighted line(s), 5 file(s)", self.review()[0])
+        self.assertIn("review: adversarial + conformance (large: 1 weighted line(s), 5 file(s)", self.review()[0])
 
     def test_a_trailer_below_the_unit_s_level_never_restarts(self):
         self.change({"lib/a.py": "a\n" * 50})
         self.status()
         self.amend_trailer("simple")
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 51 weighted line(s), 2 file(s) in 2 commit(s): over every band" + WIDEST_SMALL)
+        self.assertCeiling("large: 51 weighted line(s), 2 file(s) in 2 commit(s): over every band" + WIDEST_SMALL)
 
     def test_churn_never_restarts(self):  # the net diff, not the commits summed
         self.change({"lib/a.py": "a\n" * 50})
@@ -160,7 +161,7 @@ class RestartTest(unittest.TestCase):
         self.change({"lib/keep.py": "k\n"}, "take it back")
         self.add_trailer()
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 102 weighted line(s), 3 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
+        self.assertCeiling("large: 102 weighted line(s), 3 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_large_simple_unit_never_restarts_even_with_a_logged_three(self):  # the log line is forged
         self.change({"docs/x.txt": "x\n" * 100})
@@ -171,15 +172,24 @@ class RestartTest(unittest.TestCase):
                       % (base, head))
         self.repo.git("commit", "-q", "--amend", "--no-edit", "--trailer", self.repo.trailer("simple"))
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 101 weighted line(s), 2 file(s) in 2 commit(s): over every band" + WIDEST_SMALL)
+        self.assertCeiling("large: 101 weighted line(s), 2 file(s) in 2 commit(s): over every band" + WIDEST_SMALL)
 
-    def test_a_logged_lighter_load_is_no_evidence(self):  # only three restarts, whatever the size
+    def test_a_logged_lighter_load_is_no_evidence(self):  # only the ceiling restarts, whatever the size
         self.large_unit()
-        lines = [line.replace("\tthree reviewers\t", "\tadversarial + conformance\t") for line in self.log()]
+        lines = [line.replace("\tadversarial + conformance\t", "\tone merged reviewer\t") for line in self.log()]
         with open(self.log_path(), "w", encoding="utf-8") as log:
             log.write("".join(line + "\n" for line in lines))
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 52 weighted line(s), 2 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
+        self.assertCeiling("large: 52 weighted line(s), 2 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
+
+    def test_three_logged_before_0_13_0_still_restarts(self):  # an old ceiling, from a log a 0.12.0 guard wrote
+        trailer = self.large_unit()
+        lines = [line.replace("\tadversarial + conformance\t", "\tthree reviewers\t").split("; weight=")[0]
+                 for line in self.log()]
+        with open(self.log_path(), "w", encoding="utf-8") as log:
+            log.write("".join(line + "\n" for line in lines))
+        self.change({"lib/b.py": "b\n"})
+        self.assertRestarted(trailer)
 
     def test_three_logged_at_a_head_the_unit_left_is_no_evidence(self):  # another unit with the same start
         self.change({"lib/a.py": "a\n" * 50})
@@ -188,27 +198,27 @@ class RestartTest(unittest.TestCase):
         self.change({"lib/other.py": "o\n" * 50}, "not what was reviewed")
         self.amend_trailer()
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 51 weighted line(s), 2 file(s) in 2 commit(s): over every band" + WIDEST_SMALL)
+        self.assertCeiling("large: 51 weighted line(s), 2 file(s) in 2 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_later_unit_never_borrows_an_earlier_unit_s_three(self):  # the logged start must be its own
         first = self.large_unit()
         self.change({"lib/c.py": "c\n" * 50}, "a second large unit, never through status")
         self.repo.git("commit", "-q", "--amend", "--no-edit", "--trailer", self.repo.trailer("important", first))
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 51 weighted line(s), 2 file(s) in 2 commit(s): over every band" + WIDEST_SMALL
+        self.assertCeiling("large: 51 weighted line(s), 2 file(s) in 2 commit(s): over every band" + WIDEST_SMALL
                          + SINCE % first[:12])
 
     def test_without_the_log_line_there_is_no_restart(self):  # another clone, a rebase, a deleted log
         self.large_unit()
         os.remove(self.log_path())
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 52 weighted line(s), 2 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
+        self.assertCeiling("large: 52 weighted line(s), 2 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
 
     def test_another_branch_s_log_line_is_no_evidence(self):
         self.large_unit()
         self.repo.git("switch", "-q", "-c", "copy")
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: 52 weighted line(s), 2 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
+        self.assertCeiling("large: 52 weighted line(s), 2 file(s) in 3 commit(s): over every band" + WIDEST_SMALL)
 
     def test_a_restart_from_a_side_branch_still_measures_the_mainline(self):  # only the restart's history drops
         self.repo.git("switch", "-q", "-c", "feature")
@@ -228,7 +238,7 @@ class RestartTest(unittest.TestCase):
         self.repo.git("merge", "-q", "--no-edit", "origin/main")
         self.large_unit()
         self.change({"lib/b.py": "b\n"})
-        self.assertIn("review: three reviewers (large: ", self.review()[0])
+        self.assertIn("review: adversarial + conformance (large: ", self.review()[0])
 
     def test_a_large_unit_after_a_merge_of_main_restarts(self):
         self.other_work_on_main()
@@ -243,19 +253,19 @@ class RestartTest(unittest.TestCase):
         self.repo.git("merge", "-q", "--no-edit", "origin/main")
         self.repo.git("commit", "-q", "--amend", "--no-edit", "--trailer", self.repo.trailer("important"))
         self.change({"lib/b.py": "b\n" * 50})
-        self.assertIn("review: three reviewers (large: ", self.review()[0])
+        self.assertIn("review: adversarial + conformance (large: ", self.review()[0])
         self.change({"lib/b.py": "b\n" * 25}, "take half back")
         self.add_trailer()
         self.change({"lib/c.py": "c\n"})
-        self.assertIn("review: three reviewers (large: 81 weighted line(s)", self.review()[0])
+        self.assertIn("review: adversarial + conformance (large: 81 weighted line(s)", self.review()[0])
 
     def test_a_branch_that_tightens_its_own_bands_never_restarts(self):  # I1: the standing rules decide
         self.change({"lib/a.py": "a\n" * 30, "REVIEW.md": read_text(os.path.join(self.repo.path, "REVIEW.md"))
                      .replace("```review-slices\n", "```review-slices\nsmall: 10 lines, 3 files\n")})
-        self.assertIn("review: three reviewers (large: REVIEW.md is a floor path)", self.review()[0])
+        self.assertIn("review: adversarial + conformance (large: REVIEW.md is a floor path)", self.review()[0])
         self.add_trailer()
         self.change({"lib/b.py": "b\n"})
-        self.assertThree("large: REVIEW.md is a floor path")
+        self.assertCeiling("large: REVIEW.md is a floor path")
 
     def test_a_restart_never_lowers_a_held_load(self):
         trailer = self.large_unit()
@@ -295,7 +305,7 @@ class CriticalRestartTest(unittest.TestCase):
 
     def test_a_small_code_fix_after_a_large_critical_unit_takes_the_pair(self):
         self.change({"engine/a.py": "a\n" * 150})
-        self.assertIn("review: three reviewers (large: ", self.review()[0])
+        self.assertIn("review: adversarial + conformance (large: ", self.review()[0])
         self.add_trailer()
         trailer = self.repo.out("rev-parse", "HEAD")
         self.change({"engine/b.py": "b\n" * 2})
@@ -305,10 +315,10 @@ class CriticalRestartTest(unittest.TestCase):
 
     def test_a_medium_critical_unit_never_restarts(self):  # three, but within a band's line limit
         self.change({"engine/a.py": "a\n" * 60})
-        self.assertIn("review: three reviewers (medium: ", self.review()[0])
+        self.assertIn("review: adversarial + conformance (medium: ", self.review()[0])
         self.add_trailer()
         self.change({"engine/b.py": "b\n" * 2})
-        self.assertIn("review: three reviewers (medium: 62 weighted line(s)", self.review()[0])
+        self.assertIn("review: adversarial + conformance (medium: 62 weighted line(s)", self.review()[0])
 
 
 del Helpers  # its own tests run in test_merged_reviewer

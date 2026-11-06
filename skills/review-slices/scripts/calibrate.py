@@ -148,7 +148,7 @@ def print_distribution(judged):
         return
     share = {level: float(counts[level]) / len(judged) for level in guard.LEVELS}
     if share["critical"] > TOO_STRICT:
-        print("warning: %.0f%% are critical: most changes would need three reviewers and the user's go-ahead; people "
+        print("warning: %.0f%% are critical: most changes would need two reviewers and the user's go-ahead; people "
               "will route around it. Narrow the critical globs." % (100 * share["critical"]))
     if share["trivial"] > TOO_LOOSE:
         print("warning: %.0f%% are trivial, so most changes would get no review at all. Check that the trivial globs "

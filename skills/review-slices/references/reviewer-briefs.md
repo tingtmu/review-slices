@@ -78,7 +78,7 @@ Lenses, in order:
 
 For two adversarial reviewers, split the lenses: one takes 1, 3 and 5, the other 2 and 4.
 
-## Standards reviewer (Important, Critical)
+## Standards reviewer (the three reviewers; the merged and conformance briefs quote it)
 
 ```
 Check this change against the standards this repo has written down.
@@ -93,7 +93,7 @@ each review finding; a preference with no written source is a Nit.
 <the rules every brief carries>
 ```
 
-## Spec reviewer (Important, Critical)
+## Spec reviewer (the three reviewers; the merged and conformance briefs quote it)
 
 ```
 Check that this change does what was asked: all of it, and nothing else.
@@ -165,18 +165,37 @@ Finish both even if the first finds a Blocker.
 <the rules every brief carries>
 ```
 
-The `code-review` skill (mattpocock/skills) can stand in for the Standards and Spec reviewers if it is installed.
-Invoke it with the fixed point and the spec as arguments, so its issue-tracker step never runs
-(`fixed point: <base sha>; spec: <path>`), hand its reviewers the rules every brief carries and the Standards
-and Spec briefs (its prompts name no leftovers or silent ambiguity), and start the adversarial reviewer in the same
-message.
+## Cross-check reviewer (where `status` prints `plus a cross-check`)
+
+One fresh adversarial reviewer on the whole unit, after round one's pair has reported. Start it with the first of
+these you can, and name which ran in your report:
+
+1. An Orca worker of another model family (Codex from Claude, Claude from Codex), where Orca is installed.
+2. That family's CLI in a read-only sandbox, as "Starting a CLI or terminal reviewer" says (`codex exec`,
+   `claude -p`).
+3. One model family only: a fresh reviewer of your own family with this brief. Prompt diversity in one model is
+   weaker than another family; the report says so.
+
+```
+Assume this change is wrong and show how it fails, from angles a first review did not take.
+The first review covered: <one line per lens: adversarial (correctness, security, test holes, agent instructions,
+weakened checks), Standards, Spec>. Do not repeat what it raised: <its review findings, one line each>.
+Take instead: operations and rollback (what an upgrade, a downgrade or a half-applied change leaves behind); a
+hostile or careless user; concurrency and partial failure; what the spec left unsaid that a user would expect.
+<the adversarial brief from "Change:" through its lenses>
+<the report for a reduced load>
+<the rules every brief carries>
+```
+
+Its review findings are handled as round one's (SKILL.md step 5); the pair's round two confirms the fixes, and the
+cross-check reviewer is resumed for its own.
 
 ## Later rounds
 
-At most three rounds in all; there is no round four. Run `status` before each later round: a higher load than the
-last round's is escalation, the three reviewers on the whole unit (SKILL.md step 6). Before round two, the escalation
-round is round two. After round two, it is round three at full scope: the three reviewers may report a Blocker or a
-Fix anywhere in the unit, and beside them the Refute below still runs. A Fix you do not fix goes to the user, and a
+At most three rounds in all; there is no round four. Run `status` before each later round: an `escalate:` line, or a
+higher load than the last round's, is escalation, a fresh adversarial + conformance pair on the whole unit (SKILL.md
+step 6). Before round two, the escalation round is round two. After round two, it is round three at full scope: the
+fresh pair may report a Blocker or a Fix anywhere in the unit, and beside them the Refute below still runs. A Fix you do not fix goes to the user, and a
 commit after it is unreviewed, as below. In round three, step 5's escalation reasons do not apply: a Blocker found
 there is fixed and goes to the user as below.
 
@@ -193,7 +212,7 @@ for one the author rejected, here is the reason: <reason>; rule on it: a rejecti
 author read, or a line or output that shows the claim wrong. Report only new defects tagged Fix or Blocker, including
 breakage the fix itself brings. If none, say converged."
 
-On escalation the three reviewers start from the rules above and hear nothing of a rejection. Beside them, resume the
+On escalation the fresh pair starts from the rules above and hear nothing of a rejection. Beside them, resume the
 reviewer of each review finding you rejected, with the same reason and ruling request. Its ruling settles that review
 finding; the escalation stands, and no refuter rules on it in round three.
 

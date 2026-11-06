@@ -1,4 +1,5 @@
-"""`status`'s review log: the load it printed per review unit, held at the highest, three after a rewrite."""
+"""`status`'s review log: the load it printed per review unit, held at the highest, the pair after a rewrite; the
+unit's weight, and the escalation line when it rises or history is rewritten."""
 import os
 import re
 import shlex
@@ -17,7 +18,7 @@ Helpers = test_merged_reviewer.MergedReviewerTest
 
 class ReviewLogTest(unittest.TestCase):
     status, review, change, on_main = Helpers.status, Helpers.review, Helpers.change, Helpers.on_main
-    assertAllowed, assertThree = Helpers.assertAllowed, Helpers.assertThree
+    assertAllowed, assertCeiling = Helpers.assertAllowed, Helpers.assertCeiling
 
     def setUp(self):
         self.repo = Repo(self, rules=LIB_RULES)
@@ -53,17 +54,63 @@ class ReviewLogTest(unittest.TestCase):
                         review)
         self.assertIn("(large: as once printed); now small: 1 weighted line(s)", review)
 
-    def test_a_rewrite_inside_the_unit_is_three_reviewers(self):
+    def escalation(self):
+        """The `escalate:` line of status, or None."""
+        return next((line for line in self.status().splitlines() if line.startswith("escalate: ")), None)
+
+    def test_a_rewrite_inside_the_unit_is_the_pair_and_escalates(self):
         self.change({"lib/a.py": "a\n"})
         old = self.repo.out("rev-parse", "HEAD")
         self.status()
+        self.assertIsNone(self.escalation())
         self.repo.write("lib/a.py", "b\n")
         self.repo.git("commit", "-q", "-a", "--amend", "--no-edit")
-        self.assertThree("history inside the unit was rewritten after status printed one merged reviewer at %s"
-                         % old[:12])
-        self.status()  # and it stays three
-        self.assertTrue(self.log()[-1].endswith("\tthree reviewers\thistory inside the unit was rewritten after "
-                                                "status printed one merged reviewer at %s" % old[:12]))
+        self.assertCeiling("history inside the unit was rewritten after status printed one merged reviewer at %s"
+                           % old[:12])
+        self.assertTrue(self.log()[-1].endswith("\tadversarial + conformance\thistory inside the unit was rewritten "
+                                                "after status printed one merged reviewer at %s; weight=important/"
+                                                "small/none" % old[:12]), self.log()[-1])
+        fresh = ("escalate: history inside the unit was rewritten after status logged it at %s: a fresh adversarial "
+                 "+ conformance pair on the whole unit, `git diff %s..HEAD`, as its round two, or the user decides"
+                 % (old[:12], self.repo.out("rev-parse", "--short=12", "origin/main")))
+        self.assertEqual(self.escalation(), fresh)
+        self.assertEqual(self.escalation(), fresh)  # until a new commit
+        self.change({"lib/b.py": "b\n"})
+        self.assertIsNone(self.escalation())
+        self.assertIn("history inside the unit was rewritten", self.review()[0])  # the load stays the pair
+
+    def test_a_rise_in_the_unit_s_weight_escalates(self):  # the load no longer rises past the pair (r1 B1)
+        self.repo = Repo(self, rules=LIB_RULES + "medium: 100 lines, 6 files\ncritical: core/*\n")
+        self.repo.install()
+        self.change({"lib/a.py": "a\n" * 41})
+        self.assertIn("review: adversarial + conformance (medium: ", self.review()[0])
+        self.assertIsNone(self.escalation())
+        self.change({"lib/b.py": "b\n" * 60})  # medium to large: the pair still
+        self.assertIn("review: adversarial + conformance (large: ", self.review()[0])
+        self.assertTrue(self.escalation().startswith("escalate: the unit's weight rose (band medium -> large): a "
+                                                     "fresh adversarial + conformance pair on the whole unit"),
+                        self.escalation())
+        self.change({"lib/c.py": "c\n"})  # no rise since the last status
+        self.assertIsNone(self.escalation())
+        self.change({"core/x.py": "x\n", ".githooks/x.txt": "x\n"})  # Critical, a content path and a floor path
+        self.assertIn("the unit's weight rose (level important -> critical, path none -> path)", self.escalation())
+        self.assertTrue(self.log()[-1].endswith("; weight=critical/large/path"), self.log()[-1])
+
+    def test_the_weight_is_read_from_the_last_suffix_and_old_lines_read_lowest(self):  # r3 F3
+        sizer, sha = test_merged_reviewer.SIZER, "a" * 40
+        entry = sizer.Entry("t", "r", sha, sha, "important", "adversarial + conformance",
+                            "held: status printed it for this unit at t (medium: x; weight=important/medium/none); "
+                            "now large: y; weight=important/large/path; cross-check")
+        self.assertEqual(sizer.weight(entry), ("important", "large", "path"))
+        old = entry._replace(why="medium: before 0.13.0")
+        self.assertEqual(sizer.weight(old), ("important", "medium", "none"))
+        self.assertEqual(sizer.weight(old._replace(load="three reviewers")), ("important", "large", "none"))
+        self.assertEqual(sizer.weight(old._replace(level="critical", load="adversarial + conformance")),
+                         ("critical", "small", "none"))
+        self.assertEqual(sizer.rise([("important", "medium", "none")], ("important", "large", "none")),
+                         ["band medium -> large"])
+        self.assertEqual(sizer.rise([("important", "large", "none"), ("important", "small", "path")],
+                                    ("important", "large", "path")), [])
 
     def test_a_step_back_and_forth_is_never_held_at_three(self):  # review: the rewrite's three was held for good
         self.repo.git("switch", "-q", "--detach")
@@ -77,7 +124,7 @@ class ReviewLogTest(unittest.TestCase):
 
     def test_the_trailer_closes_the_unit(self):
         self.change({"lib/a.py": "a\n" * 50})
-        self.assertThree("large: 50 weighted line(s), 1 file(s) in 1 commit(s): over every band" + WIDEST_SMALL)
+        self.assertCeiling("large: 50 weighted line(s), 1 file(s) in 1 commit(s): over every band" + WIDEST_SMALL)
         self.add_trailer()  # an amend, but it starts the next unit
         self.change({"lib/b.py": "b\n"})
         review = self.review()[0]
@@ -88,7 +135,7 @@ class ReviewLogTest(unittest.TestCase):
 
     def test_uncommitted_work_is_never_logged(self):
         self.repo.write("lib/a.py", "a\n")
-        self.assertEqual(self.review()[0], "review: three reviewers (large: uncommitted work)")
+        self.assertEqual(self.review()[0], "review: adversarial + conformance (large: uncommitted work)")
         self.assertEqual(self.log(), [])
         self.repo.commit("change")
         self.assertAllowed("1 weighted line(s), 1 file(s) in 1 commit(s)")
@@ -141,7 +188,7 @@ class ReviewLogTest(unittest.TestCase):
         done = calibrate(self.repo, "--base", "main")
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertRegex(done.stdout, r"important\s+4 unit\(s\), 2 logged: one merged reviewer 1, adversarial \+ "
-                                      r"conformance 0, three reviewers 1; held 0, history rewritten 0")
+                                      r"conformance 1, three reviewers 0; held 0, history rewritten 0")
 
     def test_calibrate_never_takes_a_stacked_branch_s_unit_for_another(self):  # review: x's merged was y's load
         self.repo.git("switch", "-q", "-c", "x")
@@ -158,7 +205,7 @@ class ReviewLogTest(unittest.TestCase):
         done = calibrate(self.repo, "--base", "main")
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertRegex(done.stdout, r"important\s+4 unit\(s\), 1 logged: one merged reviewer 0, adversarial \+ "
-                                      r"conformance 0, three reviewers 1;")
+                                      r"conformance 1, three reviewers 0;")
 
 
 del Helpers  # its own tests run in test_merged_reviewer

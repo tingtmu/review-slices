@@ -30,7 +30,7 @@ simple: CHANGELOG.md
 Planned actions that make a change Critical: a release tag; a change to the pass stamp or review trailer
 format, or to how the hook is installed, since every adopting clone depends on them.
 
-The one exception to the three reviewers a raised level or a floor path takes (the skill's SKILL.md step 4): a
+The one exception to the pair a raised level or a floor path takes (the skill's SKILL.md step 4): a
 release commit whose only changed lines outside its notes (the root README.md and CHANGELOG.md) swap the version
 for a newer one (`VERSION = "x"` and `(skill version x)`) takes one merged reviewer, and its later rounds stay one
 merged reviewer, plus any refuter step 6 calls for, while the fix commits touch only those notes. It applies only as written in

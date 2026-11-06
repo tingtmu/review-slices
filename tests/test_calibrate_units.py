@@ -302,7 +302,7 @@ class UnitsTest(unittest.TestCase):
         self.assertIn("small 2 (50%)", out)  # each band's and load's share of the level's units
         out = re.sub(r" \(\d+%\)", "", out)
         self.assertRegex(out, r"important\s+4 unit\(s\)\s+small 2\s+medium 0\s+large 2\s+->\s+one merged reviewer 1, "
-                              r"adversarial \+ conformance 0, three reviewers 3")  # the raised unit takes three
+                              r"adversarial \+ conformance 3")  # the raised unit takes the pair, the ceiling
         self.assertIn("small critical units: 1, 0 of them in `critical code:` globs alone", out)
         draft = os.path.join(self.repo.tmp, "draft.md")
         with open(draft, "w", encoding="utf-8") as handle:
@@ -310,9 +310,9 @@ class UnitsTest(unittest.TestCase):
         out = re.sub(r" \(\d+%\)", "", self.run_ok("--rules", draft, "--list-candidates", "10", "1"))
         self.assertIn("bands: small 40 lines, 3 files, medium 100 lines, 5 files", out)
         self.assertRegex(out, r"important\s+4 unit\(s\)\s+small 2\s+medium 1\s+large 1\s+->\s+one merged reviewer 1, "
-                              r"adversarial \+ conformance 1, three reviewers 2")
+                              r"adversarial \+ conformance 3")
         self.assertRegex(out, r"critical\s+2 unit\(s\)\s+small 2\s+medium 0\s+large 0\s+->\s+adversarial \+ "
-                              r"conformance 1, three reviewers 1")
+                              r"conformance 2")
         self.assertIn("small critical units: 2, 1 of them in `critical code:` globs alone", out)
         self.assertRegex(out, r"small code critical\s+1 line\(s\), 1 file\(s\)\s+code")
         self.assertRegex(out, r"small content critical\s+1 line\(s\), 1 file\(s\)\s+content: core/x.py")

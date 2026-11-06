@@ -174,6 +174,6 @@ each failure class from getting through again. Terms: the skill's
 - **Fix:** `next:` counts the first round's separate reviewers, says a reduction is the user's call asked first and
   puts the trailer after they report; a large change's `why` names the widest band on; SKILL.md steps 4 and 7, its
   Report, the conformance brief, templates/REVIEW.md and the known holes say the same.
-- **Plug:** test tests/test_binding_load.py::NextStepTest::test_three_reviewers_are_counted_and_only_the_user_lowers_them,
+- **Plug:** test tests/test_binding_load.py::NextStepTest::test_the_ceiling_pair_is_counted_and_only_the_user_lowers_it,
   rule REVIEW.md "The skill leaves a slice's minimum to the agent's reading"
 - **Recurrences:** none

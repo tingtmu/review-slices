@@ -14,12 +14,20 @@ are known; reviewers and the user cover them.
   moved unchanged counts as one file and no lines, so content moved from a lower-level path into a `critical code:`
   glob can take the adversarial and conformance pair on a diff that shows none of it; reviewers read the moved file
   whole.
-- The measure starts over after a unit large on its own that the review log shows went to three reviewers, so the
-  slices before and after it are never measured together: about one band of lightly reviewed work per stretch. Any
-  unit over the line limit buys that restart, filler or not: a deleted file, a file moved with a one-character edit
-  (it counts in full) or one very long line reads as little as a pure move; reviewers see them. The restart needs this
-  branch's log line, so another clone, a deleted log or a rebase measures the branch whole again (three); a forged
+- The measure starts over after a unit large on its own that the review log shows got the ceiling load (the pair;
+  three reviewers before 0.13.0), so the slices before and after it are never measured together: about one band of
+  lightly reviewed work per stretch. Any unit over the line limit buys that restart, filler or not: a deleted file, a
+  file moved with a one-character edit (it counts in full) or one very long line reads as little as a pure move;
+  reviewers see them. The restart needs this
+  branch's log line, so another clone, a deleted log or a rebase measures the branch whole again (the pair); a forged
   log line restarts only a unit that is large on its own anyway.
+- The pair is the most `status` prints (0.13.0), on large and Critical changes too; one reviewer fewer than before
+  was never benched there, and the owner accepted that risk. A miss through it on a large or Critical unit goes to
+  the user before the next one (`incidents.py` counts them); two units' untested misses through it ask for
+  `cross-check: on`, never three reviewers. The guard prints the cross-check but cannot see whether it ran or which
+  runner (another model family, or the same one), as it cannot see how many reviewers ran; the report names it.
+- The `escalate:` line compares the unit's weight with what this clone's review log holds for it, so another clone,
+  a deleted log or a rebase onto a moved base branch shows no rise; step 6 then asks for a fresh pair by hand.
 - The trailer's base SHA is informational; rebases change it and the guard does not check it.
 - The pass stamp covers the tree `git add -A` would commit; committing only some of the files means running the
   suite again.
