@@ -154,9 +154,10 @@ def restarts(guard, rules, commits, tips):
     """The trailer commits among COMMITS after which the measure starts over: each closes a unit with no merge, of
     the standing RULES' Important or Critical level, whose trailer says that level or higher and whose net diff is
     over every band's line limit, and for which this ref's review log holds the ceiling load (the pair, or three
-    reviewers before 0.13.0) printed in the unit at or before it, when the unit was already that large. So a slice that is small on its own, a unit grown past the
-    band after a lighter load, a base branch reset under it, rules tightened since, another clone or a rebase never
-    restart; the log can only take a restart away. No standing rules, or a guard without the helpers: none."""
+    reviewers before 0.13.0) printed in the unit at or before it, when the unit was already that large. So a slice
+    that is small on its own, a unit grown past the band after a lighter load, a base branch reset under it,
+    another clone or a rebase never restart (since the pair is also the medium band's load, rules tightened since
+    can); the log can only take a restart away. No standing rules, or a guard without the helpers: none."""
     limit = line_limit(rules)
     if not rules or limit is None or not all(hasattr(guard, name) for name in ("review_units", "range_level",
                                                                               "paths_of", "rank")):
@@ -231,22 +232,26 @@ def rise(old, new):
 
 
 def escalation(guard, start):
-    """A git fact that escalates the unit that starts at START, from the review log, or None: history inside it
-    was rewritten since `status` last logged it, or its weight rose above every weight logged for it before. It
-    reads only the line hold() logged for HEAD, so it shows at every `status` until a new commit."""
-    head = guard.git("rev-parse", "HEAD")
+    """The last git fact that escalated the unit that starts at START, from the review log, or None: history inside
+    it was rewritten (a logged head is not in the next one's history), or its weight rose above every weight logged
+    for it before. It names the head `status` saw it at and shows until a new fact, so a round can tell, by git
+    alone, whether it already reviewed that head."""
     ref = unit_ref(guard)
     mine = [entry for entry in read_log(guard, log_path(guard)) if (entry.ref, entry.start) == (ref, start)]
-    if not mine or mine[-1].head != head:
+    heads = [entry for index, entry in enumerate(mine) if index == 0 or entry.head != mine[index - 1].head]
+    fact = None
+    for index, entry in enumerate(heads[1:], 1):
+        before = heads[index - 1].head
+        if guard.git("merge-base", "--is-ancestor", before, entry.head, check=False) is None:
+            fact = entry.head, "history inside the unit was rewritten after status logged it at %s" % before[:12]
+            continue
+        parts = rise([weight(seen) for seen in heads[:index]], weight(entry))
+        fact = (entry.head, "the unit's weight rose (%s)" % ", ".join(parts)) if parts else fact
+    if not fact:
         return None
-    prior = [entry for entry in mine if entry.head != head]
-    if prior and guard.git("merge-base", "--is-ancestor", prior[-1].head, head, check=False) is None:
-        fact = "history inside the unit was rewritten after status logged it at %s" % prior[-1].head[:12]
-    else:
-        parts = rise([weight(entry) for entry in prior], weight(mine[-1]))
-        fact = "the unit's weight rose (%s)" % ", ".join(parts) if parts else None
-    return fact and "%s: a fresh adversarial + conformance pair on the whole unit, `git diff %s..HEAD`, as its " \
-                    "round two, or the user decides" % (fact, start[:12])
+    return ("%s, at %s: a fresh adversarial + conformance pair on the whole unit, `git diff %s..HEAD`, unless a "
+            "round already reviewed %s (`git merge-base --is-ancestor %s <that round's head>`), or the user decides"
+            % (fact[1], fact[0][:12], start[:12], fact[0][:12], fact[0][:12]))
 
 
 def allowed(guard, commits, uncommitted, tips):

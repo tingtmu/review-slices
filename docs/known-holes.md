@@ -4,11 +4,11 @@ The guard is a hard stop for honest mistakes, not a lock against an agent set on
 are known; reviewers and the user cover them.
 
 - A review trailer proves a level was declared, not that a review ran. The agent writes its own trailer.
-- Whether one merged reviewer or three ran is invisible too: `status` only says when one may, and an agent that
+- Which load ran (one merged reviewer, the pair, or three) is invisible too: `status` only says when one may, and an agent that
   runs fewer reviewers than it printed is caught only by the user (issue #26). Its review log
   (`.git/review-slices/review-log`) holds a unit at the highest load printed, but it is a per-clone file: deleting
   it, another clone or worktree branch copied from this one, or a rebase that moves the unit's start drops the
-  hold. A branch deleted and made again under the same name from the same base commit reads as rewritten: three.
+  hold. A branch deleted and made again under the same name from the same base commit reads as rewritten: the pair, with an `escalate:` line.
   Its measure counts lines and files, not what they do: a one-line change to something every adopter depends on
   fits, so the author raises the level for planned actions and the reviewer's Blocker rule backs that up. A file
   moved unchanged counts as one file and no lines, so content moved from a lower-level path into a `critical code:`
@@ -27,7 +27,8 @@ are known; reviewers and the user cover them.
   `cross-check: on`, never three reviewers. The guard prints the cross-check but cannot see whether it ran or which
   runner (another model family, or the same one), as it cannot see how many reviewers ran; the report names it.
 - The `escalate:` line compares the unit's weight with what this clone's review log holds for it, so another clone,
-  a deleted log or a rebase onto a moved base branch shows no rise; step 6 then asks for a fresh pair by hand.
+  a deleted log or a rebase onto a moved base branch shows no rise; step 6 then asks for a fresh pair by hand. Whether
+  a round already reviewed the head it names is the agent's `git merge-base` check, not the guard's.
 - The trailer's base SHA is informational; rebases change it and the guard does not check it.
 - The pass stamp covers the tree `git add -A` would commit; committing only some of the files means running the
   suite again.

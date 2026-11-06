@@ -77,7 +77,7 @@ class RestartTest(unittest.TestCase):
         self.change({"lib/b.py": "b\n"})
         self.assertRestarted(trailer)
 
-    def test_a_large_unit_with_a_floor_path_restarts_and_a_later_floor_path_is_three(self):  # owner's call
+    def test_a_large_unit_with_a_floor_path_restarts_and_a_later_floor_path_is_the_pair(self):  # owner's call
         trailer = self.large_unit({"lib/a.py": "a\n" * 50, "REVIEW.md": read_text(
             os.path.join(self.repo.path, "REVIEW.md")) + "\nA note.\n"})
         self.change({"lib/b.py": "b\n"})
@@ -85,7 +85,7 @@ class RestartTest(unittest.TestCase):
         self.change({".githooks/x.txt": "x\n"})
         self.assertCeiling("large: .githooks/x.txt is a floor path" + SINCE % trailer[:12])
 
-    def test_a_merge_with_changes_of_its_own_after_the_restart_is_three(self):
+    def test_a_merge_with_changes_of_its_own_after_the_restart_is_the_pair(self):
         self.other_work_on_main()
         trailer = self.large_unit()
         self.repo.git("merge", "-q", "--no-commit", "origin/main")
@@ -313,7 +313,7 @@ class CriticalRestartTest(unittest.TestCase):
                                            "in 1 commit(s), within the small band's 40 lines, 3 files%s)"
                                            % (SINCE % trailer[:12]))
 
-    def test_a_medium_critical_unit_never_restarts(self):  # three, but within a band's line limit
+    def test_a_medium_critical_unit_never_restarts(self):  # the pair, but within a band's line limit
         self.change({"engine/a.py": "a\n" * 60})
         self.assertIn("review: adversarial + conformance (medium: ", self.review()[0])
         self.add_trailer()

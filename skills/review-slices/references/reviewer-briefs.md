@@ -212,9 +212,9 @@ for one the author rejected, here is the reason: <reason>; rule on it: a rejecti
 author read, or a line or output that shows the claim wrong. Report only new defects tagged Fix or Blocker, including
 breakage the fix itself brings. If none, say converged."
 
-On escalation the fresh pair starts from the rules above and hear nothing of a rejection. Beside them, resume the
-reviewer of each review finding you rejected, with the same reason and ruling request. Its ruling settles that review
-finding; the escalation stands, and no refuter rules on it in round three.
+On escalation the fresh pair starts from the rules above, on the whole unit, and also hears each review finding you
+rejected, with your reason and the same ruling request. Its ruling settles that review finding; the escalation
+stands, and no refuter rules on it in round three.
 
 ### Round three: the closing round
 

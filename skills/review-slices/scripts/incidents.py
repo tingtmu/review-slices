@@ -443,12 +443,14 @@ def unit_after(text, start):
 
 
 def large_misses(incident):
-    """How many of INCIDENT's misses through the pair name the large band or Critical in their parentheses."""
-    texts = [incident.fields.get(label, "") for label in ("slice that should have caught it", "recurrences")]
-    if incident.slice != SLICES[2]:
-        texts = texts[1:]
-    return sum(1 for text in texts for match in LOAD_NAMES[PAIR].finditer(text)
-               if LARGE.search(text[match.start():(closing(text, match.start()) or len(text))]))
+    """How many of INCIDENT's misses through the pair, counted as misses() counts them (the Slice field's first,
+    then each recurrence), name the large band or Critical in their parentheses."""
+    slice_text, recurrences = (incident.fields.get(label, "") for label in ("slice that should have caught it",
+                                                                            "recurrences"))
+    found = [(slice_text, match) for match in LOAD_NAMES[PAIR].finditer(slice_text)][:1] if (
+        incident.slice == SLICES[2]) else []
+    found += [(recurrences, match) for match in LOAD_NAMES[PAIR].finditer(recurrences)]
+    return sum(1 for text, match in found if LARGE.search(text[match.start():closing(text, match.start()) or None]))
 
 
 def unit_count(units):
@@ -516,8 +518,8 @@ def band_problems(root, incidents):
 def miss_count(load, units, large=0):
     """`<load> <misses>`, the review units they came from where those are fewer, and how many named a large unit."""
     count = unit_count(units)
-    return "%s %d%s%s" % (load, len(units), " in %d review unit(s)" % count if count < len(units) else "",
-                          " (%d on a large or Critical unit: tell the user before the next one)" % large if large else "")
+    large = " (%d on a large or Critical unit: tell the user before the next one)" % large if large else ""
+    return "%s %d%s%s" % (load, len(units), " in %d review unit(s)" % count if count < len(units) else "", large)
 
 
 def print_report(where, incidents, skipped, today):

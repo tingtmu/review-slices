@@ -47,9 +47,8 @@ Three sections live in their own files. Read each one in full when it applies:
    ones it says are in the standing rules to the user. Raise the level for planned actions REVIEW.md lists (for
    example a live cloud action); when unsure, go one higher. A raised level is the level the trailer records.
    Never lower it. Put its output in your report. At Important and Critical it also prints a `review:` line: the
-   review load (which reviewers) and why, from the size band of everything the branch adds to the base branch (or,
-   after a unit over every band's line limit on its own that got the ceiling load, only what follows it: `since
-   <sha>, a unit large on its own`) and, at Critical, the glob kind of the paths that set the level; and an
+   review load (which reviewers) and why, from the size band of everything the branch adds to the base branch (or only
+   what follows a unit large on its own: `since <sha>`) and, at Critical, the glob kind of the paths that set the level; and an
    `escalate:` line when a git fact escalates the unit (step 5).
 4. **Review at that level, with the load `status` printed** (briefs in
    [references/reviewer-briefs.md](references/reviewer-briefs.md)):
@@ -62,13 +61,12 @@ Three sections live in their own files. Read each one in full when it applies:
    | Critical | `adversarial + conformance`. Then the user's go-ahead for the one-way door, given with the review findings. A [review meeting](references/review-meeting.md) only for a disputed review finding, only if the user says yes |
 
    `plus a cross-check` (the base branch's REVIEW.md has `cross-check: on`) adds one cross-check reviewer after
-   round one; `three reviewers` (Standards, Spec, adversarial) only where `status` prints it, unable to measure.
+   round one, also to a pair you run on a raised level (not to an escalation's fresh pair); `three reviewers` (Standards, Spec, adversarial) only where `status` prints it, unable to measure.
    The load is the least review the change needs; more is always allowed. A level you raised for a planned action
    takes the pair whatever `status` prints for the computed level. The one exception: a release whose only changes outside its release notes swap the version
    takes one merged reviewer where REVIEW.md as committed on the base branch (`git show <base>:REVIEW.md`) says so
    beside its planned actions, with the shown output it requires; wording that exists only on your branch never applies. A guard before 0.9.0, or no `review:` line:
-   the three reviewers, except one merged reviewer where `status` prints `review: merged reviewer allowed` at
-   Important.
+   the three reviewers (one merged reviewer where it prints `review: merged reviewer allowed`).
 
    Never lower the load, merge its lenses into fewer reviewers, or swap a reviewer for a tool that does less: only
    the user can, asked before the round with the printed load. "It looks small", "it is mostly moves" and "it is
@@ -112,8 +110,8 @@ Three sections live in their own files. Read each one in full when it applies:
    Fix a review finding's whole class at once, not only the line quoted. Fixes are new commits naming each
    finding's lens (`Adversarial: ...`), except a secret in unpushed commits, which is
    removed by rewriting them ([A secret turns up](references/secrets.md)).
-6. **Converge.** Run `status` again before each later round. An `escalate:` line, or a load higher than the last
-   round's, is escalation (step 5). A unit's load is the highest `status` printed since the unit began, and the
+6. **Converge.** Run `status` again before each later round. A load higher than the last round's, or an `escalate:`
+   line naming a head no round reviewed yet, is escalation (step 5); before round one, round one is that pair. A unit's load is the highest `status` printed since the unit began, and the
    pair once history inside the unit was rewritten; a lower load printed later changes nothing. `status` keeps this
    itself, in the clone's review log (`held:` or `history inside the unit was rewritten` in its `review:` line), but
    a rebase onto a moved base branch moves the unit's start and starts the log over: after one, take a fresh pair on

@@ -70,30 +70,33 @@ class ReviewLogTest(unittest.TestCase):
         self.assertTrue(self.log()[-1].endswith("\tadversarial + conformance\thistory inside the unit was rewritten "
                                                 "after status printed one merged reviewer at %s; weight=important/"
                                                 "small/none" % old[:12]), self.log()[-1])
-        fresh = ("escalate: history inside the unit was rewritten after status logged it at %s: a fresh adversarial "
-                 "+ conformance pair on the whole unit, `git diff %s..HEAD`, as its round two, or the user decides"
-                 % (old[:12], self.repo.out("rev-parse", "--short=12", "origin/main")))
+        new, base = self.repo.out("rev-parse", "HEAD")[:12], self.repo.out("rev-parse", "--short=12", "origin/main")
+        fresh = ("escalate: history inside the unit was rewritten after status logged it at %s, at %s: a fresh "
+                 "adversarial + conformance pair on the whole unit, `git diff %s..HEAD`, unless a round already "
+                 "reviewed %s (`git merge-base --is-ancestor %s <that round's head>`), or the user decides"
+                 % (old[:12], new, base, new, new))
         self.assertEqual(self.escalation(), fresh)
-        self.assertEqual(self.escalation(), fresh)  # until a new commit
-        self.change({"lib/b.py": "b\n"})
-        self.assertIsNone(self.escalation())
+        self.change({"lib/b.py": "b\n"})  # review: a status at a later commit lost it; it stays, naming its head
+        self.assertEqual(self.escalation(), fresh)
         self.assertIn("history inside the unit was rewritten", self.review()[0])  # the load stays the pair
 
     def test_a_rise_in_the_unit_s_weight_escalates(self):  # the load no longer rises past the pair (r1 B1)
-        self.repo = Repo(self, rules=LIB_RULES + "medium: 100 lines, 6 files\ncritical: core/*\n")
+        self.repo = Repo(self, rules=LIB_RULES + "medium: 100 lines, 6 files\ncritical code: eng/*\n")
         self.repo.install()
         self.change({"lib/a.py": "a\n" * 41})
         self.assertIn("review: adversarial + conformance (medium: ", self.review()[0])
         self.assertIsNone(self.escalation())
-        self.change({"lib/b.py": "b\n" * 60})  # medium to large: the pair still
+        grown = self.change({"lib/b.py": "b\n" * 60})  # medium to large: the pair still
         self.assertIn("review: adversarial + conformance (large: ", self.review()[0])
-        self.assertTrue(self.escalation().startswith("escalate: the unit's weight rose (band medium -> large): a "
-                                                     "fresh adversarial + conformance pair on the whole unit"),
-                        self.escalation())
-        self.change({"lib/c.py": "c\n"})  # no rise since the last status
-        self.assertIsNone(self.escalation())
-        self.change({"core/x.py": "x\n", ".githooks/x.txt": "x\n"})  # Critical, a content path and a floor path
-        self.assertIn("the unit's weight rose (level important -> critical, path none -> path)", self.escalation())
+        self.assertTrue(self.escalation().startswith("escalate: the unit's weight rose (band medium -> large), at "
+                                                     "%s: a fresh adversarial + conformance pair on the whole unit"
+                                                     % grown[:12]), self.escalation())
+        self.change({"lib/c.py": "c\n"})  # review: a status between them never loses it
+        self.assertIn("weight rose (band medium -> large), at %s:" % grown[:12], self.escalation())
+        critical = self.change({"eng/x.py": "x\n"})  # the level alone: code, so no content path
+        self.assertIn("weight rose (level important -> critical), at %s:" % critical[:12], self.escalation())
+        floor = self.change({".githooks/x.txt": "x\n"})  # the path alone: a floor path
+        self.assertIn("weight rose (path none -> path), at %s:" % floor[:12], self.escalation())
         self.assertTrue(self.log()[-1].endswith("; weight=critical/large/path"), self.log()[-1])
 
     def test_the_weight_is_read_from_the_last_suffix_and_old_lines_read_lowest(self):  # r3 F3
@@ -111,6 +114,9 @@ class ReviewLogTest(unittest.TestCase):
                          ["band medium -> large"])
         self.assertEqual(sizer.rise([("important", "large", "none"), ("important", "small", "path")],
                                     ("important", "large", "path")), [])
+        self.assertEqual(sizer.rise([("important", "small", "none"), ("important", "medium", "none")],
+                                    ("important", "medium", "none")), [])  # ties one, above another: no rise
+        self.assertEqual(sizer.rise([], ("critical", "large", "path")), [])
 
     def test_a_step_back_and_forth_is_never_held_at_three(self):  # review: the rewrite's three was held for good
         self.repo.git("switch", "-q", "--detach")
