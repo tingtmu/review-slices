@@ -411,7 +411,7 @@ def lint(config):
     """(errors, warnings) about CONFIG as rules for this repo."""
     errors, warnings = list(config["errors"]), list(config["warnings"])
     tracked = split_nul(git("ls-files", "-z", "--full-name", ":/"))
-    for level, pattern in config["globs"] + [("copy-credit", glob) for glob in config.get("copy-credit", ())]:
+    for level, pattern in config["globs"]:
         matcher = re.compile(fnmatch.translate(pattern))
         if not any(matcher.match(path) for path in tracked):
             warnings.append("%s: %s matches no tracked file" % (level, pattern))

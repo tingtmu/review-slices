@@ -133,6 +133,11 @@ def copy_path(line):
     return path
 
 
+def copy_globs(rules):
+    """The `copy-credit:` globs of RULES (None: the defaults, none)."""
+    return (rules or {}).get("copy-credit") or ()
+
+
 def matches(globs, path):
     return path is not None and any(fnmatch.fnmatchcase(path, glob) for glob in globs)
 
@@ -140,8 +145,7 @@ def matches(globs, path):
 def copy_gate(guard, globs, sha):
     """True if commit SHA moves a file under GLOBS: it deletes one and adds one there (`--no-renames`), as an
     archive does. A delete alone never opens it, nor does a root commit."""
-    out = guard.git("diff-tree", "-r", "-z", "--no-renames", "--name-status", "--no-commit-id", sha, check=False)
-    fields = (out or "").split("\0")
+    fields = guard.git("diff-tree", "-r", "-z", "--no-renames", "--name-status", "--no-commit-id", sha).split("\0")
     found = {status for status, path in zip(fields[::2], fields[1::2]) if matches(globs, path)}
     return {"D", "A"} <= found
 
@@ -149,8 +153,8 @@ def copy_gate(guard, globs, sha):
 def tree_lines(guard, globs, rev, cache):
     """The set of whitespace-trimmed lines of the files under GLOBS in REV's tree (empty for no REV)."""
     if rev not in cache:
-        listing = guard.git("ls-tree", "-r", "-z", "--full-tree", rev, check=False) if rev else ""
-        blobs = [entry.split("\t", 1)[0].split()[2] for entry in (listing or "").split("\0")
+        listing = guard.git("ls-tree", "-r", "-z", "--full-tree", rev) if rev else ""
+        blobs = [entry.split("\t", 1)[0].split()[2] for entry in listing.split("\0")
                  if "\t" in entry and entry.split()[1] == "blob" and matches(globs, entry.split("\t", 1)[1])]
         cache[rev] = {line.strip() for line in batch(guard, blobs).split("\n")}
     return cache[rev]
@@ -190,7 +194,7 @@ def credited_size(guard, globs, shas):
     def credit(sha):
         if not copy_gate(guard, globs, sha):
             return None
-        parent = guard.git("rev-parse", "--verify", "-q", sha + "^", check=False)
+        parent = guard.git("rev-parse", "--verify", "-q", sha + "^", check=False)  # None: a root commit
         before, after = tree_lines(guard, globs, parent, cache), tree_lines(guard, globs, sha, cache)
 
         def file_test(old, new):
@@ -251,7 +255,7 @@ def band_of(rules, size):
 def band(guard, rules, commits, uncommitted, tips):
     """(small, medium or large, why): the size band of COMMITS under RULES. A band that is off, or that a smaller
     one already covers, takes nothing."""
-    size, why = measure(guard, commits, uncommitted, tips, (rules or {}).get("copy-credit") or ())
+    size, why = measure(guard, commits, uncommitted, tips, copy_globs(rules))
     name = band_of(rules, size)
     if name == "large":  # name the limit crossed, so "it is only a move" reads as counted (issue #26)
         on = [(limit, band_name) for band_name, limit in limits(rules).items() if limit]  # medium may be narrower

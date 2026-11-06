@@ -3,8 +3,9 @@ units measured as large)."""
 import os
 import re
 import unittest
+from unittest import mock
 
-from support import Repo, read_text
+from support import ENV, Repo, read_text
 from test_calibrate import calibrate
 import test_merged_reviewer as base  # a module, not its classes: unittest would run them here again
 
@@ -43,9 +44,9 @@ class CopyCreditTest(unittest.TestCase):
                            "51 weighted line(s) credited as copies")
 
     def test_a_commit_that_moves_nothing_gets_no_credit(self):  # plan review r1 B1: a live spec edit
-        self.proposed()
-        self.change({"lib/specs/s.md": SPEC.replace("old wording\n", "") + DELTA}, "sync by hand")
-        self.assertCeiling("large: 50 weighted line(s), 1 file(s) in 1 commit(s): over every band" + WIDEST_SMALL)
+        self.proposed()  # req 0 is deleted, though the old archive holds it; the delta's lines are added
+        self.change({"lib/specs/s.md": SPEC.replace("req 0 SHALL hold\n", "") + DELTA}, "sync by hand")
+        self.assertCeiling("large: 52 weighted line(s), 1 file(s) in 1 commit(s): over every band" + WIDEST_SMALL)
 
     def test_deleting_a_spec_file_the_archive_holds_counts_in_full(self):  # plan review r2 B1: a delete alone
         self.proposed()
@@ -98,6 +99,15 @@ class NoCreditTest(unittest.TestCase):
             "important: lib/*\n", "important: lib/*\ncopy-credit: lib/specs/* lib/changes/*\n")}, "credit myself")
         self.archive()
         self.assertCeiling("large: REVIEW.md is a floor path")
+        cwd = os.getcwd()  # the measure itself reads the rules it is given: the standing ones give no credit
+        with mock.patch.dict(os.environ, ENV, clear=True):
+            os.chdir(self.repo.path)
+            try:
+                archive = [GUARD.git("rev-parse", "HEAD")]
+                for at, expected in (("origin/main", "large"), ("HEAD", "small")):
+                    self.assertEqual(SIZER.band(GUARD, GUARD.rules_at(at), archive, [], ("HEAD~",))[0], expected, at)
+            finally:
+                os.chdir(cwd)
 
 
 class ParseTest(unittest.TestCase):
@@ -119,6 +129,21 @@ class CalibrateTest(unittest.TestCase):
         test.proposed()
         test.archive()
         repo.git("commit", "-q", "--amend", "-m", "archive x", "-m", repo.trailer("important"))
+        done = calibrate(repo, "--base", "main")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        out = re.sub(r" \(\d+%\)", "", done.stdout)
+        self.assertRegex(out, r"important\s+3 unit\(s\)\s+small 1\s+medium 0\s+large 2\s+->\s+one merged reviewer 1")
+
+    def test_calibrate_credits_a_pull_request_s_archive_commits(self):  # review: status_size's pull branch
+        repo = Repo(self, rules=CREDIT_RULES)
+        test = CopyCreditTest()
+        test.repo = repo
+        test.proposed()
+        repo.git("checkout", "-q", "-b", "archive")
+        test.archive()
+        repo.git("commit", "-q", "--amend", "-m", "archive x", "-m", repo.trailer("important"))
+        repo.git("checkout", "-q", "main")
+        repo.git("merge", "-q", "--no-ff", "-m", "Merge pull request #1 from someone/archive", "archive")
         done = calibrate(repo, "--base", "main")
         self.assertEqual(done.returncode, 0, done.stderr)
         out = re.sub(r" \(\d+%\)", "", done.stdout)

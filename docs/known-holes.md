@@ -15,7 +15,8 @@ are known; reviewers and the user cover them.
   glob can take the adversarial and conformance pair on a diff that shows none of it; reviewers read the moved file
   whole. Copy credit (`copy-credit:`) matches text, not context: in a commit that moves a file under its globs, a
   common line, text copied into a new place, or a live requirement deleted while an archive still holds its text
-  counts no lines. It lowers the band only (one merged reviewer instead of the pair, never no review), and the
+  counts no lines, and a file under its globs counts lines, never a file, so new text spread over many files
+  there is held by the line limit alone (owner, 2026-11-06). It lowers the band only (one merged reviewer instead of the pair, never no review), and the
   globs the base branch names bound it.
 - The measure starts over after a unit large on its own that the review log shows got the ceiling load (the pair;
   three reviewers before 0.13.0), so the slices before and after it are never measured together: about one band of
