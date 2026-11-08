@@ -26,10 +26,11 @@ starts: give it the standing ones.
      -c memories.generate_memories=false -c 'plugins."<memory plugin>".enabled=false' - < brief.txt`. Not
      `--approve-for-me`: its automatic review approved a write outside the sandbox.
    - Claude: from `$wt`, `claude -p --setting-sources user --strict-mcp-config --permission-mode auto
-     --disallowedTools "Edit Write NotebookEdit" --settings <json> < brief.txt`, the JSON being
+     --disallowedTools "Edit Write NotebookEdit" --settings <file> < brief.txt`, the file holding
      `{"autoMemoryEnabled": false, "enabledPlugins": {"<memory plugin>": false}, "sandbox": {"enabled": true,
-     "allowUnsandboxedCommands": false, "filesystem": {"denyWrite": ["<repo path>/.git"]}}}`. `auto` alone is no
-     sandbox, and without `denyWrite` the sandbox lets git write the repo's `.git`.
+     "allowUnsandboxedCommands": false, "filesystem": {"denyWrite": ["<git dir>"]}}}`, where `<git dir>` is
+     `git rev-parse --path-format=absolute --git-common-dir` (the shared `.git`, also when the checkout is itself a
+     linked worktree). `auto` alone is no sandbox, and without `denyWrite` the sandbox lets git write there.
    Never full access: no `--dangerously-bypass-approvals-and-sandbox`, `danger-full-access` or `bypassPermissions`.
 4. For a later round, move it (`git -C "$wt" checkout --force --detach <new head> && git -C "$wt" clean -ffdx`,
    then step 2 again) and resume the reviewer with the same flags (`codex exec resume <id>`,
