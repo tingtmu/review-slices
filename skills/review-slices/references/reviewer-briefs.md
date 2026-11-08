@@ -12,8 +12,9 @@ You set it up and clean it up; the user does nothing by hand. It works in its ow
 review, so it can read files and re-run the shown output, but a CLI loads the instruction files and config where it
 starts: give it the standing ones.
 
-1. Worktree, outside the checkout, in a new directory per unit (a memory plugin keyed to the directory then
-   starts empty): `wt=$(mktemp -d)/review && git worktree add --detach "$wt" HEAD`.
+1. Worktree, outside the checkout, in a new directory per reviewer and unit (a memory plugin keyed to the
+   directory then starts empty): `wt=$(mktemp -d)/review && git worktree add --detach "$wt" HEAD`, then
+   `git -C "$wt" submodule update --init --recursive` where the repo has submodules.
 2. Each path `git diff --no-renames --name-only <standing>..HEAD` lists that is, at any depth, `AGENTS.md`,
    `CLAUDE.md`, `CLAUDE.local.md`, `.mcp.json`, `.claude.json`, or under `.claude/` or `.codex/`: restore it with
    `git -C "$wt" checkout <standing> -- <path>`, or delete it from `$wt` where `<standing>` has none.
@@ -31,8 +32,8 @@ starts: give it the standing ones.
    Never full access: no `--dangerously-bypass-approvals-and-sandbox`, `danger-full-access` or `bypassPermissions`.
 4. For a later round, move it (`git -C "$wt" checkout --force --detach <new head> && git -C "$wt" clean -ffdx`,
    then step 2 again) and resume the reviewer with the same flags (`codex exec resume <id>`,
-   `claude -p --resume <id>`). After the unit's last round: `git worktree remove --force "$wt"`,
-   `rmdir "${wt%/review}"`, `git worktree prune`.
+   `claude -p --resume <id>`). After the unit's last round: `git worktree remove --force "$wt"` and
+   `rmdir "${wt%/review}"` (never `git worktree prune`: it acts on every worktree of the repo).
 
 It still reads the change as `git diff <base>..HEAD` and instruction files at `<standing>`, as every brief says.
 
