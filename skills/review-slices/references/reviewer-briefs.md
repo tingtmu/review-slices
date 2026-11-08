@@ -12,28 +12,29 @@ You set it up and clean it up; the user does nothing by hand. It works in its ow
 review, so it can read files and re-run the shown output, but a CLI loads the instruction files and config where it
 starts: give it the standing ones.
 
-1. Worktree, outside the checkout, in a new directory per reviewer and unit (a memory plugin keyed to the
-   directory then starts empty): `wt=$(mktemp -d)/review && git worktree add --detach "$wt" HEAD`, then
-   `git -C "$wt" submodule update --init --recursive` where the repo has submodules.
+1. Worktree, outside the checkout, one per reviewer and unit, in a new directory with a name of its own:
+   `wt=$(mktemp -d -t review.XXXXXX) && git worktree add --detach "$wt" HEAD`. Submodules are not checked out:
+   where the shown output needs them, the reviewer says its re-run is blocked.
 2. Each path `git diff --no-renames --name-only <standing>..HEAD` lists that is, at any depth, `AGENTS.md`,
    `CLAUDE.md`, `CLAUDE.local.md`, `.mcp.json`, `.claude.json`, or under `.claude/` or `.codex/`: restore it with
    `git -C "$wt" checkout <standing> -- <path>`, or delete it from `$wt` where `<standing>` has none.
 3. Start it in `$wt` with its brief on stdin, never inside a shell-quoted argument (a `$(...)` in pasted output
-   would run), with writes held to `$wt` and no cross-session memory:
+   would run), with writes held to `$wt` (the repo's `.git` stays read-only, so it cannot commit) and no
+   cross-session memory: turn off each memory plugin the user has (Claude `~/.claude/settings.json` `enabledPlugins`,
+   Codex `~/.codex/config.toml` `[plugins]`; for example claude-mem, which keys memory by repo, not directory).
    - Codex: `codex exec -C "$wt" -s workspace-write -c approval_policy='"never"' -c memories.use_memories=false
-     -c memories.generate_memories=false - < brief.txt`. The main checkout and git's own files stay read-only, so
-     it cannot commit. Not `--approve-for-me`: its automatic review approved a write outside the sandbox.
+     -c memories.generate_memories=false -c 'plugins."<memory plugin>".enabled=false' - < brief.txt`. Not
+     `--approve-for-me`: its automatic review approved a write outside the sandbox.
    - Claude: from `$wt`, `claude -p --setting-sources user --strict-mcp-config --permission-mode auto
-     --disallowedTools "Edit Write NotebookEdit Bash(git commit:*) Bash(git push:*) Bash(git checkout:*)
-     Bash(git switch:*) Bash(git reset:*) Bash(git stash:*) Bash(git clean:*) Bash(git branch:*) Bash(git tag:*)
-     Bash(git update-ref:*)" --settings '{"autoMemoryEnabled": false, "sandbox": {"enabled": true,
-     "allowUnsandboxedCommands": false}}' < brief.txt`. `auto` alone is no sandbox, and the Bash sandbox still lets
-     git write the repo's `.git`, hence the git verbs denied.
+     --disallowedTools "Edit Write NotebookEdit" --settings <json> < brief.txt`, the JSON being
+     `{"autoMemoryEnabled": false, "enabledPlugins": {"<memory plugin>": false}, "sandbox": {"enabled": true,
+     "allowUnsandboxedCommands": false, "filesystem": {"denyWrite": ["<repo path>/.git"]}}}`. `auto` alone is no
+     sandbox, and without `denyWrite` the sandbox lets git write the repo's `.git`.
    Never full access: no `--dangerously-bypass-approvals-and-sandbox`, `danger-full-access` or `bypassPermissions`.
 4. For a later round, move it (`git -C "$wt" checkout --force --detach <new head> && git -C "$wt" clean -ffdx`,
    then step 2 again) and resume the reviewer with the same flags (`codex exec resume <id>`,
-   `claude -p --resume <id>`). After the unit's last round: `git worktree remove --force "$wt"` and
-   `rmdir "${wt%/review}"` (never `git worktree prune`: it acts on every worktree of the repo).
+   `claude -p --resume <id>`). After the unit's last round, `git worktree remove --force "$wt"` (never
+   `git worktree prune`: it acts on every worktree of the repo).
 
 It still reads the change as `git diff <base>..HEAD` and instruction files at `<standing>`, as every brief says.
 
