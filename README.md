@@ -64,7 +64,7 @@ changes of its own, a submodule update or a binary or Git LFS file added, edited
 takes one merged reviewer when small, and an adversarial and a conformance (Standards and Spec) reviewer otherwise;
 Critical always takes that pair, the most `status` prints (0.13.0; it printed three reviewers on large and Critical
 units before). `cross-check: on` in the base branch's REVIEW.md adds one cross-check reviewer to every pair unit:
-a fresh adversarial reviewer from another model family where one is available (an Orca worker, else `codex exec`),
+a fresh adversarial reviewer from another model family where one is available (its CLI, `codex exec` or `claude -p`, else an Orca worker),
 else the same family with a brief for the angles the pair did not take; `incidents.py --check` asks for the line
 once misses from two review units through the pair lack a test plug. When the unit's weight (level, size band, a
 floor or content path) rises, or history inside it is rewritten, `status` prints an `escalate:` line: a fresh pair

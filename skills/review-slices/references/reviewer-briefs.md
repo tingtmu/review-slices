@@ -12,22 +12,27 @@ You set it up and clean it up; the user does nothing by hand. It works in its ow
 review, so it can read files and re-run the shown output, but a CLI loads the instruction files and config where it
 starts: give it the standing ones.
 
-1. Worktree, outside the checkout: `wt=$(mktemp -d)/review && git worktree add --detach "$wt" HEAD`.
-2. Each path `git diff --name-only <standing>..HEAD` lists that is, at any depth, `AGENTS.md`, `CLAUDE.md`,
-   `CLAUDE.local.md`, `.mcp.json`, `.claude.json`, or under `.claude/` or `.codex/`: restore it with
+1. Worktree, outside the checkout, in a new directory per unit (a memory plugin keyed to the directory then
+   starts empty): `wt=$(mktemp -d)/review && git worktree add --detach "$wt" HEAD`.
+2. Each path `git diff --no-renames --name-only <standing>..HEAD` lists that is, at any depth, `AGENTS.md`,
+   `CLAUDE.md`, `CLAUDE.local.md`, `.mcp.json`, `.claude.json`, or under `.claude/` or `.codex/`: restore it with
    `git -C "$wt" checkout <standing> -- <path>`, or delete it from `$wt` where `<standing>` has none.
 3. Start it in `$wt` with its brief on stdin, never inside a shell-quoted argument (a `$(...)` in pasted output
    would run), with writes held to `$wt` and no cross-session memory:
-   - Codex: `codex exec -C "$wt" --approve-for-me --ignore-rules - < brief.txt` (the workspace-write sandbox; the
-     main checkout and git's own files stay read-only, so it cannot commit).
+   - Codex: `codex exec -C "$wt" -s workspace-write -c approval_policy='"never"' -c memories.use_memories=false
+     -c memories.generate_memories=false - < brief.txt`. The main checkout and git's own files stay read-only, so
+     it cannot commit. Not `--approve-for-me`: its automatic review approved a write outside the sandbox.
    - Claude: from `$wt`, `claude -p --setting-sources user --strict-mcp-config --permission-mode auto
-     --disallowedTools "Edit Write NotebookEdit" --settings <json> < brief.txt`, where the JSON turns on the Bash
-     sandbox (`"sandbox": {"enabled": true, "allowUnsandboxedCommands": false}`) and turns off memory
-     (`"autoMemoryEnabled": false`, and `"enabledPlugins"` false for any memory plugin). `auto` alone is no sandbox.
+     --disallowedTools "Edit Write NotebookEdit Bash(git commit:*) Bash(git push:*) Bash(git checkout:*)
+     Bash(git switch:*) Bash(git reset:*) Bash(git stash:*) Bash(git clean:*) Bash(git branch:*) Bash(git tag:*)
+     Bash(git update-ref:*)" --settings '{"autoMemoryEnabled": false, "sandbox": {"enabled": true,
+     "allowUnsandboxedCommands": false}}' < brief.txt`. `auto` alone is no sandbox, and the Bash sandbox still lets
+     git write the repo's `.git`, hence the git verbs denied.
    Never full access: no `--dangerously-bypass-approvals-and-sandbox`, `danger-full-access` or `bypassPermissions`.
-4. For a later round, move it (`git -C "$wt" checkout --detach <new head>`, then step 2 again) and resume the
-   reviewer (`codex exec resume <id>`, `claude -p --resume <id>`). After the unit's last round,
-   `git worktree remove --force "$wt"`.
+4. For a later round, move it (`git -C "$wt" checkout --force --detach <new head> && git -C "$wt" clean -ffdx`,
+   then step 2 again) and resume the reviewer with the same flags (`codex exec resume <id>`,
+   `claude -p --resume <id>`). After the unit's last round: `git worktree remove --force "$wt"`,
+   `rmdir "${wt%/review}"`, `git worktree prune`.
 
 It still reads the change as `git diff <base>..HEAD` and instruction files at `<standing>`, as every brief says.
 
@@ -189,8 +194,10 @@ these you can, and name which ran in your report:
 1. Another model family's CLI (Codex from Claude, Claude from Codex), as "Starting a CLI or terminal reviewer"
    says.
 2. An Orca worker of that family, where Orca is installed, on the same worktree (steps 1, 2 and 4 above). Orca
-   starts workers with full access: launch the agent's terminal with no task, set and confirm "Approve for me"
-   (Codex `/permissions`), then `orca orchestration worker-start --terminal <handle>`. Not yet tried end to end.
+   starts workers with full access: launch the agent's terminal with no task, switch it to a mode that keeps writes
+   in the sandbox and asks you before any escalation (Codex `/permissions`, not "Approve for me" or full access;
+   Claude, its default mode, not auto or bypass), confirm it, then `orca orchestration worker-start --terminal
+   <handle>`. Not yet tried end to end.
 3. One model family only: a fresh reviewer of your own family with this brief. Prompt diversity in one model is
    weaker than another family; the report says so.
 

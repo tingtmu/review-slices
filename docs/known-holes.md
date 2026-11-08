@@ -34,6 +34,8 @@ are known; reviewers and the user cover them.
   worktree with writes held there: the same reach a pair subagent has in the checkout. Restoring the instruction
   and config files to `<standing>` keeps the change from steering it; a path outside the list in
   reviewer-briefs.md (a tool's own rules file) is not restored, and the brief's rules are the only guard there.
+  Claude's Bash sandbox still lets git write the repo's `.git` (a commit on the worktree's detached HEAD went
+  through in a test); the denied git verbs catch the common writes, not plumbing or a script that runs git.
 - The `escalate:` line compares the unit's weight with what this clone's review log holds for it, so another clone,
   a deleted log or a rebase onto a moved base branch shows no rise; step 6 then asks for a fresh pair by hand. Whether
   a round already reviewed the head it names is the agent's `git merge-base` check, not the guard's.
