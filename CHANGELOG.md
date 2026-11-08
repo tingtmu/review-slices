@@ -3,6 +3,23 @@
 Each release of the review-slices skill, newest first. Each is tagged `vX.Y.Z`; from 0.9.2 on, each also has a
 GitHub Release with the same notes.
 
+## 0.15.0 (2026-11-08)
+
+A CLI reviewer (the cross-check, the fallback when no subagent can start, a refuter) now works in its own detached
+worktree of the commit under review, one per reviewer in a directory of its own, so it can read files and re-run the
+shown output, instead of an empty directory that read the repo only through git. Before it starts, the author
+restores the instruction and config files the unit touched (`AGENTS.md`, `CLAUDE.md`, `CLAUDE.local.md`, `.mcp.json`,
+`.claude.json`, `.claude/`, `.codex/`, at any depth) to the standing commit, as Anthropic's claude-code-action does
+for pull requests. reviewer-briefs.md gives one command per model family, smoke-tested: `codex exec -s
+workspace-write -c approval_policy='"never"'` (not `--approve-for-me`, whose automatic review approved a write outside
+the sandbox), and `claude -p --permission-mode auto` with the Bash sandbox, `denyWrite` on the git common dir, no edit
+tools and project settings left out; memory and memory plugins off for both; never full access. A later round moves
+the worktree with `checkout --force` and `clean -ffdx`; cleanup removes only that worktree. Submodules are not checked
+out (a re-run that needs them is reported blocked). The cross-check's runners are now the other family's CLI, then an
+Orca worker set to a mode that asks before escalating, then the same family. SKILL.md and README no longer call the
+CLI reviewer read-only-sandboxed; known-holes.md says it runs the change's code, as a pair subagent does. This repo's
+own REVIEW.md turns on `cross-check: on`. No guard change: the guard's behaviour and log are as in 0.14.0.
+
 ## 0.14.0 (2026-11-06)
 
 New `copy-credit: <glob> ...` in the base branch's REVIEW.md: in a commit that moves a file under those globs (it
