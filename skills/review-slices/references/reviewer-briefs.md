@@ -8,12 +8,28 @@ the branch left the base branch); where that line names none, use `<base>` and s
 
 ## Starting a CLI or terminal reviewer
 
-Start it in a new empty directory (`mktemp -d`), never the checkout or a directory above it (`codex exec
---skip-git-repo-check --sandbox read-only`), and have it read the repo only through git
-(`git -C <repo path> diff <base>..HEAD`, `git -C <repo path> show HEAD:<path>` and `git -C <repo path> grep <pattern>
-HEAD` for code, `git -C <repo path> show <standing>:<path>` for instruction files), so it never loads the change's
-instruction files as its own. Give it its brief from a file or stdin, never inside a shell-quoted argument: a `$(...)`
-in pasted output would run.
+You set it up and clean it up; the user does nothing by hand. It works in its own worktree of the commit under
+review, so it can read files and re-run the shown output, but a CLI loads the instruction files and config where it
+starts: give it the standing ones.
+
+1. Worktree, outside the checkout: `wt=$(mktemp -d)/review && git worktree add --detach "$wt" HEAD`.
+2. Each path `git diff --name-only <standing>..HEAD` lists that is, at any depth, `AGENTS.md`, `CLAUDE.md`,
+   `CLAUDE.local.md`, `.mcp.json`, `.claude.json`, or under `.claude/` or `.codex/`: restore it with
+   `git -C "$wt" checkout <standing> -- <path>`, or delete it from `$wt` where `<standing>` has none.
+3. Start it in `$wt` with its brief on stdin, never inside a shell-quoted argument (a `$(...)` in pasted output
+   would run), with writes held to `$wt` and no cross-session memory:
+   - Codex: `codex exec -C "$wt" --approve-for-me --ignore-rules - < brief.txt` (the workspace-write sandbox; the
+     main checkout and git's own files stay read-only, so it cannot commit).
+   - Claude: from `$wt`, `claude -p --setting-sources user --strict-mcp-config --permission-mode auto
+     --disallowedTools "Edit Write NotebookEdit" --settings <json> < brief.txt`, where the JSON turns on the Bash
+     sandbox (`"sandbox": {"enabled": true, "allowUnsandboxedCommands": false}`) and turns off memory
+     (`"autoMemoryEnabled": false`, and `"enabledPlugins"` false for any memory plugin). `auto` alone is no sandbox.
+   Never full access: no `--dangerously-bypass-approvals-and-sandbox`, `danger-full-access` or `bypassPermissions`.
+4. For a later round, move it (`git -C "$wt" checkout --detach <new head>`, then step 2 again) and resume the
+   reviewer (`codex exec resume <id>`, `claude -p --resume <id>`). After the unit's last round,
+   `git worktree remove --force "$wt"`.
+
+It still reads the change as `git diff <base>..HEAD` and instruction files at `<standing>`, as every brief says.
 
 ## Rules every brief carries
 
@@ -170,9 +186,11 @@ Finish both even if the first finds a Blocker.
 One fresh adversarial reviewer on the whole unit, after round one's pair has reported. Start it with the first of
 these you can, and name which ran in your report:
 
-1. An Orca worker of another model family (Codex from Claude, Claude from Codex), where Orca is installed.
-2. That family's CLI in a read-only sandbox, as "Starting a CLI or terminal reviewer" says (`codex exec`,
-   `claude -p`).
+1. Another model family's CLI (Codex from Claude, Claude from Codex), as "Starting a CLI or terminal reviewer"
+   says.
+2. An Orca worker of that family, where Orca is installed, on the same worktree (steps 1, 2 and 4 above). Orca
+   starts workers with full access: launch the agent's terminal with no task, set and confirm "Approve for me"
+   (Codex `/permissions`), then `orca orchestration worker-start --terminal <handle>`. Not yet tried end to end.
 3. One model family only: a fresh reviewer of your own family with this brief. Prompt diversity in one model is
    weaker than another family; the report says so.
 

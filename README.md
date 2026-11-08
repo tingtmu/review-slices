@@ -21,7 +21,7 @@ No other skill is required. Reviewers are fresh-context agents briefed from
   Orca app, are needed only for optional review meetings. Without them, a disputed Critical review finding goes to
   the user.
 
-If fresh-context agent reviewers are unavailable, the procedure falls back to a read-only CLI reviewer, then
+If fresh-context agent reviewers are unavailable, the procedure falls back to a CLI reviewer in its own worktree, then
 an Orca terminal if available, then asking the user. The author must not review its own work as Slice 2.
 The Python guard checks pass stamps and review trailers, not whether reviewers actually ran.
 

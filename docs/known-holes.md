@@ -30,6 +30,10 @@ are known; reviewers and the user cover them.
   the user before the next one (`incidents.py` counts them); two units' untested misses through it ask for
   `cross-check: on`, never three reviewers. The guard prints the cross-check but cannot see whether it ran or which
   runner (another model family, or the same one), as it cannot see how many reviewers ran; the report names it.
+- A CLI reviewer (the cross-check, a fallback, a refuter) runs the change's code, tests included, in its own
+  worktree with writes held there: the same reach a pair subagent has in the checkout. Restoring the instruction
+  and config files to `<standing>` keeps the change from steering it; a path outside the list in
+  reviewer-briefs.md (a tool's own rules file) is not restored, and the brief's rules are the only guard there.
 - The `escalate:` line compares the unit's weight with what this clone's review log holds for it, so another clone,
   a deleted log or a rebase onto a moved base branch shows no rise; step 6 then asks for a fresh pair by hand. Whether
   a round already reviewed the head it names is the agent's `git merge-base` check, not the guard's.

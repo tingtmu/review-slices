@@ -79,7 +79,7 @@ Three sections live in their own files. Read each one in full when it applies:
    read-only, have fresh context, never a fork of this session, and use the strongest model available. Give
    them the diff command, REVIEW.md, the spec path and the level output; never tell one what not to flag or how to
    grade. If you cannot start a fresh-context reviewer, use, in order: a CLI
-   reviewer in a read-only sandbox (`claude -p`, `codex exec`), an Orca terminal, or ask the user. A subagent of
+   reviewer in its own worktree (`claude -p`, `codex exec`), an Orca terminal, or ask the user. A subagent of
    this session loads the checkout's AGENTS.md, CLAUDE.md and `.claude/`
    settings as they are now: if `git diff --name-only <standing>..HEAD` (`<standing>` from the `standing rules:`
    line) touches any of those at any depth, or `.codex/`, use a CLI reviewer even when you can start a subagent.
