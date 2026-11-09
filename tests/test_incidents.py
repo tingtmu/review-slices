@@ -12,6 +12,7 @@ from support import ENV, ROOT, SCRIPTS
 
 INCIDENTS = os.path.join(SCRIPTS, "incidents.py")
 TODAY = datetime.date.today()
+BANDS_ONLY = "none yet (no check: this test is about the bands)"  # a recurrence otherwise needs a test or check plug
 
 
 def load_incidents():
@@ -142,6 +143,24 @@ class ParseTest(unittest.TestCase):
         _found, problems, _notes, _skipped = incidents.parse_log(entry(1) + entry(1))
         self.assertEqual(problems, ["I1 appears twice; give each incident its own id"])
 
+    def test_a_check_plug_and_a_no_check_reason_are_read(self):
+        value = "check \"test: ! git grep -n 'old_api(' -- src\" (pins I1), guard g (no check: the rest is judgement)"
+        plugs, unread = incidents.parse_plug(value)
+        self.assertEqual(unread, [])
+        self.assertEqual([(plug.kind, plug.path, plug.names) for plug in plugs], [
+            ("check", "REVIEW.md", ["test: ! git grep -n 'old_api(' -- src"]), ("guard", "g", [])])
+        for text, reason in ((value, "the rest is judgement"), ("none yet (no check: a judgement call).",
+                                                                 "a judgement call"),
+                             ("test a.py::f", None), ("none yet (no check: )", None), ("none yet", None)):
+            self.assertEqual(incidents.no_check(text), reason, text)
+        self.assertEqual(incidents.parse_plug("none yet (no check: a judgement call)"), ([], []))
+
+    def test_a_recurrence_that_names_no_load_is_no_miss(self):  # a recurrence review caught names no load
+        for text in ("\n  - 2026-10-01, 2 Review, unit 1a2b3c4d: the adversarial reviewer caught it again.",
+                     "\n  - 2026-10-01, 2 Review: the merged reviewer caught it; adversarial + conformance agreed."):
+            found = incidents.parse_log(entry(1, slice_text="1 Offline suite", recurrences=text))[0][0]
+            self.assertEqual(incidents.misses(found), [], text)
+
 
 class ReportTest(unittest.TestCase):
     def test_open_incidents_show_their_age_and_plug(self):
@@ -269,9 +288,10 @@ class ReportTest(unittest.TestCase):
 
     def test_a_recurrence_that_names_a_load_is_a_miss_through_it(self):
         recurrence = "\n  - 2026-10-01, 2 Review (merged reviewer): the same class again."
-        for entries, count in (((entry(1, slice_text="1 Offline suite", recurrences=recurrence),), 1),
-                               ((entry(1, slice_text="2 Review (merged reviewer)", recurrences=recurrence),), 2),
-                               ((entry(1, recurrences=recurrence * 2),), 2)):
+        for entries, count in (((entry(1, slice_text="1 Offline suite", recurrences=recurrence, plug=BANDS_ONLY),), 1),
+                               ((entry(1, slice_text="2 Review (merged reviewer)", recurrences=recurrence,
+                                       plug=BANDS_ONLY),), 2),
+                               ((entry(1, recurrences=recurrence * 2, plug=BANDS_ONLY),), 2)):
             done = LogRepo(self, *entries).run("--check")
             self.assertIn("recurrences included: merged reviewer %d," % count, done.stdout)
             self.assertEqual(done.returncode, int(count > 1), done.stdout)
@@ -292,7 +312,8 @@ class ReportTest(unittest.TestCase):
         for recurrences, refused in ((recurrence % "1a2b3c4", False), (recurrence % "abcdef12", True),
                                      ("\n  - 2026-10-01, 2 Review (merged reviewer): no unit" + recurrence
                                       % "1a2b3c4d", True)):
-            done = LogRepo(self, entry(1, slice_text=slice_text, recurrences=recurrences)).run("--check")
+            done = LogRepo(self, entry(1, slice_text=slice_text, recurrences=recurrences, plug=BANDS_ONLY)
+                           ).run("--check")
             self.assertEqual(done.returncode, int(refused), recurrences + done.stdout)
 
     def test_a_unit_counts_only_right_after_its_load(self):  # review: a later line's unit merged two units
@@ -306,8 +327,8 @@ class ReportTest(unittest.TestCase):
             done = LogRepo(self, entry(1, slice_text=first, recurrences=recurrences)).run("--check")
             self.assertEqual(done.returncode, 1, first + recurrences + done.stdout)
         done = LogRepo(self, entry(1, slice_text="2 Review (one merged reviewer (small band)), unit 1a2b3c4d",
-                                   recurrences="\n  - 2026-10-01, 2 Review (merged reviewer), unit 1A2B3C4D9: again.")
-                       ).run("--check")
+                                   recurrences="\n  - 2026-10-01, 2 Review (merged reviewer), unit 1A2B3C4D9: again.",
+                                   plug=BANDS_ONLY)).run("--check")
         self.assertEqual(done.returncode, 0, done.stdout)
 
     def test_a_band_plug_must_be_a_line_the_guard_reads(self):  # review: a commented-out band passed the check
@@ -476,6 +497,149 @@ class ReportTest(unittest.TestCase):
         self.assertEqual(done.returncode, 2)
         self.assertIn("incidents: cannot read nope.md", done.stderr)
         self.assertNotIn("Traceback", done.stderr)
+
+
+CHECKS = ("# Rules\n\nPrecheck: grep for 'gone(' in prose, not in the block.\n\n```review-slices\n"
+          "test: python3 -m unittest -q\nbase: main\n"
+          "test: ! git grep -n 'old_api(' -- src  # I1\n"
+          "test: ! git grep -n 'other(' -- src  # I2\n"
+          "test: ! git grep -n 'both(' -- src  # I1, I2\n```\n")
+OLD_API = "check \"test: ! git grep -n 'old_api(' -- src\""
+REVIEWED = "\n  - 2026-10-01, 2 Review: caught again in review."
+
+
+class CheckPlugTest(unittest.TestCase):
+    def run_plug(self, plug, ident=1):
+        log = LogRepo(self, entry(ident, status="plugged", plug=plug))
+        log.write("REVIEW.md", CHECKS)
+        return log.run("--check")
+
+    def test_a_check_plug_on_its_own_tagged_test_line_is_working(self):
+        for plug in (OLD_API, OLD_API + " (pins old_api)", "`%s`" % OLD_API,
+                     "check \"test: ! git grep -n 'old_api(' -- src  # I1\""):
+            done = self.run_plug(plug)
+            self.assertEqual(done.returncode, 0, plug + done.stdout)
+
+    def test_a_check_plug_that_is_no_test_line_of_the_block_reopens_the_hole(self):
+        for text in ("test: ! git grep -n 'gone(' -- src", "base: main", "Precheck: grep for 'gone(' in prose",
+                     "test: python3 -m unittest"):
+            done = self.run_plug('check "%s"' % text)
+            self.assertEqual(done.returncode, 1, text + done.stdout)
+            self.assertIn("is not a `test:` line of REVIEW.md's review-slices block; " + incidents.REOPEN,
+                          done.stdout, text)
+
+    def test_a_check_plug_line_must_end_with_its_own_incident_id(self):  # else one plug could name the suite
+        for text, ident in (("test: python3 -m unittest -q", 1), ("test: ! git grep -n 'other(' -- src", 1),
+                            ("test: ! git grep -n 'both(' -- src", 1), ("test: ! git grep -n 'old_api(' -- src", 11)):
+            done = self.run_plug('check "%s"' % text, ident)
+            self.assertEqual(done.returncode, 1, text + done.stdout)
+            self.assertIn("does not end with the comment `# I%d`" % ident, done.stdout, text)
+
+    def test_a_check_plug_with_a_double_quote_is_a_problem(self):
+        done = self.run_plug('check "test: ! git grep -n "old_api(" -- src"')
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertIn("contains `\"`; quote the test: line's arguments with single quotes", done.stdout)
+
+
+class EscalationTest(unittest.TestCase):
+    def test_a_recurrence_needs_a_working_test_or_check_plug_or_a_reason(self):
+        for status, plug, recurrences, refused in (
+                ("open", "none yet", REVIEWED, True), ("plugged", 'rule REVIEW.md "Rules"', REVIEWED, True),
+                ("plugged", "guard .githooks/pre-push", REVIEWED, True),
+                ("plugged", "test tests/test_a.py::test_gone", REVIEWED, True),
+                ("open", "test tests/test_a.py::test_gone", REVIEWED, True),
+                ("open", "none yet (no check: )", REVIEWED, True),
+                ("plugged", 'rule REVIEW.md "Rules"', "none", False),
+                ("open", "none yet", "none", False),
+                ("plugged", "test tests/test_a.py::test_top", REVIEWED, False),
+                ("open", "test tests/test_a.py::ATest::test_in_class", REVIEWED, False),
+                ("plugged", OLD_API, REVIEWED, False), ("open", OLD_API, REVIEWED, False),
+                ("open", "none yet (no check: judgement only)", REVIEWED, False),
+                ("plugged", 'rule REVIEW.md "Rules" (no check: judgement only)', REVIEWED, False)):
+            log = LogRepo(self, entry(1, status=status, plug=plug, recurrences=recurrences))
+            log.write("REVIEW.md", CHECKS)
+            done = log.run("--check")
+            self.assertEqual(done.returncode, int(refused), "%s %s %s\n%s" % (status, plug, recurrences, done.stdout))
+            self.assertEqual("problem: I1 has a recurrence but no working test or check plug" in done.stdout, refused,
+                             done.stdout)
+
+    def test_every_no_check_reason_is_a_note(self):
+        done = LogRepo(self, entry(1, plug="none yet (no check: judgement only)", recurrences=REVIEWED),
+                       entry(2, status="plugged", plug='rule REVIEW.md "Rules" (no check: prose)')).run("--check")
+        self.assertEqual(done.returncode, 0, done.stdout)
+        self.assertIn("note: I1: no check: judgement only\n", done.stdout)
+        self.assertIn("note: I2: no check: prose\n", done.stdout)
+
+
+class SuiteMarkerTest(unittest.TestCase):
+    def run_line(self, line):
+        log = LogRepo(self, entry(1, status="plugged", plug="test tests/test_a.py::test_top"),
+                      entry(2, status="plugged", plug='rule REVIEW.md "Rules"'),
+                      entry(3, status="plugged", plug="test tests/test_a.py::test_top", recurrences=REVIEWED),
+                      entry(4, status="plugged", plug=OLD_API))
+        log.write("REVIEW.md", CHECKS.replace("# I1\n", "# I4\n") + "\n## Failure looks like\n\n" + line
+                  + "\n\n## Repo rules\n\n- Not a marker (suite) here\n")
+        return log.run("--check")
+
+    def test_a_suite_line_needs_every_linked_incident_tested_and_never_recurred(self):
+        link = "[I%d](docs/INCIDENTS.md#i%d)"
+        for line, refused in (("- A thing (suite) (%s)" % (link % (1, 1)), False),
+                              ("- A thing (suite) (%s, %s)" % (link % (1, 1), link % (4, 4)), False),
+                              ("- A thing\n  (suite) (%s)" % (link % (1, 1)), False), ("- A thing", False),
+                              ("- A thing (suite)", True), ("- A thing (suite) (%s)" % (link % (2, 2)), True),
+                              ("- A thing (suite) (%s)" % (link % (3, 3)), True),
+                              ("- A thing (suite) (%s, %s)" % (link % (1, 1), link % (2, 2)), True),
+                              ("- A thing (suite) (%s)" % (link % (9, 9)), True)):
+            done = self.run_line(line)
+            self.assertEqual(done.returncode, int(refused), line + "\n" + done.stdout)
+            self.assertEqual("problem: REVIEW.md's \"Failure looks like\" line" in done.stdout, refused, done.stdout)
+
+
+class NoticeTest(unittest.TestCase):
+    def dated(self, days):
+        return (TODAY - datetime.timedelta(days=days)).isoformat()
+
+    def test_near_misses_never_change_the_exit_code(self):
+        text = ("# Near misses\n\n## I7. A heading\n\n- **Plug:** test tests/gone.py::test_x\n- F1 old — %s abc1234\n"
+                "- F2 bad date — 2026-13-45 abc\nproblem: small: off\n```review-slices\nsmall: off\n```\n"
+                % self.dated(400))
+        for plug, code in (("test tests/test_a.py::test_top", 0), ("test tests/test_a.py::test_gone", 1)):
+            log = LogRepo(self, entry(1, status="plugged", plug=plug),
+                          entry(2, slice_text="2 Review (merged reviewer)"))
+            for content in (None, text.encode("utf-8"), b"\xff\xfe\x00 garbage\n" + text.encode("utf-8")):
+                if content is not None:
+                    with open(os.path.join(log.path, "docs", "NEAR-MISSES.md"), "wb") as handle:
+                        handle.write(content)
+                done = log.run("--check")
+                self.assertEqual(done.returncode, code, "%s %r\n%s" % (plug, content, done.stdout + done.stderr))
+                self.assertNotIn("Traceback", done.stderr)
+
+    def test_a_stale_one_sighting_near_miss_is_a_notice(self):
+        old, recent = self.dated(91), self.dated(10)
+        lines = {"- F1 one old — %s abc1234 Fix" % old: True,
+                 "- F2 two sightings — %s abc1234, %s def5678 Fix" % (old, self.dated(200)): False,
+                 "- F3 one recent — %s abc1234 Blocker" % recent: False,
+                 "- F4 rejected is no sighting — %s abc1234; rejected %s def5678" % (old, recent): True,
+                 "- F5 seen again recently — %s abc1234; rejected %s def5678" % (recent, old): False,
+                 "- F6 ninety days — %s abc1234" % self.dated(90): False,
+                 "Prose dated %s is no entry" % old: False}
+        log = LogRepo(self, entry(1))
+        log.write("docs/NEAR-MISSES.md", "# Near misses\n\n" + "\n".join(lines) + "\n")
+        done = log.run("--check")
+        self.assertEqual(done.returncode, 0, done.stdout)
+        for line, stale in lines.items():
+            self.assertEqual(("note: docs/NEAR-MISSES.md: a one-sighting near miss over 90 days old; delete it in "
+                              "your next commit: %s\n" % line) in done.stdout, stale, line + "\n" + done.stdout)
+
+    def test_prune_due_is_a_notice(self):
+        for header, due in (("", True), ("Last pruned: %s\n\n" % self.dated(10), False),
+                            ("- **Last pruned:** %s\n\n" % self.dated(90), False),
+                            ("Last pruned: %s\n\n" % self.dated(91), True)):
+            log = LogRepo(self)
+            log.write("docs/INCIDENTS.md", "# Incidents\n\n" + header + entry(1))
+            done = log.run("--check")
+            self.assertEqual(done.returncode, 0, done.stdout)
+            self.assertEqual("note: prune due:" in done.stdout, due, header + done.stdout)
 
 
 class DogfoodTest(unittest.TestCase):

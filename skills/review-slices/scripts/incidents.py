@@ -21,9 +21,17 @@ bullets; entries whose date is still the template's `<...>` are skipped. For a `
     rule REVIEW.md "<line>"          REVIEW.md holds that text (backticks and whitespace runs are ignored); a
                                      `small:` or `medium:` line must be a line of its review-slices block, not a
                                      comment, unless the block turns that band off
+    check "<test: line>"             a `test:` line of REVIEW.md's review-slices block (comments dropped, as the
+                                     guard reads it) whose raw line ends with the comment `# <this incident's id>`
+                                     alone; the quoted line may not contain `"`
 
 Paths are relative to the repo root and stay inside it. A missing plug is a problem: the hole is open again. An
-open incident older than 30 days is a note.
+open incident older than 30 days is a note. A Plug field may end with `(no check: <reason>)`, also after `none yet`;
+every reason is a note. An incident with a recurrence, open or plugged, is a problem until it has a working test or
+check plug or such a reason. A REVIEW.md "Failure looks like" line marked `(suite)` is a problem unless it links
+`[I<n>]` incidents that all have a working test or check plug and no recurrence. Two notes never change the exit
+code: a one-sighting near miss in docs/NEAR-MISSES.md (one date that is not `rejected <date>`) older than 90 days,
+and `prune due` when the log's `Last pruned: YYYY-MM-DD` is missing or older than 90 days.
 
 A miss through a reduced review load is a Slice field at 2 Review, or a recurrence, that names the load in
 parentheses: `2 Review (merged reviewer)` (or `one merged reviewer`, as `status` prints it, with more after it),
@@ -86,6 +94,21 @@ RULE_ITEM = re.compile(r"rule\s+(\S+)\s+[\"“]([^\"”]*)[\"”]")
 RULE_FILE = "REVIEW.md"
 # Text allowed after a plug item: nothing, or a parenthetical, then an optional full stop.
 AFTER_ITEM = re.compile(r"^\s*(\([^()]*\))?\s*\.?\s*$")
+# A check plug quotes a `test:` line of REVIEW.md's block: its text runs to the last quote before what AFTER_ITEM
+# allows, so a `"` inside it is read and refused rather than cut short.
+CHECK_ITEM = re.compile(r"check\s+[\"“](.*)[\"”](?=\s*(?:\([^()]*\))?\s*\.?\s*$)")
+# Why an incident has no test or check plug, at the end of its Plug field: "none yet (no check: <reason>)".
+NO_CHECK = re.compile(r"\(\s*no\s+check\s*:\s*([^()]*?)\s*\)\s*\.?\s*$", re.I)
+# The comment that ends the block line a check plug names: that incident's id alone.
+CHECK_TAG = re.compile(r"\s#\s*(I\d+)\s*$")
+FAILURES = re.compile(r"^#{1,6}\s+Failure looks like\s*$", re.I)  # REVIEW.md's section of failure classes
+SUITE = "(suite)"
+LINK = re.compile(r"\[(I\d+)\]")
+STALE_DAYS = 90
+NEAR_MISSES = os.path.join("docs", "NEAR-MISSES.md")
+DATE = r"\d{4}-\d{2}-\d{2}"
+SIGHTING = re.compile(r"(rejected\s+)?\b(%s)\b" % DATE, re.I)
+LAST_PRUNED = re.compile(r"Last pruned\W*(%s)\b" % DATE, re.I)
 # A separator between plug items, outside quotes and parentheses.
 SEPARATOR = re.compile(r",|;|\s+and\s+|\s+or\s+")
 BAND_RULE = re.compile(r"^(small|medium)\s*:")  # a band plug: a line the guard reads, never prose or a comment
@@ -217,7 +240,10 @@ def split_items(value):
 
 
 def parse_item(item):
-    """A Plug for ITEM, or None when it is not a test, guard or rule followed by at most a parenthetical."""
+    """A Plug for ITEM, or None when it is not a test, guard, rule or check followed by at most a parenthetical."""
+    check = CHECK_ITEM.match(item)
+    if check:
+        return Plug("check", RULE_FILE, [check.group(1)], check.group(0))
     for kind, pattern in (("test", TEST_ITEM), ("guard", GUARD_ITEM), ("rule", RULE_ITEM)):
         match = pattern.match(item)
         if match and AFTER_ITEM.match(item[match.end():]):
@@ -226,9 +252,17 @@ def parse_item(item):
     return None
 
 
+def no_check(value):
+    """The reason in a `(no check: <reason>)` that ends the Plug field VALUE, or None when it gives none."""
+    match = NO_CHECK.search(value or "")
+    return match.group(1) if match and match.group(1) else None
+
+
 def parse_plug(value):
-    """(plugs, unread): the plug items in VALUE, and the items that are none of test, guard or rule."""
-    if not value or NO_PLUG.match(value.strip()):
+    """(plugs, unread): the plug items in VALUE, and the items that are none of test, guard, rule or check; a
+    closing `(no check: <reason>)` is no item."""
+    value = NO_CHECK.sub("", value or "").strip()
+    if not value or NO_PLUG.match(value):
         return [], []
     plugs, unread = [], []
     unquoted = re.split(r"(\"[^\"]*\"|“[^”]*”)", value)
@@ -322,10 +356,36 @@ def flat(text):
     return " ".join(text.replace("`", "").split())
 
 
+def raw_block(text):
+    """The raw lines of TEXT's first review-slices block, comments kept."""
+    block = re.search(r"^```review-slices[ \t]*\r?\n(.*?)^```", text, re.S | re.M)  # the guard's fence, exactly
+    return block.group(1).splitlines() if block else []
+
+
+def uncommented(line):
+    """LINE as the guard reads a block line: its comment dropped, flattened."""
+    return flat(re.sub(r"(?:^|\s)#.*$", "", line))
+
+
 def block_lines(text):
     """The lines of TEXT's first review-slices block as the guard reads them: comments dropped, flattened."""
-    block = re.search(r"^```review-slices[ \t]*\r?\n(.*?)^```", text, re.S | re.M)  # the guard's fence, exactly
-    return [flat(re.sub(r"(?:^|\s)#.*$", "", line)) for line in (block.group(1).splitlines() if block else [])]
+    return [uncommented(line) for line in raw_block(text)]
+
+
+def check_problem(plug, ident, text):
+    """Why the check PLUG of incident IDENT is not a working check in REVIEW.md, holding TEXT, or None: its line must
+    be a `test:` line of the block that ends with the comment `# <IDENT>`, so it pins that incident alone."""
+    line = uncommented(plug.names[0])
+    if '"' in plug.names[0]:
+        return "the quoted line contains `\"`; quote the test: line's arguments with single quotes"
+    found = [raw for raw in raw_block(text) if uncommented(raw) == line]
+    if line.partition(":")[0].strip() != "test" or not found:
+        return "%r is not a `test:` line of %s's review-slices block" % (plug.names[0], RULE_FILE)
+    tags = [CHECK_TAG.search(raw) for raw in found]
+    if not any(tag and tag.group(1) == ident for tag in tags):
+        return "%s's block line %r does not end with the comment `# %s`, so it is not that incident's own check" % (
+            RULE_FILE, found[0].strip(), ident)
+    return None
 
 
 def block_settings(text):
@@ -351,8 +411,8 @@ def broken_test(path, plug, text):
     return None
 
 
-def plug_problem(root, plug):
-    """Why PLUG does not exist under ROOT, or None when it does."""
+def plug_problem(root, plug, ident=None):
+    """Why PLUG, of incident IDENT, does not exist under ROOT, or None when it does."""
     parts = plug.path.replace("\\", "/").split("/")
     if os.path.isabs(plug.path) or ".." in parts:
         return "%s is not a path inside the repo" % plug.path
@@ -376,6 +436,8 @@ def plug_problem(root, plug):
         return "%s does not contain %r" % (plug.path, plug.names[0])
     if band and flat(plug.names[0]) not in block_lines(text):
         return "%s's review-slices block has no line %r, so the band is not narrowed" % (plug.path, plug.names[0])
+    if plug.kind == "check":
+        return check_problem(plug, ident, text)
     return broken_test(path, plug, text) if plug.kind == "test" else None
 
 
@@ -388,8 +450,9 @@ def check_plugs(root, incident):
     problems = ["%s is plugged but names no plug; name it or reopen the incident" % incident.id] if not (
         plugs or unread) else []
     problems += ["%s: plug item not understood, so it cannot be checked: %r (write `test <path>::<function>`"
-                 ", `guard <path>` or `rule REVIEW.md \"<line>\"`)" % (incident.id, item) for item in unread]
-    reasons = [(plug, plug_problem(root, plug)) for plug in plugs]
+                 ", `guard <path>`, `rule REVIEW.md \"<line>\"` or `check \"<test: line>\"`)" % (incident.id, item)
+                 for item in unread]
+    reasons = [(plug, plug_problem(root, plug, incident.id)) for plug in plugs]
     problems += ["%s: plug `%s` is missing: %s; %s" % (incident.id, plug.text, reason, REOPEN)
                  for plug, reason in reasons if reason]
     return problems, []
@@ -468,9 +531,97 @@ def unit_count(units):
 def tested(root, incident):
     """Whether INCIDENT is plugged with a distinct working test for each of its misses, so a recurrence through a
     reduced load adds a test to the Plug field (the earlier plug did not stop it)."""
-    plugs, _unread = parse_plug(incident.fields.get("plug", ""))
-    working = {test_key(root, plug) for plug in plugs if plug.kind == "test" and not plug_problem(root, plug)}
+    working = {test_key(root, plug) for plug in working_checks(root, incident) if plug.kind == "test"}
     return incident.status == "plugged" and len(working) >= max(1, len(misses(incident)))
+
+
+def working_checks(root, incident):
+    """The test and check plugs INCIDENT's Plug field names that work (plug_problem finds nothing), whatever its
+    status."""
+    plugs, _unread = parse_plug(incident.fields.get("plug", ""))
+    return [plug for plug in plugs if plug.kind in ("test", "check") and plug_problem(root, plug, incident.id) is None]
+
+
+def escalation_problems(root, incidents):
+    """(problems, notes): a problem for each incident with a recurrence that has neither a working test or check plug
+    nor a `(no check: <reason>)`; a note for every such reason."""
+    problems, notes = [], []
+    for incident in incidents:
+        reason = no_check(incident.fields.get("plug", ""))
+        notes += ["%s: no check: %s" % (incident.id, reason)] if reason else []
+        if has_recurrences(incident) and not reason and not working_checks(root, incident):
+            problems.append("%s has a recurrence but no working test or check plug: add one that fails on the class "
+                            "(shown failing before the fix), or end its Plug field with `(no check: <reason>)`"
+                            % incident.id)
+    return problems, notes
+
+
+def failure_lines(text):
+    """The bullets of TEXT's "Failure looks like" section, each with its wrapped lines joined."""
+    lines, inside = [], False
+    for line in unfenced(text):
+        if OTHER_HEADING.match(line):
+            inside = bool(FAILURES.match(line))
+        elif inside and re.match(r"\s*[-*]\s", line):
+            lines.append(line.strip())
+        elif inside and lines and line.strip() and line[:1].isspace():
+            lines[-1] += " " + line.strip()
+    return lines
+
+
+def suite_problems(root, incidents):
+    """A problem for each `(suite)` line of REVIEW.md's "Failure looks like" section that links no incident, or links
+    one without a working test or check plug, or with a recurrence (its plug pinned an instance, not the class)."""
+    try:
+        text = read_text(os.path.join(root, RULE_FILE))
+    except OSError:
+        return []  # no REVIEW.md, no (suite) line
+    by_id = {incident.id: incident for incident in incidents}
+    problems = []
+    for line in failure_lines(text):
+        if SUITE not in line:
+            continue
+        ids = list(dict.fromkeys(LINK.findall(line)))
+        why = [] if ids else ["it links no [I<n>]"]
+        why += ["%s is not in the log" % ident for ident in ids if ident not in by_id]
+        why += ["%s has no working test or check plug" % ident for ident in ids
+                if ident in by_id and not working_checks(root, by_id[ident])]
+        why += ["%s has a recurrence" % ident for ident in ids if ident in by_id and has_recurrences(by_id[ident])]
+        problems += ["%s's \"Failure looks like\" line %r is marked %s but %s; reviewers would skip a class the "
+                     "suite does not hold" % (RULE_FILE, line, SUITE, "; ".join(why))] if why else []
+    return problems
+
+
+def notices(root, log_text, today):
+    """Notes that never change the exit code: one-sighting near misses older than STALE_DAYS in NEAR_MISSES, and
+    `prune due` when the log's `Last pruned:` date is missing or older than STALE_DAYS."""
+    notes = []
+    try:
+        near = read_text(os.path.join(root, NEAR_MISSES))
+    except OSError:
+        near = ""  # no near-miss log: nothing to prune
+    for line in unfenced(near):
+        sightings = [found.group(2) for found in SIGHTING.finditer(line) if not found.group(1)]
+        if re.match(r"\s*[-*]\s", line) and len(sightings) == 1 and (days_since(sightings[0], today) or 0) > STALE_DAYS:
+            notes.append("%s: a one-sighting near miss over %d days old; delete it in your next commit: %s"
+                         % (NEAR_MISSES.replace(os.sep, "/"), STALE_DAYS, line.strip()))
+    pruned = LAST_PRUNED.search(log_text)
+    age = days_since(pruned.group(1), today) if pruned else None
+    if age is None or age > STALE_DAYS:
+        notes.append("prune due: %s; read REVIEW.md, the log and %s, bring the pruning to the user at the next "
+                     "go-ahead, then set `Last pruned: %s`" % (
+                         "no readable `Last pruned: YYYY-MM-DD` line in the log" if age is None else
+                         "last pruned %s, %d days ago (over %d)" % (pruned.group(1), age, STALE_DAYS),
+                         NEAR_MISSES.replace(os.sep, "/"), today))
+    return notes
+
+
+def days_since(text, today):
+    """Days from the YYYY-MM-DD date TEXT to TODAY, or None when TEXT is no date."""
+    try:
+        return (today - datetime.datetime.strptime(text, "%Y-%m-%d").date()).days
+    except ValueError:
+        return None
 
 
 def test_key(root, plug):
@@ -576,7 +727,9 @@ def report(path, root, check, today=None):
     for incident in incidents:
         plug_problems, plug_notes = check_plugs(root, incident)
         problems, notes = problems + plug_problems, notes + plug_notes + age_notes(incident, today)
-    problems += band_problems(root, incidents)
+    escalated, reasons = escalation_problems(root, incidents)
+    problems += band_problems(root, incidents) + escalated + suite_problems(root, incidents)
+    notes += reasons + notices(root, text, today)
     print_report(os.path.relpath(path), incidents, skipped, today)
     for message in notes:
         print("note: " + message)
@@ -592,7 +745,8 @@ def main(argv):
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--path", help="the incident log (default: docs/INCIDENTS.md at the repo root)")
     parser.add_argument("--check", action="store_true", help="exit 1 on any problem: a plug missing or unreadable, "
-                        "or a band that misses from a second review unit through a reduced load need off")
+                        "a band that misses from a second review unit through a reduced load need off, a recurrence "
+                        "with no working test or check plug or reason, or a (suite) line its incidents do not back")
     args = parser.parse_args(argv[1:])
     root = repo_root()
     try:
