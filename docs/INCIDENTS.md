@@ -7,7 +7,10 @@ each failure class from getting through again. Terms: the skill's
 - One entry per failure class. A later case of the same class goes under that entry's Recurrences, and says why
   the plug did not stop it.
 - Status is `open` until the plug exists, then `plugged`. A fix repairs one instance; only a plug closes an entry.
-- A plug is, in order of preference: `test <path>::<test function>`, `guard <path>`, `rule REVIEW.md "<line>"`.
+- A plug is, in order of preference: `test <path>::<test function>`, `check "<test: line>"`, `guard <path>`,
+  `rule REVIEW.md "<line>"`.
+
+Last pruned: 2026-11-09
 
 ## I1. The guard trusts input the change controls
 

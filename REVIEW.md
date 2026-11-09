@@ -26,6 +26,7 @@ important: .codex/*
 important: tests/*
 simple: README.md
 simple: CHANGELOG.md
+trivial: docs/NEAR-MISSES.md
 ```
 
 Planned actions that make a change Critical: a release tag; a change to the pass stamp or review trailer
@@ -55,9 +56,10 @@ Checks that run only in CI or another remote service, outside the suite. Read th
 - The guard trusts input the change itself controls ([I1](docs/INCIDENTS.md#i1-the-guard-trusts-input-the-change-controls))
 - The guard fails open on input it did not expect ([I2](docs/INCIDENTS.md#i2-the-guard-fails-open-on-unexpected-input))
 - A push is measured across commits that are not the author's ([I3](docs/INCIDENTS.md#i3-a-push-is-measured-across-other-peoples-commits))
-- A tool runs a one-way door it should only list ([I5](docs/INCIDENTS.md#i5-a-setup-tool-runs-a-one-way-door-it-should-only-list))
+- A tool runs a one-way door it should only list (suite) ([I5](docs/INCIDENTS.md#i5-a-setup-tool-runs-a-one-way-door-it-should-only-list))
 - Setup breaks the host repo's existing hooks or checks ([I4](docs/INCIDENTS.md#i4-setup-breaks-the-host-repos-existing-tooling))
-- The skill leaves a slice's minimum to the agent's reading ([I6](docs/INCIDENTS.md#i6-the-skill-leaves-a-slices-minimum-to-the-agents-reading))
+- The skill leaves a slice's minimum to the agent's reading (suite) ([I6](docs/INCIDENTS.md#i6-the-skill-leaves-a-slices-minimum-to-the-agents-reading))
+- F1. A release note or CHANGELOG line claims what the diff or a cited source does not show: the release check reads versions, not claims ([near misses](docs/NEAR-MISSES.md))
 
 ## Repo rules for reviewers
 
