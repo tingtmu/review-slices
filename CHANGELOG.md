@@ -23,10 +23,12 @@ that links no incident, or links one that is open, lacks a working test or check
 (the agent deletes it), and `prune due` when INCIDENTS.md's `Last pruned:` is missing or older than 90 days (the
 agent brings the pruning of "Failure looks like" to the user at the next go-ahead). references/incidents.md adds
 red-before-green for new plugs, test plugs over the class's shapes, and a short admission and pruning rule; the
-templates, set-up.md, GLOSSARY ("Near miss", "Check plug") and README follow. Upgrading: copy the new
-`incidents.py`; give each recurring incident a working test or check plug or a `(no check: <reason>)`; add
-`Last pruned:` and `docs/NEAR-MISSES.md`. Also: the briefs say a read-only reviewer may run tests to check a claim.
-No guard change.
+templates, set-up.md, GLOSSARY ("Near miss", "Check plug") and README follow; known-holes.md says a plug's shape is
+checked, not what it tests. Upgrading: `setup_tools.py upgrade` refreshes `.githooks/incidents.py` where a repo has
+one; a repo without it copies the script there and adds `test: python3 .githooks/incidents.py --check` to its
+block, or nothing gates on these rules. Then give each recurring incident a working test or check plug or a
+`(no check: <reason>)`, and add `Last pruned:` and `docs/NEAR-MISSES.md`. Also: the briefs say a read-only reviewer
+may run tests to check a claim. No guard change.
 
 ## 0.15.0 (2026-11-08)
 
