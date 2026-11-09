@@ -88,7 +88,9 @@ Last pruned: 2026-11-09
   test tests/test_agent_hook.py::CdTest::test_an_amend_after_a_cd_into_a_reviewed_repo_is_denied,
   test tests/test_agent_hook.py::CdTest::test_an_amend_after_a_cd_the_hook_cannot_follow_is_denied,
   test tests/test_incidents.py::EscalationTest::test_an_undated_recurrence_counts_everywhere,
-  test tests/test_incidents.py::OpenSuiteTest::test_a_suite_line_linking_an_open_incident_is_a_problem
+  test tests/test_incidents.py::OpenSuiteTest::test_a_suite_line_linking_an_open_incident_is_a_problem,
+  test tests/test_incidents.py::CheckPlugTest::test_a_check_plug_that_differs_only_by_backticks_is_a_problem,
+  test tests/test_incidents.py::CheckPlugTest::test_a_check_plug_must_match_its_line_whitespace_included
 - **Recurrences:**
   - 2026-10-23, review finding on 0.2.0: a push to `refs/for/main` (Gerrit) went unchecked. The plug tested
     branches and tags only, the two ref kinds the fix had in mind.
@@ -109,6 +111,11 @@ Last pruned: 2026-11-09
     `(suite)` mark on an open incident passed, though an open incident's plugs are never checked. The plugs tested
     the guard's inputs, not the incident checker's. One recurrence rule now serves the report, escalation and
     `(suite)`, and an open incident voids the mark.
+  - 2026-11-09, cross-check findings on the same work: a check plug matched its `test:` line after whitespace was
+    collapsed and backticks dropped, so `'old  api'` matched `'old api'`; and the documented check
+    `! git grep -n 'old_api(' -- src` passed on a grep error. Round one's plugs covered how a check is found, not
+    what it runs. Matching is now exact but for the tag and a wrapped Plug field, and the example passes only on
+    grep's no-match status (`git grep -n -F ... ; test $? -eq 1`).
 
 ## I3. A push is measured across other people's commits
 
