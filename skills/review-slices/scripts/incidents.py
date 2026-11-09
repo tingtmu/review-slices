@@ -110,9 +110,10 @@ ITEM = re.compile(r"\s*(?:[-*]|\d+[.)])\s")  # a bullet or numbered item
 SECTION_END = re.compile(r"^#{1,2}\s")  # a "Failure looks like" section runs to the next level-1 or 2 heading
 LINK = re.compile(r"\[(I\d+)\]")
 STALE_DAYS = 90
-NEAR_MISSES = os.path.join("docs", "NEAR-MISSES.md")
+NEAR_MISSES = "docs/NEAR-MISSES.md"  # os.path.join takes "/" on every platform
 DATE = r"\d{4}-\d{2}-\d{2}"
 SIGHTING = re.compile(r"(rejected\s+)?\b(%s)\b" % DATE, re.I)
+KEPT = re.compile(r"^\s*[-*]\s+F\d+\b|\bplugged:", re.I)  # a promoted or plugged near miss: pruning reads it
 LAST_PRUNED = re.compile(r"Last pruned\W*(%s)\b" % DATE, re.I)
 # A separator between plug items, outside quotes and parentheses.
 SEPARATOR = re.compile(r",|;|\s+and\s+|\s+or\s+")
@@ -418,6 +419,11 @@ def broken_test(path, plug, text):
     return None
 
 
+def inside(root, path):
+    """Whether PATH, links followed, is inside ROOT."""
+    return os.path.commonpath([os.path.realpath(path), os.path.realpath(root)]) == os.path.realpath(root)
+
+
 def plug_problem(root, plug, ident=None):
     """Why PLUG, of incident IDENT, does not exist under ROOT, or None when it does."""
     parts = plug.path.replace("\\", "/").split("/")
@@ -432,7 +438,7 @@ def plug_problem(root, plug, ident=None):
     path = os.path.join(root, plug.path)
     if not os.path.isfile(path):
         return "%s does not exist" % plug.path
-    if os.path.commonpath([os.path.realpath(path), os.path.realpath(root)]) != os.path.realpath(root):
+    if not inside(root, path):
         return "%s is a link to a file outside the repo" % plug.path
     try:
         text = read_text(path)
@@ -476,8 +482,16 @@ def age_notes(incident, today):
     return notes
 
 
+def recurrence_text(incident):
+    """INCIDENT's Recurrences field, or its singular Recurrence alias, nested lines included."""
+    return " ".join(incident.fields.get(label, "") for label in ("recurrences", "recurrence")).strip()
+
+
 def has_recurrences(incident):
-    return not NO_RECURRENCE.match(incident.fields.get("recurrences", "").strip())
+    """Whether INCIDENT has a recurrence: its field holds a YYYY-MM-DD date, or any text that is not `none` or the
+    like. The report, the escalation rule and the (suite) rule all read recurrences this way."""
+    text = recurrence_text(incident)
+    return bool(re.search(r"\b%s\b" % DATE, text)) or not NO_RECURRENCE.match(text)
 
 
 def misses(incident):
@@ -559,7 +573,7 @@ def escalation_problems(root, incidents):
         plug = incident.fields.get("plug", "")
         reason = no_check(plug)
         notes += ["%s: no check: %s" % (incident.id, reason)] if reason else []
-        if recurred(incident) and not reason and not working_checks(root, incident):
+        if has_recurrences(incident) and not reason and not working_checks(root, incident):
             problems.append("%s has a recurrence but no working test or check plug: add one that fails on the class "
                             "(shown failing before the fix), or end its Plug field with `(no check: <reason>)`%s"
                             % (incident.id, "; its `(no check: ...)` gives no reason in words" if
@@ -567,11 +581,6 @@ def escalation_problems(root, incidents):
     return problems, notes
 
 
-def recurred(incident):
-    """Whether INCIDENT's Recurrences (or Recurrence) field, nested lines included, holds a YYYY-MM-DD date, whatever
-    words come before it: the escalation and (suite) rules read recurrences this way."""
-    fields = incident.fields
-    return bool(re.search(r"\b%s\b" % DATE, fields.get("recurrences", "") + " " + fields.get("recurrence", "")))
 
 
 def failure_items(text):
@@ -595,7 +604,8 @@ def suite_item_problem(root, item, by_id):
     why += ["%s is not in the log" % ident for ident in ids if ident not in by_id]
     why += ["%s has no working test or check plug" % ident for ident in ids
             if ident in by_id and not working_checks(root, by_id[ident])]
-    why += ["%s has a recurrence" % ident for ident in ids if ident in by_id and recurred(by_id[ident])]
+    why += ["%s is open" % ident for ident in ids if ident in by_id and by_id[ident].status != "plugged"]
+    why += ["%s has a recurrence" % ident for ident in ids if ident in by_id and has_recurrences(by_id[ident])]
     return ("%s's \"Failure looks like\" line %r is marked (suite) but %s; reviewers would skip a class the suite "
             "does not hold" % (RULE_FILE, item, "; ".join(why))) if why else None
 
@@ -623,16 +633,14 @@ def suite_problems(root, incidents):
 def notices(root, log_text, today):
     """Notes that never change the exit code: one-sighting near misses older than STALE_DAYS in NEAR_MISSES, and
     `prune due` when the log's `Last pruned:` date is missing or older than STALE_DAYS."""
-    notes = []
-    try:
-        near = read_text(os.path.join(root, NEAR_MISSES))
-    except OSError:
-        near = ""  # no near-miss log: nothing to prune
-    for line in unfenced(near):
+    near = near_misses_text(root)
+    notes = ["%s is not a regular file inside the repo, so it was not read" % NEAR_MISSES] if near is None else []
+    for line in unfenced(near or ""):
         sightings = [found.group(2) for found in SIGHTING.finditer(line) if not found.group(1)]
-        if re.match(r"\s*[-*]\s", line) and len(sightings) == 1 and (days_since(sightings[0], today) or 0) > STALE_DAYS:
+        if re.match(r"\s*[-*]\s", line) and not KEPT.search(line) and len(sightings) == 1 and (
+                days_since(sightings[0], today) or 0) > STALE_DAYS:
             notes.append("%s: a one-sighting near miss over %d days old; delete it in your next commit: %s"
-                         % (NEAR_MISSES.replace(os.sep, "/"), STALE_DAYS, line.strip()))
+                         % (NEAR_MISSES, STALE_DAYS, line.strip()))
     pruned = LAST_PRUNED.search(log_text)
     age = days_since(pruned.group(1), today) if pruned else None
     if age is None or age > STALE_DAYS:
@@ -640,8 +648,20 @@ def notices(root, log_text, today):
                      "go-ahead, then set `Last pruned: %s`" % (
                          "no readable `Last pruned: YYYY-MM-DD` line in the log" if age is None else
                          "last pruned %s, %d days ago (over %d)" % (pruned.group(1), age, STALE_DAYS),
-                         NEAR_MISSES.replace(os.sep, "/"), today))
+                         NEAR_MISSES, today))
     return notes
+
+
+def near_misses_text(root):
+    """NEAR_MISSES's text under ROOT: "" when it is absent, None when it is no regular file inside ROOT (a link out of
+    the repo, a pipe or a device) or cannot be read."""
+    path = os.path.join(root, NEAR_MISSES)
+    if not os.path.lexists(path):
+        return ""
+    try:
+        return read_text(path) if os.path.isfile(path) and inside(root, path) else None
+    except OSError:
+        return None
 
 
 def days_since(text, today):
@@ -729,7 +749,7 @@ def print_report(where, incidents, skipped, today):
     recurring = [incident for incident in incidents if has_recurrences(incident)]
     print("recurrences (each means a weak plug):" + ("" if recurring else " none"))
     for incident in recurring:
-        print("  %s. %s: %s" % (incident.id, incident.title, incident.fields["recurrences"]))
+        print("  %s. %s: %s" % (incident.id, incident.title, recurrence_text(incident)))
 
 
 def repo_root():

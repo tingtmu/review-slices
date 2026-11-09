@@ -54,9 +54,9 @@ class LogRepo:
         with open(full, "w", encoding="utf-8") as handle:
             handle.write(text)
 
-    def run(self, *args, cwd=None):
+    def run(self, *args, cwd=None, timeout=None):
         return subprocess.run((sys.executable, INCIDENTS) + args, cwd=cwd or self.path, capture_output=True,
-                              text=True, env=ENV)
+                              text=True, env=ENV, timeout=timeout)
 
 
 class ParseTest(unittest.TestCase):
@@ -591,6 +591,20 @@ class EscalationTest(unittest.TestCase):
             self.assertEqual(done.returncode, 1, text + done.stdout)
             self.assertIn("problem: I1 has a recurrence but no working test or check plug", done.stdout, text)
 
+    def test_an_undated_recurrence_counts_everywhere(self):  # review: listed as weak, yet not escalated
+        undated = "\n  - review of 0.4.0, unit 1a2b3c4: caught again"
+        done = LogRepo(self, entry(1, recurrences=undated)).run("--check")
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertIn("problem: I1 has a recurrence but no working test or check plug", done.stdout)
+        self.assertIn("recurrences (each means a weak plug):\n  I1. A failure: review of 0.4.0", done.stdout)
+        log = LogRepo(self, entry(1, status="plugged", plug="test tests/test_a.py::test_top", recurrences=undated))
+        log.write("REVIEW.md", "# Rules\n\n## Failure looks like\n\n- A thing (suite) ([I1](docs/INCIDENTS.md))\n")
+        done = log.run("--check")
+        self.assertEqual(done.returncode, 1, done.stdout)
+        self.assertIn("is marked (suite) but I1 has a recurrence", done.stdout)
+        singular = entry(1, recurrences=undated).replace("**Recurrences:**", "**Recurrence:**")
+        self.assertIn("  I1. A failure: review of 0.4.0", LogRepo(self, singular).run().stdout)
+
     def test_every_no_check_reason_is_a_note(self):
         done = LogRepo(self, entry(1, plug="none yet (no check: judgement only)", recurrences=REVIEWED),
                        entry(2, status="plugged", plug='rule REVIEW.md "Rules" (no check: prose)')).run("--check")
@@ -644,6 +658,16 @@ class SuiteMarkerTest(unittest.TestCase):
             self.assertEqual("outside a \"Failure looks like\" item" in done.stdout, outside, done.stdout)
 
 
+class OpenSuiteTest(unittest.TestCase):
+    def test_a_suite_line_linking_an_open_incident_is_a_problem(self):  # review: open plugs are never checked
+        for status, refused in (("open", True), ("plugged", False)):
+            log = LogRepo(self, entry(1, status=status, plug="test tests/test_a.py::test_top"))
+            log.write("REVIEW.md", "# Rules\n\n## Failure looks like\n\n- A thing (suite) ([I1](docs/INCIDENTS.md))\n")
+            done = log.run("--check")
+            self.assertEqual(done.returncode, int(refused), status + done.stdout)
+            self.assertEqual("is marked (suite) but I1 is open" in done.stdout, refused, done.stdout)
+
+
 class TemplateTest(unittest.TestCase):
     def test_a_repo_set_up_from_the_templates_passes_the_check(self):  # review: its prose mentions `(suite)`
         log = LogRepo(self)
@@ -677,12 +701,14 @@ class NoticeTest(unittest.TestCase):
 
     def test_a_stale_one_sighting_near_miss_is_a_notice(self):
         old, recent = self.dated(91), self.dated(10)
-        lines = {"- F1 one old — %s abc1234 Fix" % old: True,
-                 "- F2 two sightings — %s abc1234, %s def5678 Fix" % (old, self.dated(200)): False,
-                 "- F3 one recent — %s abc1234 Blocker" % recent: False,
-                 "- F4 rejected is no sighting — %s abc1234; rejected %s def5678" % (old, recent): True,
-                 "- F5 seen again recently — %s abc1234; rejected %s def5678" % (recent, old): False,
-                 "- F6 ninety days — %s abc1234" % self.dated(90): False,
+        lines = {"- one old — %s abc1234 Fix" % old: True,
+                 "- two sightings — %s abc1234, %s def5678 Fix" % (old, self.dated(200)): False,
+                 "- one recent — %s abc1234 Blocker" % recent: False,
+                 "- rejected is no sighting — %s abc1234; rejected %s def5678" % (old, recent): True,
+                 "- seen again recently — %s abc1234; rejected %s def5678" % (recent, old): False,
+                 "- ninety days — %s abc1234" % self.dated(90): False,
+                 "- F2 promoted to a Failure looks like line — %s abc1234 Blocker" % old: False,
+                 "- pinned by a check — %s abc1234 Fix; plugged: test tests/test_a.py::test_top" % old: False,
                  "Prose dated %s is no entry" % old: False}
         log = LogRepo(self, entry(1))
         log.write("docs/NEAR-MISSES.md", "# Near misses\n\n" + "\n".join(lines) + "\n")
@@ -691,6 +717,24 @@ class NoticeTest(unittest.TestCase):
         for line, stale in lines.items():
             self.assertEqual(("note: docs/NEAR-MISSES.md: a one-sighting near miss over 90 days old; delete it in "
                               "your next commit: %s\n" % line) in done.stdout, stale, line + "\n" + done.stdout)
+
+    def test_a_near_miss_log_that_is_no_file_inside_the_repo_is_skipped(self):  # review: a link read outside
+        outside = tempfile.mkdtemp(prefix="review-slices-outside-")
+        self.addCleanup(shutil.rmtree, outside, True)
+        with open(os.path.join(outside, "secret.txt"), "w", encoding="utf-8") as handle:
+            handle.write("- secret line — 2020-01-01 abc1234\n")
+        log = LogRepo(self, entry(1))
+        os.mkfifo(os.path.join(log.path, "pipe"))
+        near = os.path.join(log.path, "docs", "NEAR-MISSES.md")
+        for target in (os.path.join(outside, "secret.txt"), os.path.join(log.path, "pipe"), "/dev/zero"):
+            if os.path.lexists(near):
+                os.remove(near)
+            os.symlink(target, near)
+            done = log.run("--check", timeout=30)
+            self.assertEqual(done.returncode, 0, target + done.stdout)
+            self.assertNotIn("secret line", done.stdout)
+            self.assertIn("note: docs/NEAR-MISSES.md is not a regular file inside the repo, so it was not read",
+                          done.stdout, target)
 
     def test_prune_due_is_a_notice(self):
         for header, due in (("", True), ("Last pruned: %s\n\n" % self.dated(10), False),
