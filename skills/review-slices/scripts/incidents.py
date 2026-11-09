@@ -370,9 +370,11 @@ def raw_block(text):
     return block.group(1).splitlines() if block else []
 
 
-def uncommented(line):
-    """LINE as the guard reads a block line: its comment dropped, flattened."""
-    return flat(re.sub(r"(?:^|\s)#.*$", "", line))
+def uncommented(line, backticks=False):
+    """LINE as the guard reads a block line: its comment dropped, flattened (BACKTICKS keeps those, which a shell
+    runs, and only joins whitespace runs)."""
+    line = re.sub(r"(?:^|\s)#.*$", "", line)
+    return " ".join(line.split()) if backticks else flat(line)
 
 
 def block_lines(text):
@@ -383,10 +385,10 @@ def block_lines(text):
 def check_problem(plug, ident, text):
     """Why the check PLUG of incident IDENT is not a working check in REVIEW.md, holding TEXT, or None: its line must
     be a `test:` line of the block that ends with the comment `# <IDENT>`, so it pins that incident alone."""
-    line = uncommented(plug.names[0])
+    line = uncommented(plug.names[0], backticks=True)
     if '"' in plug.names[0]:
         return "the quoted line contains `\"`; quote the test: line's arguments with single quotes"
-    found = [raw for raw in raw_block(text) if uncommented(raw) == line]
+    found = [raw for raw in raw_block(text) if uncommented(raw, backticks=True) == line]
     if line.partition(":")[0].strip() != "test" or not found:
         return "%r is not a `test:` line of %s's review-slices block" % (plug.names[0], RULE_FILE)
     tags = [CHECK_TAG.search(raw) for raw in found]

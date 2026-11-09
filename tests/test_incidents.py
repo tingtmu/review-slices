@@ -535,6 +535,15 @@ class CheckPlugTest(unittest.TestCase):
             self.assertEqual(done.returncode, 1, text + done.stdout)
             self.assertIn("does not end with the comment `# I%d`" % ident, done.stdout, text)
 
+    def test_a_check_plug_that_differs_only_by_backticks_is_a_problem(self):  # review: flat() dropped them
+        for plug, block in (("check \"test: ! git grep -n 'old_api(' -- `src`\"", CHECKS),
+                            (OLD_API, CHECKS.replace("-- src  # I1", "-- `src`  # I1"))):
+            log = LogRepo(self, entry(1, status="plugged", plug=plug))
+            log.write("REVIEW.md", block)
+            done = log.run("--check")
+            self.assertEqual(done.returncode, 1, plug + done.stdout)
+            self.assertIn("is not a `test:` line of REVIEW.md's review-slices block", done.stdout, plug)
+
     def test_a_check_plug_with_a_double_quote_is_a_problem(self):
         done = self.run_plug('check "test: ! git grep -n "old_api(" -- src"')
         self.assertEqual(done.returncode, 1, done.stdout)
