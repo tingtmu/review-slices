@@ -188,8 +188,15 @@ is wrong) or `process` (a rule was broken or a loop failed).
 _Avoid_: bug, finding, postmortem
 
 **Recurrence**:
-A later incident or review finding of the same failure class as an earlier incident, listed under that incident.
+A later incident of the same failure class as an earlier incident, or a review finding its reviewer tagged with that
+incident's id, listed under that incident.
 _Avoid_: duplicate, repeat
+
+**Near miss**:
+A Blocker or Fix review finding the author accepted and fixed, whose reviewer tagged it with an `F<n>` "Failure looks
+like" entry or `none`. Logged by failure class in docs/NEAR-MISSES.md; its class may earn a test, a check or an
+`F<n>` line, never an incident.
+_Avoid_: close call, catch, finding (unqualified)
 
 **Miss**:
 An incident, or a recurrence, whose Slice 2 review had a reduced load and named it, as in
@@ -204,6 +211,12 @@ service".
 _Avoid_: category, type
 
 **Plug**:
-The durable change that closes the hole an incident went through: a test or guard (preferred), else a written
-review rule.
+The durable change that closes the hole an incident went through: a test, check plug or guard (preferred), else a
+written review rule.
 _Avoid_: patch, lesson, fix (a fix repairs one instance; a plug stops the class)
+
+**Check plug**:
+A plug that is one `test:` line of REVIEW.md's block, such as a one-line grep or lint, ending with the comment
+`# I<n>` of the incident it plugs and named in its Plug field as `check "<test: line>"`. The suite runs it, so a case
+of its class fails before review.
+_Avoid_: lint rule, detector

@@ -12,10 +12,12 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
 2. Copy [templates/REVIEW.md](../templates/REVIEW.md) to the repo root and fill in its level table (one glob per
    line), its `test:` lines and remote checks from step 1, and its failure list. If a REVIEW.md is already there,
    keep its text and add the template's sections to it. Copy [templates/INCIDENTS.md](../templates/INCIDENTS.md) to
-   `docs/INCIDENTS.md`. If the repo already has review rules (an existing REVIEW.md, CONTRIBUTING, a pull request
-   template, CODEOWNERS, AGENTS.md or CLAUDE.md), list where they agree with the new rules and where they
-   conflict, for the user to decide; link to them rather than copy them. CODEOWNERS paths are good candidates for
-   important or critical globs.
+   `docs/INCIDENTS.md`, with today as its `Last pruned:` date, and
+   [templates/NEAR-MISSES.md](../templates/NEAR-MISSES.md) to `docs/NEAR-MISSES.md` (REVIEW.md's
+   `trivial: docs/NEAR-MISSES.md` line stays). If the repo already has review rules (an existing REVIEW.md, CONTRIBUTING, a
+   pull request template, CODEOWNERS, AGENTS.md or CLAUDE.md), list where they agree with the new rules and where
+   they conflict, for the user to decide; link to them rather than copy them. CODEOWNERS paths are good candidates
+   for important or critical globs.
 3. **Calibrate the table** before committing it: `python3 <skill>/scripts/calibrate.py` shows how it would have
    judged the base branch's last 50 first-parent commits. Under 20 it notes it cannot judge the mix (a new repo): set
    the table from what each path's code can break, and run calibrate again once there is history. Over 30% critical
@@ -53,9 +55,10 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    them. If another check in the suite (a formatter such as black or prettier, or ruff with `preview = true`, which
    wants `# ruff: file-ignore`) still reads `.githooks/`, exclude it there in this same setup commit and say so to
    the user; it is not a weakened check.
-7. Commit REVIEW.md, `docs/INCIDENTS.md`, `.githooks/` and the agent hook settings together; REVIEW.md puts them
-   at Important or higher, so they are reviewed like any change. Every other clone that wants the guard runs
-   `install --apply` once; teammates who do not are never blocked by it, and the agent hook does nothing for them.
+7. Commit REVIEW.md, `docs/INCIDENTS.md`, `docs/NEAR-MISSES.md`, `.githooks/` and the agent hook settings together;
+   REVIEW.md puts them at Important or higher, so they are reviewed like any change. Every other clone that wants the
+   guard runs `install --apply` once; teammates who do not are never blocked by it, and the agent hook does nothing
+   for them.
 8. Offer the user [templates/review-slices-ci.yml](../templates/review-slices-ci.yml) as
    `.github/workflows/review-slices.yml`: it runs `review_slices.py ci` on every pull request, so trailers are
    checked even from clones that never installed the hook.
@@ -67,6 +70,7 @@ reviewed change. What gets installed:
 ```
 <repo>/REVIEW.md                       rules and level table               committed
 <repo>/docs/INCIDENTS.md               incidents and their plugs           committed
+<repo>/docs/NEAR-MISSES.md             what review caught, by class        committed
 <repo>/.githooks/review_slices.py      the guard; the base branch's copy   committed
                                        judges every push
 <repo>/.githooks/agent_hook.py         blocks an agent's overrides         committed

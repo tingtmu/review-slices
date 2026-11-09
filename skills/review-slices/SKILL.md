@@ -13,11 +13,11 @@ and plug a hole every time something gets through. Terms are defined in this ski
 use them exactly.
 
 Start by reading the repo's `REVIEW.md` (its rules, level table and "failure looks like" list) and running
-`python3 .githooks/review_slices.py status`, which says where the work stands and what to do next. If the repo has
-no REVIEW.md with a ```` ```review-slices ```` block, go to [Set up a repo](references/set-up.md). If `python3 .githooks/review_slices.py --version` is older than
-this skill's `scripts/review_slices.py --version`, tell the user `setup_tools.py upgrade` can update it.
+`python3 .githooks/review_slices.py status`, which says where the work stands and what to do next. If
+`python3 .githooks/review_slices.py --version` is older than this skill's `scripts/review_slices.py --version`, tell
+the user `setup_tools.py upgrade` can update it.
 
-Three sections live in their own files. Read each one in full when it applies:
+Read each of these in full when it applies:
 
 - A secret found by any scan: [A secret turns up](references/secrets.md), before anything else.
 - A defect or rule break found after the work was declared done: [Record an incident](references/incidents.md).
@@ -86,7 +86,8 @@ Three sections live in their own files. Read each one in full when it applies:
    Start a CLI or terminal reviewer as the briefs say. Never act as Slice 2
    for your own work.
 5. **Handle review findings.** Check each one yourself before acting on it. A Blocker, Fix or Nit is
-   never an incident: the review caught it. You may re-grade a finding upward only. To dispute a tag or a finding,
+   never an incident: the review caught it. Log a fixed Blocker or Fix in `docs/NEAR-MISSES.md`, or as a Recurrence
+   where its reviewer tagged it `I<n>` ([Record an incident](references/incidents.md)). You may re-grade a finding upward only. To dispute a tag or a finding,
    reject it, citing the mitigation you found and read, or the line or output that shows the claim wrong; a comment
    that claims safety is not one. Its reviewer rules in round two (step 6; on escalation, the briefs' Later rounds);
    still disputed, a refuter in round three.
@@ -155,6 +156,6 @@ why, with any refuter's ruling) and, for a Blocker or Fix, a line on how you ver
 three, each commit after round three as unreviewed, each `spec-mandated` one and the user's answer,
 any level notes, the shown output for the final state, the Door line (step 9), and any incident recorded.
 Never a secret's value.
-The guard's known holes are summarized in [references/known-holes.md](references/known-holes.md).
+The guard's known holes: [references/known-holes.md](references/known-holes.md).
 
 End of review-slices SKILL.md.

@@ -23,6 +23,7 @@ important: <core logic>
 important: <agent instructions, such as AGENTS.md>
 simple: <files tests read, test-only paths>
 trivial: <notes and roadmap files no check reads>
+trivial: docs/NEAR-MISSES.md
 # secrets: gitleaks   (optional: scan the commits every push adds; needs gitleaks 8.19+ and git 2.36+)
 # small: 40 lines, 3 files     (optional size bands of the review load; or off)
 # medium: 200 lines, 10 files
@@ -61,7 +62,14 @@ Checks that run only in CI or another remote service, outside the suite. Read th
 
 What has gone wrong here before, or would hurt most. Reviewers check every change against this list and name the
 entry a review finding falls under by its id. Each line has one: F1, F2, ... until an incident records its class,
-then that incident's, linked.
+then that incident's, linked. A line ends with `(suite)` only when every incident it links has a working test or
+check plug and no recurrence (`incidents.py --check` holds this): the suite ran green on it, so reviewers flag only
+a variant its check would miss.
+
+A line earns its place only when the mistake is non-obvious, has repeated or would be costly, and is specific
+enough to act on. Write it as a trap with a one-clause why: traps to avoid, not maps to follow. Edit one line at a
+time; never regenerate this file. Lines are deleted only when the user prunes the list (the review-slices skill's
+references/incidents.md).
 
 - <one line per failure class, e.g. `F1. A new route skips the token check`, or, once incident I1 records it,
   `A new route skips the token check ([I1](docs/INCIDENTS.md#i1-...))`; delete this line if there is none yet>

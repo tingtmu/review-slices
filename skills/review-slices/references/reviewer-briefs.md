@@ -78,7 +78,8 @@ Review level output: <paste the `level` output>. Check this level first: if a pa
 a higher level under REVIEW.md, that is a Blocker. If the level looks higher than the change needs, say so in one
 line at the end, as a level note, not a review finding: the glob that set it and the level you would give that
 glob. Never lower a level yourself.
-Read: REVIEW.md (the "Failure looks like" list is what this repo has got wrong before), <spec path>.
+Read: REVIEW.md (the "Failure looks like" list is what this repo has got wrong before), <spec path>. The suite
+ran green on `(suite)` lines; under one, flag only a variant its check would miss.
 Shown output from the author: <paste the commands and summary lines>. Re-run the cheapest of them (one test, one
 --help) and compare the exit code and summary line. If your sandbox blocks the re-run, say so, ask the author for
 the transcript lines, and never mark the output confirmed.
@@ -148,7 +149,8 @@ Report one part per lens, each with its own verdict (clean, or its review findin
 - Spec-mandated: each review finding whose defect the spec itself requires, labelled `spec-mandated` on the tag it
   would get anyway, or `none`.
 - For each review finding, the REVIEW.md "Failure looks like" entry it falls under: the entry's id (I1, F1)
-  where it has one, else its text quoted; or `none`.
+  where it has one, else its text quoted; or `none`. The suite ran green on `(suite)` lines; flag only a variant
+  its check would miss.
 If the change looks bigger or riskier than this load should take, say so at the top.
 ```
 
