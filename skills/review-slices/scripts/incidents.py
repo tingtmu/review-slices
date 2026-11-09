@@ -21,9 +21,9 @@ bullets; entries whose date is still the template's `<...>` are skipped. For a `
     rule REVIEW.md "<line>"          REVIEW.md holds that text (backticks and whitespace runs are ignored); a
                                      `small:` or `medium:` line must be a line of its review-slices block, not a
                                      comment, unless the block turns that band off
-    check "<test: line>"             a `test:` line of REVIEW.md's review-slices block (comments dropped, as the
-                                     guard reads it) whose raw line ends with the comment `# <this incident's id>`
-                                     alone; the quoted line may not contain `"`
+    check "<test: line>"             a `test:` line of REVIEW.md's review-slices block, matched exactly but for its
+                                     comment and outer whitespace, that ends with the comment `# <this incident's
+                                     id>` alone; the quoted line may not contain `"`
 
 Paths are relative to the repo root and stay inside it. A missing plug is a problem: the hole is open again. An
 open incident older than 30 days is a note. A test plug on a .md, .txt or .rst file is no plug. A Plug field may end
@@ -370,11 +370,14 @@ def raw_block(text):
     return block.group(1).splitlines() if block else []
 
 
-def uncommented(line, backticks=False):
-    """LINE as the guard reads a block line: its comment dropped, flattened (BACKTICKS keeps those, which a shell
-    runs, and only joins whitespace runs)."""
-    line = re.sub(r"(?:^|\s)#.*$", "", line)
-    return " ".join(line.split()) if backticks else flat(line)
+def uncommented(line):
+    """LINE as the guard reads a block line: its comment dropped, flattened."""
+    return flat(command(line))
+
+
+def command(line):
+    """LINE with its comment and outer whitespace dropped and nothing else changed: what a `test:` line runs."""
+    return re.sub(r"(?:^|\s)#.*$", "", line).strip()
 
 
 def block_lines(text):
@@ -385,10 +388,10 @@ def block_lines(text):
 def check_problem(plug, ident, text):
     """Why the check PLUG of incident IDENT is not a working check in REVIEW.md, holding TEXT, or None: its line must
     be a `test:` line of the block that ends with the comment `# <IDENT>`, so it pins that incident alone."""
-    line = uncommented(plug.names[0], backticks=True)
-    if '"' in plug.names[0]:
+    line = plug.names[0].strip()  # exact: a Plug field's wrapped lines are already joined with one space
+    if '"' in line:
         return "the quoted line contains `\"`; quote the test: line's arguments with single quotes"
-    found = [raw for raw in raw_block(text) if uncommented(raw, backticks=True) == line]
+    found = [raw for raw in raw_block(text) if command(raw) == line]
     if line.partition(":")[0].strip() != "test" or not found:
         return "%r is not a `test:` line of %s's review-slices block" % (plug.names[0], RULE_FILE)
     tags = [CHECK_TAG.search(raw) for raw in found]
@@ -581,8 +584,6 @@ def escalation_problems(root, incidents):
                             % (incident.id, "; its `(no check: ...)` gives no reason in words" if
                                NO_CHECK.search(plug) else ""))
     return problems, notes
-
-
 
 
 def failure_items(text):

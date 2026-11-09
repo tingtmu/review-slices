@@ -515,8 +515,7 @@ class CheckPlugTest(unittest.TestCase):
         return log.run("--check")
 
     def test_a_check_plug_on_its_own_tagged_test_line_is_working(self):
-        for plug in (OLD_API, OLD_API + " (pins old_api)", "`%s`" % OLD_API,
-                     "check \"test: ! git grep -n 'old_api(' -- src  # I1\""):
+        for plug in (OLD_API, OLD_API + " (pins old_api)", "`%s`" % OLD_API):
             done = self.run_plug(plug)
             self.assertEqual(done.returncode, 0, plug + done.stdout)
 
@@ -543,6 +542,19 @@ class CheckPlugTest(unittest.TestCase):
             done = log.run("--check")
             self.assertEqual(done.returncode, 1, plug + done.stdout)
             self.assertIn("is not a `test:` line of REVIEW.md's review-slices block", done.stdout, plug)
+
+    def test_a_check_plug_must_match_its_line_whitespace_included(self):  # review: runs collapsed to one space
+        single, double = "test: ! grep -n 'old api' src/a", "test: ! grep -n 'old  api' src/a"
+        for plug, line in ((double, single), (single, double)):
+            log = LogRepo(self, entry(1, status="plugged", plug='check "%s"' % plug))
+            log.write("REVIEW.md", "```review-slices\n%s  # I1\n```\n" % line)
+            done = log.run("--check")
+            self.assertEqual(done.returncode, 1, plug + done.stdout)
+            self.assertIn("is not a `test:` line of REVIEW.md's review-slices block", done.stdout, plug)
+
+    def test_a_check_plug_wrapped_in_the_plug_field_still_matches(self):
+        done = self.run_plug("check \"test: ! git grep -n\n  'old_api(' -- src\" (pins old_api)")
+        self.assertEqual(done.returncode, 0, done.stdout)
 
     def test_a_check_plug_with_a_double_quote_is_a_problem(self):
         done = self.run_plug('check "test: ! git grep -n "old_api(" -- src"')
