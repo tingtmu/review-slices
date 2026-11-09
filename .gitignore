@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 /AGENTS.md
+/CLAUDE.md
 /ROADMAP.md
 .tmp/
 /show-me/
