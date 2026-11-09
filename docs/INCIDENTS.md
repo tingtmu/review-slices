@@ -35,7 +35,8 @@ Last pruned: 2026-11-09
   test tests/test_install.py::UpgradeAndDoctorTest::test_a_pth_file_in_a_virtualenv_on_path_never_runs_in_the_hooks,
   test tests/test_agent_hook.py::SettingsTest::test_a_pth_file_in_a_virtualenv_on_path_never_runs_in_the_agent_hook,
   test tests/test_install.py::UpgradeAndDoctorTest::test_a_config_hook_never_imports_a_module_planted_beside_the_bootstrap,
-  test tests/test_install.py::UpgradeAndDoctorTest::test_the_checkout_s_guard_in_adoption_never_imports_a_module_beside_it
+  test tests/test_install.py::UpgradeAndDoctorTest::test_the_checkout_s_guard_in_adoption_never_imports_a_module_beside_it,
+  test tests/test_incidents.py::NoticeTest::test_a_near_miss_log_that_is_no_file_inside_the_repo_is_skipped
 - **Recurrences:**
   - 2026-10-24, review finding on 0.4.0: the agent hook ran the checkout's copy, which the agent can edit. The plug
     covered the guard and `ci`, not the agent hook added after it.
@@ -54,6 +55,10 @@ Last pruned: 2026-11-09
     under `-I` alone), and `doctor` names hooks an older install wrote. The review also found that a push whose
     command line sets `PATH` or git's own variables gets past the agent hook; the owner chose to list it as a
     known hole rather than chase it in the hook's parser.
+  - 2026-11-09, review finding on the 0.16.0 near-miss work: `incidents.py` read docs/NEAR-MISSES.md, a `trivial:`
+    path the change itself controls, through a committed symlink, so a note printed a file outside the repo and a
+    FIFO hung `--check`. The plugs covered the guard and hooks, not a reader added to the incident checker. It now
+    reads the file only when it is a regular file inside the repo.
 
 ## I2. The guard fails open on unexpected input
 
@@ -81,7 +86,9 @@ Last pruned: 2026-11-09
   test tests/test_agent_hook.py::AgentHookTest::test_overrides_are_denied,
   test tests/test_agent_hook.py::AmendTest::test_staging_and_amending_in_one_command_is_denied,
   test tests/test_agent_hook.py::CdTest::test_an_amend_after_a_cd_into_a_reviewed_repo_is_denied,
-  test tests/test_agent_hook.py::CdTest::test_an_amend_after_a_cd_the_hook_cannot_follow_is_denied
+  test tests/test_agent_hook.py::CdTest::test_an_amend_after_a_cd_the_hook_cannot_follow_is_denied,
+  test tests/test_incidents.py::EscalationTest::test_an_undated_recurrence_counts_everywhere,
+  test tests/test_incidents.py::OpenSuiteTest::test_a_suite_line_linking_an_open_incident_is_a_problem
 - **Recurrences:**
   - 2026-10-23, review finding on 0.2.0: a push to `refs/for/main` (Gerrit) went unchecked. The plug tested
     branches and tags only, the two ref kinds the fix had in mind.
@@ -97,6 +104,11 @@ Last pruned: 2026-11-09
     keyword (`if`, `then`, `do`, `{`, `!`) or after operators shlex runs together (`;(`). The plugs tested plain
     commands in the session's repo only; the `cd` cases are now plugs, and the keyword cases are in the overrides
     test.
+  - 2026-11-09, review findings on the 0.16.0 near-miss work: the new recurrence rule counted a recurrence only when
+    it had a date, so an undated one was listed as a weak plug but never escalated and kept a `(suite)` mark; and a
+    `(suite)` mark on an open incident passed, though an open incident's plugs are never checked. The plugs tested
+    the guard's inputs, not the incident checker's. One recurrence rule now serves the report, escalation and
+    `(suite)`, and an open incident voids the mark.
 
 ## I3. A push is measured across other people's commits
 
