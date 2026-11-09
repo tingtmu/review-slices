@@ -29,7 +29,8 @@ one, in your own work or another agent's (`<skill>` is this skill's directory, w
 4. Otherwise choose the plug in this order: a test that fails on the class, written over its known shapes (a small
    table of inputs), not only the instance that slipped (the commonest recurrence); a check, a one-line grep or lint
    `test:` line in REVIEW.md's block with single quotes only, ending with the incident's id as a comment
-   (`test: ! git grep -n 'old_api(' -- src  # I6`); a guard that fails on the class; else a "Failure looks like"
+   (`test: git grep -n -F 'old_api(' -- src; test $? -eq 1  # I6`: only grep's no-match status passes, so a grep
+   error fails); a guard that fails on the class; else a "Failure looks like"
    rule. Show a new test or check failing on the commit before the fix, named in the Plug line (`(fails on 1a2b3c4)`).
    An incident stays open until its plug exists. Once it has a recurrence, it needs a working test or check plug,
    or a Plug field ending with `(no check: <reason>)`; name each new reason in your report.

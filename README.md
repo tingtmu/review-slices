@@ -47,7 +47,8 @@ and more), marked local or remote, and `--run` tries the local ones on a clean t
 level table would have judged the base branch's last 50 commits and, by review unit, which globs set the levels,
 what each level costs in size, which small important units one merged reviewer could take, and the review load
 each unit would get under the draft's size bands and glob kinds.
-`incidents.py [--check]` reports docs/INCIDENTS.md and checks that every plug still exists. All three run from the
+`incidents.py [--check]` reports docs/INCIDENTS.md and checks that every plug still exists, that an incident that
+recurred has a working test or check plug (or a written reason none fits), and that each `(suite)` mark holds. All three run from the
 skill's `scripts/`; `incidents.py` can also be copied into `.githooks/` to run in a repo's suite, and `upgrade`
 keeps it current.
 
