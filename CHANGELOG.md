@@ -3,6 +3,31 @@
 Each release of the review-slices skill, newest first. Each is tagged `vX.Y.Z`; from 0.9.2 on, each also has a
 GitHub Release with the same notes.
 
+## 0.16.0 (2026-11-09)
+
+Recurring failure classes now move into the suite, so reviewers spend attention only where no check exists. A Blocker
+or Fix that review caught, that the author accepted and fixed, and that its reviewer tagged `F<n>` or `none` is a near
+miss: one line per class in a new `docs/NEAR-MISSES.md` (listed `trivial:`; nothing in it changes an exit code). A
+finding tagged with an incident's id is a Recurrence under that incident, naming no review load. Every reviewer brief
+now asks for that tag. A class is promoted with no separate go-ahead: a cheap test or check that pins it goes in with
+the fix at the first sighting; else a Blocker gets an `F<n>` "Failure looks like" line at once, and a Fix at its
+second sighting in another review unit; a promotion that edits REVIEW.md goes in its own change after the fix's unit.
+A new plug kind, `check "<test: line>"`, names a one-line grep or lint `test:` line in REVIEW.md's block that ends
+with the incident's id as a comment (`git grep -n -F '<text>' -- <path>; test $? -eq 1  # I6`, single quotes only),
+matched exactly. `incidents.py --check` adds these exit-1 conditions: an incident with a recurrence, open or
+plugged, and no working test or check plug, unless its Plug field ends `(no check: <reason>)` in words; a `check`
+plug whose line is missing, untagged, tagged for another incident or holds `"`; a `test` plug on a `.md`, `.txt` or
+`.rst` file; a "Failure looks like" line marked `(suite)` (reviewers then flag only variants its check would miss)
+that links no incident, or links one that is open, lacks a working test or check plug, or has recurred; and a bare
+`(suite)` outside such a line. Two notes never change the exit code: a one-sighting near miss older than 90 days
+(the agent deletes it), and `prune due` when INCIDENTS.md's `Last pruned:` is missing or older than 90 days (the
+agent brings the pruning of "Failure looks like" to the user at the next go-ahead). references/incidents.md adds
+red-before-green for new plugs, test plugs over the class's shapes, and a short admission and pruning rule; the
+templates, set-up.md, GLOSSARY ("Near miss", "Check plug") and README follow. Upgrading: copy the new
+`incidents.py`; give each recurring incident a working test or check plug or a `(no check: <reason>)`; add
+`Last pruned:` and `docs/NEAR-MISSES.md`. Also: the briefs say a read-only reviewer may run tests to check a claim.
+No guard change.
+
 ## 0.15.0 (2026-11-08)
 
 A CLI reviewer (the cross-check, the fallback when no subagent can start, a refuter) now works in its own detached
