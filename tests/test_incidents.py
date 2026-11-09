@@ -563,6 +563,34 @@ class EscalationTest(unittest.TestCase):
             self.assertEqual("problem: I1 has a recurrence but no working test or check plug" in done.stdout, refused,
                              done.stdout)
 
+    def test_a_test_plug_on_a_text_file_is_no_plug(self):  # review: `test docs/INCIDENTS.md::again` passed
+        for plug in ("test docs/INCIDENTS.md::Incidents", "test REVIEW.md::Rules", "test notes.txt::x",
+                     "test docs/a.rst::x"):
+            log = LogRepo(self, entry(1, status="plugged", plug=plug),
+                          entry(2, plug=plug, recurrences=REVIEWED))
+            log.write("notes.txt", "x\n")
+            log.write("docs/a.rst", "x\n")
+            done = log.run("--check")
+            self.assertEqual(done.returncode, 1, plug + done.stdout)
+            self.assertIn("a test plug must name a test file the suite runs", done.stdout, plug)
+            self.assertIn("problem: I2 has a recurrence but no working test or check plug", done.stdout, plug)
+
+    def test_a_no_check_reason_must_be_words(self):  # review: the template's <reason> and `-` counted
+        for reason in ("<reason>", "-", " — ", "123"):
+            done = LogRepo(self, entry(1, plug="none yet (no check: %s)" % reason, recurrences=REVIEWED)).run("--check")
+            self.assertEqual(done.returncode, 1, reason + done.stdout)
+            self.assertIn("problem: I1 has a recurrence but no working test or check plug", done.stdout, reason)
+            self.assertIn("gives no reason in words", done.stdout, reason)
+            self.assertNotIn("note: I1: no check", done.stdout, reason)
+
+    def test_a_recurrence_is_any_dated_line_in_the_field(self):  # review: three spellings slipped past
+        for text in (entry(1, recurrences="none\n  - 2026-10-05, 2 Review: caught again"),
+                     entry(1, recurrences=REVIEWED).replace("**Recurrences:**", "**Recurrence:**"),
+                     entry(1, recurrences="No plug stopped it: 2026-10-05, 2 Review again")):
+            done = LogRepo(self, text).run("--check")
+            self.assertEqual(done.returncode, 1, text + done.stdout)
+            self.assertIn("problem: I1 has a recurrence but no working test or check plug", done.stdout, text)
+
     def test_every_no_check_reason_is_a_note(self):
         done = LogRepo(self, entry(1, plug="none yet (no check: judgement only)", recurrences=REVIEWED),
                        entry(2, status="plugged", plug='rule REVIEW.md "Rules" (no check: prose)')).run("--check")
@@ -576,9 +604,11 @@ class SuiteMarkerTest(unittest.TestCase):
         log = LogRepo(self, entry(1, status="plugged", plug="test tests/test_a.py::test_top"),
                       entry(2, status="plugged", plug='rule REVIEW.md "Rules"'),
                       entry(3, status="plugged", plug="test tests/test_a.py::test_top", recurrences=REVIEWED),
-                      entry(4, status="plugged", plug=OLD_API))
+                      entry(4, status="plugged", plug=OLD_API),
+                      entry(5, status="plugged", plug="test tests/test_a.py::ATest::test_in_class",
+                            recurrences="none\n  - 2026-10-05, 2 Review: caught again"))
         log.write("REVIEW.md", CHECKS.replace("# I1\n", "# I4\n") + "\n## Failure looks like\n\n" + line
-                  + "\n\n## Repo rules\n\n- Not a marker (suite) here\n")
+                  + "\n\n## Repo rules\n\n- Nothing marked here\n")
         return log.run("--check")
 
     def test_a_suite_line_needs_every_linked_incident_tested_and_never_recurred(self):
@@ -589,10 +619,25 @@ class SuiteMarkerTest(unittest.TestCase):
                               ("- A thing (suite)", True), ("- A thing (suite) (%s)" % (link % (2, 2)), True),
                               ("- A thing (suite) (%s)" % (link % (3, 3)), True),
                               ("- A thing (suite) (%s, %s)" % (link % (1, 1), link % (2, 2)), True),
-                              ("- A thing (suite) (%s)" % (link % (9, 9)), True)):
+                              ("- A thing (suite) (%s)" % (link % (9, 9)), True),
+                              ("- A thing (suite) (%s)" % (link % (5, 5)), True)):
             done = self.run_line(line)
             self.assertEqual(done.returncode, int(refused), line + "\n" + done.stdout)
             self.assertEqual("problem: REVIEW.md's \"Failure looks like\" line" in done.stdout, refused, done.stdout)
+
+    def test_every_suite_marker_is_found_and_must_sit_on_a_failure_item(self):  # review: (Suite), ###, numbered
+        link = "[I%d](docs/INCIDENTS.md#i%d)"
+        for line, refused, outside in (("- A thing (Suite) (%s)" % (link % (2, 2)), True, False),
+                                       ("1. A thing (suite) (%s)" % (link % (2, 2)), True, False),
+                                       ("1. A thing (suite) (%s)" % (link % (1, 1)), False, False),
+                                       ("### Sub\n\n- A thing (SUITE) (%s)" % (link % (2, 2)), True, False),
+                                       ("### Sub\n\n- A thing (suite) (%s)" % (link % (1, 1)), False, False),
+                                       ("Prose (suite) here (%s)" % (link % (1, 1)), True, True),
+                                       ("- A thing\n\n## Repo rules\n\n- Rule (suite) (%s)" % (link % (1, 1)), True,
+                                        True)):
+            done = self.run_line(line)
+            self.assertEqual(done.returncode, int(refused), line + "\n" + done.stdout)
+            self.assertEqual("outside a \"Failure looks like\" item" in done.stdout, outside, done.stdout)
 
 
 class NoticeTest(unittest.TestCase):

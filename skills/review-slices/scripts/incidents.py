@@ -26,10 +26,11 @@ bullets; entries whose date is still the template's `<...>` are skipped. For a `
                                      alone; the quoted line may not contain `"`
 
 Paths are relative to the repo root and stay inside it. A missing plug is a problem: the hole is open again. An
-open incident older than 30 days is a note. A Plug field may end with `(no check: <reason>)`, also after `none yet`;
-every reason is a note. An incident with a recurrence, open or plugged, is a problem until it has a working test or
-check plug or such a reason. A REVIEW.md "Failure looks like" line marked `(suite)` is a problem unless it links
-`[I<n>]` incidents that all have a working test or check plug and no recurrence. Two notes never change the exit
+open incident older than 30 days is a note. A test plug on a .md, .txt or .rst file is no plug. A Plug field may end
+with `(no check: <reason>)`, also after `none yet`; a reason in words is a note. An incident with a recurrence (a
+date in its Recurrences field), open or plugged, is a problem until it has a working test or check plug or such a
+reason. A `(suite)` mark in REVIEW.md is a problem unless it is on a "Failure looks like" item linking `[I<n>]`
+incidents that all have a working test or check plug and no recurrence. Two notes never change the exit
 code: a one-sighting near miss in docs/NEAR-MISSES.md (one date that is not `rejected <date>`) older than 90 days,
 and `prune due` when the log's `Last pruned: YYYY-MM-DD` is missing or older than 90 days.
 
@@ -92,6 +93,7 @@ TEST_ITEM = re.compile(r"test\s+([^\s:,]+)::(%s(?:(?:::|\.)%s)*)(?:\[[^\]]*\])?"
 GUARD_ITEM = re.compile(r"guard\s+([^\s,()]+)")
 RULE_ITEM = re.compile(r"rule\s+(\S+)\s+[\"“]([^\"”]*)[\"”]")
 RULE_FILE = "REVIEW.md"
+TEXT_FILES = (".md", ".txt", ".rst")  # a test plug naming one of these is no test (its name is only grepped)
 # Text allowed after a plug item: nothing, or a parenthetical, then an optional full stop.
 AFTER_ITEM = re.compile(r"^\s*(\([^()]*\))?\s*\.?\s*$")
 # A check plug quotes a `test:` line of REVIEW.md's block: its text runs to the last quote before what AFTER_ITEM
@@ -102,7 +104,9 @@ NO_CHECK = re.compile(r"\(\s*no\s+check\s*:\s*([^()]*?)\s*\)\s*\.?\s*$", re.I)
 # The comment that ends the block line a check plug names: that incident's id alone.
 CHECK_TAG = re.compile(r"\s#\s*(I\d+)\s*$")
 FAILURES = re.compile(r"^#{1,6}\s+Failure looks like\s*$", re.I)  # REVIEW.md's section of failure classes
-SUITE = "(suite)"
+SUITE = re.compile(r"\(suite\)", re.I)
+ITEM = re.compile(r"\s*(?:[-*]|\d+[.)])\s")  # a bullet or numbered item
+SECTION_END = re.compile(r"^#{1,2}\s")  # a "Failure looks like" section runs to the next level-1 or 2 heading
 LINK = re.compile(r"\[(I\d+)\]")
 STALE_DAYS = 90
 NEAR_MISSES = os.path.join("docs", "NEAR-MISSES.md")
@@ -253,9 +257,11 @@ def parse_item(item):
 
 
 def no_check(value):
-    """The reason in a `(no check: <reason>)` that ends the Plug field VALUE, or None when it gives none."""
+    """The reason in a `(no check: <reason>)` that ends the Plug field VALUE, or None when it gives none in words (a
+    placeholder such as the template's `<reason>`, a dash or a number is none)."""
     match = NO_CHECK.search(value or "")
-    return match.group(1) if match and match.group(1) else None
+    reason = match.group(1) if match else ""
+    return reason if re.search(r"[^\W\d_]", reason) and not PLACEHOLDER.search(reason) else None
 
 
 def parse_plug(value):
@@ -420,6 +426,8 @@ def plug_problem(root, plug, ident=None):
         return "a rule plug must name %s, not %s" % (RULE_FILE, plug.path)
     if plug.kind == "rule" and not flat(plug.names[0]):
         return "the rule's quoted line is blank"
+    if plug.kind == "test" and plug.path.lower().endswith(TEXT_FILES):
+        return "a test plug must name a test file the suite runs, not the text file %s" % plug.path
     path = os.path.join(root, plug.path)
     if not os.path.isfile(path):
         return "%s does not exist" % plug.path
@@ -547,48 +555,67 @@ def escalation_problems(root, incidents):
     nor a `(no check: <reason>)`; a note for every such reason."""
     problems, notes = [], []
     for incident in incidents:
-        reason = no_check(incident.fields.get("plug", ""))
+        plug = incident.fields.get("plug", "")
+        reason = no_check(plug)
         notes += ["%s: no check: %s" % (incident.id, reason)] if reason else []
-        if has_recurrences(incident) and not reason and not working_checks(root, incident):
+        if recurred(incident) and not reason and not working_checks(root, incident):
             problems.append("%s has a recurrence but no working test or check plug: add one that fails on the class "
-                            "(shown failing before the fix), or end its Plug field with `(no check: <reason>)`"
-                            % incident.id)
+                            "(shown failing before the fix), or end its Plug field with `(no check: <reason>)`%s"
+                            % (incident.id, "; its `(no check: ...)` gives no reason in words" if
+                               NO_CHECK.search(plug) else ""))
     return problems, notes
 
 
-def failure_lines(text):
-    """The bullets of TEXT's "Failure looks like" section, each with its wrapped lines joined."""
-    lines, inside = [], False
-    for line in unfenced(text):
-        if OTHER_HEADING.match(line):
+def recurred(incident):
+    """Whether INCIDENT's Recurrences (or Recurrence) field, nested lines included, holds a YYYY-MM-DD date, whatever
+    words come before it: the escalation and (suite) rules read recurrences this way."""
+    fields = incident.fields
+    return bool(re.search(r"\b%s\b" % DATE, fields.get("recurrences", "") + " " + fields.get("recurrence", "")))
+
+
+def failure_items(text):
+    """[[item, line numbers]] for each bullet or numbered item of TEXT's "Failure looks like" section, which runs to
+    the next level-1 or level-2 heading; an item's indented wrapped lines are joined to it."""
+    items, inside = [], False
+    for number, line in enumerate(unfenced(text)):
+        if FAILURES.match(line) or SECTION_END.match(line):
             inside = bool(FAILURES.match(line))
-        elif inside and re.match(r"\s*[-*]\s", line):
-            lines.append(line.strip())
-        elif inside and lines and line.strip() and line[:1].isspace():
-            lines[-1] += " " + line.strip()
-    return lines
+        elif inside and ITEM.match(line):
+            items.append([line.strip(), [number]])
+        elif inside and items and items[-1][1][-1] == number - 1 and line.strip() and line[:1].isspace():
+            items[-1] = [items[-1][0] + " " + line.strip(), items[-1][1] + [number]]
+    return items
+
+
+def suite_item_problem(root, item, by_id):
+    """Why the "Failure looks like" ITEM marked (suite) is not backed by the suite, or None."""
+    ids = list(dict.fromkeys(LINK.findall(item)))
+    why = [] if ids else ["it links no [I<n>]"]
+    why += ["%s is not in the log" % ident for ident in ids if ident not in by_id]
+    why += ["%s has no working test or check plug" % ident for ident in ids
+            if ident in by_id and not working_checks(root, by_id[ident])]
+    why += ["%s has a recurrence" % ident for ident in ids if ident in by_id and recurred(by_id[ident])]
+    return ("%s's \"Failure looks like\" line %r is marked (suite) but %s; reviewers would skip a class the suite "
+            "does not hold" % (RULE_FILE, item, "; ".join(why))) if why else None
 
 
 def suite_problems(root, incidents):
-    """A problem for each `(suite)` line of REVIEW.md's "Failure looks like" section that links no incident, or links
-    one without a working test or check plug, or with a recurrence (its plug pinned an instance, not the class)."""
+    """A problem for each (suite) mark, in any case, of REVIEW.md: on a "Failure looks like" item that links no
+    incident, or one without a working test or check plug, or with a recurrence (its plug pinned an instance, not the
+    class); and anywhere else."""
     try:
         text = read_text(os.path.join(root, RULE_FILE))
     except OSError:
-        return []  # no REVIEW.md, no (suite) line
+        return []  # no REVIEW.md, no (suite) mark
     by_id = {incident.id: incident for incident in incidents}
-    problems = []
-    for line in failure_lines(text):
-        if SUITE not in line:
-            continue
-        ids = list(dict.fromkeys(LINK.findall(line)))
-        why = [] if ids else ["it links no [I<n>]"]
-        why += ["%s is not in the log" % ident for ident in ids if ident not in by_id]
-        why += ["%s has no working test or check plug" % ident for ident in ids
-                if ident in by_id and not working_checks(root, by_id[ident])]
-        why += ["%s has a recurrence" % ident for ident in ids if ident in by_id and has_recurrences(by_id[ident])]
-        problems += ["%s's \"Failure looks like\" line %r is marked %s but %s; reviewers would skip a class the "
-                     "suite does not hold" % (RULE_FILE, line, SUITE, "; ".join(why))] if why else []
+    problems, covered = [], set()
+    for item, numbers in failure_items(text):
+        covered.update(numbers)
+        problem = suite_item_problem(root, item, by_id) if SUITE.search(item) else None
+        problems += [problem] if problem else []
+    problems += ["%s line %d: (suite) outside a \"Failure looks like\" item; mark only those items" % (RULE_FILE,
+                 number + 1) for number, line in enumerate(text.splitlines()) if SUITE.search(line)
+                 and number not in covered]
     return problems
 
 
