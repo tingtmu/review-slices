@@ -50,7 +50,9 @@ one, in your own work or another agent's (`<skill>` is this skill's directory, w
 A near miss is a Blocker or Fix from Slice 2 that you accepted and fixed, whose reviewer tagged it `F<n>` or
 `none`; never an incident. Log it in `docs/NEAR-MISSES.md` ([templates/NEAR-MISSES.md](../templates/NEAR-MISSES.md),
 listed `trivial:`): one line per failure class, one dated sighting per review unit, and `rejected <date> <unit>` for
-a rejected finding of a logged class. Promote it with the fix (your go-ahead request names it; no other go-ahead):
+a rejected finding of a logged class. Promote it as below; your go-ahead request names it (no other go-ahead). A
+test file goes in with the fix; a promotion that edits REVIEW.md (a `check` line or an `F<n>` line) goes in its own
+change after the unit's trailer, so the fix's unit is not escalated:
 
 - a cheap test or one-line check pins the class: add it at the first sighting, and end the line `plugged: <plug>`;
 - else a Blocker: an `F<n>` "Failure looks like" line at the first sighting;

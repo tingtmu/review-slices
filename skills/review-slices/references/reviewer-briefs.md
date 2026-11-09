@@ -62,6 +62,7 @@ Each review finding: file:line, a tag, the evidence, and the exact change. Tags 
   error, a test that cannot fail, a skip with a false reason); or a break of a written standard quoted at file:line.
 - Nit: minor; raise at most three.
 - Pre-existing: in the code before this change, not introduced by it.
+Name the REVIEW.md "Failure looks like" entry each review finding falls under: its id (I1, F1), else `none`.
 Any other claim you cannot trace to a line or an input is a Fix at most. Also list it under "Cannot verify from the
 diff" with what would prove it.
 A lens with no failure you can show is clean; an empty report is a valid result. Under <N> words (600 is a good

@@ -83,3 +83,8 @@ are known; reviewers and the user cover them.
   reads `-c` settings, not the environment. Commands the agent runs itself (`python3 .githooks/review_slices.py status` or
   `run-suite`) put `.githooks/` first on the import path: a stdlib-named file there, untracked, could fake a pass
   stamp. `run-suite`'s stamp is the agent's word, as above.
+- `incidents.py` checks that a plug exists and is shaped right, not that it tests the class. A `test` plug may
+  name a `.py` function that is not a test, and a `check` plug may name a `test:` line that runs the whole suite
+  once that line is tagged `# I<n>` (only `.md`, `.txt` and `.rst` test paths are refused). Either then counts as
+  a working plug for the recurrence rule and the `(suite)` marker. The plug sits in a reviewed change to the
+  incident log or REVIEW.md, and reviewers read it there (owner, 2026-11-09).
