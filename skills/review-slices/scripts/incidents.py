@@ -30,9 +30,10 @@ open incident older than 30 days is a note. A test plug on a .md, .txt or .rst f
 with `(no check: <reason>)`, also after `none yet`; a reason in words is a note. An incident with a recurrence (a
 date in its Recurrences field), open or plugged, is a problem until it has a working test or check plug or such a
 reason. A `(suite)` mark in REVIEW.md is a problem unless it is on a "Failure looks like" item linking `[I<n>]`
-incidents that all have a working test or check plug and no recurrence. Two notes never change the exit
-code: a one-sighting near miss in docs/NEAR-MISSES.md (one date that is not `rejected <date>`) older than 90 days,
-and `prune due` when the log's `Last pruned: YYYY-MM-DD` is missing or older than 90 days.
+incidents that all have a working test or check plug and no recurrence; elsewhere, one in backticks is a mention.
+Two notes never change the exit code: a one-sighting near miss in docs/NEAR-MISSES.md (one date that is not
+`rejected <date>`) older than 90 days, and `prune due` when the log's `Last pruned: YYYY-MM-DD` is missing or older
+than 90 days.
 
 A miss through a reduced review load is a Slice field at 2 Review, or a recurrence, that names the load in
 parentheses: `2 Review (merged reviewer)` (or `one merged reviewer`, as `status` prints it, with more after it),
@@ -614,8 +615,8 @@ def suite_problems(root, incidents):
         problem = suite_item_problem(root, item, by_id) if SUITE.search(item) else None
         problems += [problem] if problem else []
     problems += ["%s line %d: (suite) outside a \"Failure looks like\" item; mark only those items" % (RULE_FILE,
-                 number + 1) for number, line in enumerate(text.splitlines()) if SUITE.search(line)
-                 and number not in covered]
+                 number + 1) for number, line in enumerate(text.splitlines())
+                 if SUITE.search(re.sub(r"`[^`]*`", "", line)) and number not in covered]  # `(suite)` is a mention
     return problems
 
 

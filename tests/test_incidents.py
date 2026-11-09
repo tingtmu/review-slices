@@ -634,10 +634,26 @@ class SuiteMarkerTest(unittest.TestCase):
                                        ("### Sub\n\n- A thing (suite) (%s)" % (link % (1, 1)), False, False),
                                        ("Prose (suite) here (%s)" % (link % (1, 1)), True, True),
                                        ("- A thing\n\n## Repo rules\n\n- Rule (suite) (%s)" % (link % (1, 1)), True,
-                                        True)):
+                                        True),
+                                       ("Prose explains the `(suite)` marker", False, False),
+                                       ("- A thing\n\n## Repo rules\n\n- Mark a line `(Suite)` once tested", False,
+                                        False),
+                                       ("- A thing `(suite)` (%s)" % (link % (2, 2)), True, False)):
             done = self.run_line(line)
             self.assertEqual(done.returncode, int(refused), line + "\n" + done.stdout)
             self.assertEqual("outside a \"Failure looks like\" item" in done.stdout, outside, done.stdout)
+
+
+class TemplateTest(unittest.TestCase):
+    def test_a_repo_set_up_from_the_templates_passes_the_check(self):  # review: its prose mentions `(suite)`
+        log = LogRepo(self)
+        for template, target in (("REVIEW.md", "REVIEW.md"), ("INCIDENTS.md", "docs/INCIDENTS.md"),
+                                 ("NEAR-MISSES.md", "docs/NEAR-MISSES.md")):
+            with open(os.path.join(ROOT, "skills", "review-slices", "templates", template), encoding="utf-8") as h:
+                log.write(target, h.read())
+        done = log.run("--check")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertNotIn("problem:", done.stdout)
 
 
 class NoticeTest(unittest.TestCase):
