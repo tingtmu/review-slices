@@ -1,5 +1,2 @@
 [plugins."claude-mem@claude-mem-local"]
 enabled = false
-
-[plugins."claude-mem@thedotmack"]
-enabled = false
