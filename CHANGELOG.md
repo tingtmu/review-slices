@@ -3,6 +3,21 @@
 Each release of the review-slices skill, newest first. Each is tagged `vX.Y.Z`; from 0.9.2 on, each also has a
 GitHub Release with the same notes.
 
+## 0.16.1 (2026-11-11)
+
+A rejection that rests on the user's wish now goes to the user (incident I7, from an adopter's session): an agent
+had added a change nobody asked for, offered "say if you'd rather keep the old order", read the user's "go, commit
+and review" as approval, and rejected the conformance reviewer's "unrequested" finding on that claim; the reviewer
+upheld it. SKILL.md step 5 now treats a review finding the author would reject as the user's wish as it treats a
+`spec-mandated` one: ask the user at once, naming the item; an unanswered "say if …" or a go-ahead to next steps is
+no answer; the Report lists each and the user's answer. The rules every brief carries count a cited user decision
+only where it quotes the user's own words on that item, so a decision the agent wrote into the change answers no
+finding, and round two and any refuter send an unquoted one to the user. A test pins both texts; the known holes say
+the user alone catches consent claimed only in chat or a made-up quote. Also: the known holes say a test plug the
+suite never collects still counts as a working plug, and the 0.16.0 upgrade note now says plainly that you copy
+`incidents.py` yourself into a repo without it. This repo only: `CLAUDE.md` is ignored, and a stale Codex plugin entry
+is gone. Upgrading: `setup_tools.py upgrade`; no guard change.
+
 ## 0.16.0 (2026-11-09)
 
 Recurring failure classes now move into the suite, so reviewers spend attention only where no check exists. A Blocker
