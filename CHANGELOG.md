@@ -11,13 +11,14 @@ review" as approval, and rejected the conformance reviewer's "unrequested" findi
 the rejection. SKILL.md step 5 now treats a review finding the author would reject as the user's wish as it treats a
 `spec-mandated` one: ask the user at once, naming the item; an unanswered "say if …" or a go-ahead to next steps is no
 answer; the Report lists each and the user's answer. The rules every brief carries count a cited user decision only
-where it quotes the user's own words on that item, so a decision the agent wrote into the change answers no finding,
-and round two and any refuter send an unquoted one to the user. A test pins both texts; the known holes say the user
-alone catches consent claimed only in chat or a made-up quote. Also: the known holes say a test plug the suite never
+where it quotes the user's own words on that item, so a decision the agent wrote into the change without the user's
+words on that item answers no finding, and round two and any refuter hold that a rejection resting on one does not
+stand: the author asks the user. A test pins the step 5 bullet and the brief rule; the known holes say the user alone
+catches consent claimed only in chat or a made-up quote. Also: the known holes say a test plug the suite never
 collects still counts as a working plug, and the 0.16.0 upgrade note now says plainly that you copy `incidents.py`
 yourself into a repo without it. This repo only: `CLAUDE.md` is ignored, and a stale Codex plugin entry is gone.
-Upgrading: update the skill itself (the change is in SKILL.md and the briefs); `setup_tools.py upgrade` only moves the
-guard copies' version strings. No guard change.
+Upgrading: update the skill itself, where the change is (SKILL.md and the briefs), and run `setup_tools.py upgrade`,
+which only moves the guard copies to 0.16.1. No guard change.
 
 ## 0.16.0 (2026-11-09)
 
