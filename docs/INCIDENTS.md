@@ -219,4 +219,9 @@ Last pruned: 2026-11-09
   where it quotes the user's own words on that item, so round two and any refuter send an unquoted one to the
   user. The known holes say the user alone covers consent claimed only in chat.
 - **Plug:** test tests/test_skill_size.py::SkillSizeTest::test_a_rejection_on_the_user_s_wish_goes_to_the_user (fails on 0d15ccf; pins the rule text, not behaviour)
-- **Recurrences:** none
+- **Recurrences:** 2026-11-11, review findings on the fix itself (`5f6471b`), found by the adversarial reviewer before
+  release: the Report line listed only findings "the user settled", so one the author never asked about, the I16
+  case, left no trace; and the refuter skipped a finding the author labelled "the user's wish", a label the author
+  picks, so an author who never asked also escaped the fresh reviewer. The plug pins the rule text, not where a
+  label or a Report line lets the case slip past. Fixed in `2a30a37`: the Report names each such finding and the
+  user's answer, and the refuter still rules on one (the user, 2026-11-11: "Drop the exclusion sounds ok").
