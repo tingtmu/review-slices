@@ -216,7 +216,7 @@ Last pruned: 2026-11-09
 - **Fix:** SKILL.md step 5 sends a review finding the author would reject as the user's wish to the user at once,
   as `spec-mandated` ones go, and says an unanswered "say if …" or a go-ahead to next steps is no answer; the Report
   lists each one the user settled. The rules every brief carries count a cited user decision only where it quotes
-  the user's own words on that item, and no refuter rules on such a finding. The known holes say the user alone
-  covers consent claimed only in chat.
+  the user's own words on that item, so round two and any refuter send an unquoted one to the user. The known
+  holes say the user alone covers consent claimed only in chat.
 - **Plug:** test tests/test_skill_size.py::SkillSizeTest::test_a_rejection_on_the_user_s_wish_goes_to_the_user (fails on 0d15ccf; pins the rule text, not behaviour)
 - **Recurrences:** none

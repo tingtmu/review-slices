@@ -261,8 +261,7 @@ head: list each as unreviewed in the Report and in the go-ahead request.
 1. **Refute**, for each Blocker or Fix you rejected whose reviewer did not uphold the rejection, including one first
    raised in round two, which no reviewer has ruled on: one refuter per review finding, a fresh-context reviewer
    (never a resumed one or a fork; start it as a CLI reviewer where SKILL.md step 4 says so). Never for a
-   `spec-mandated` review finding (the user settles it), one the author would reject as the user's wish (the
-   user settles it too) or one an escalation round already ruled on. Its ruling
+   `spec-mandated` review finding (the user settles it) or one an escalation round already ruled on. Its ruling
    settles the review finding; only the user can overrule it, at Critical also by a review meeting with the user's
    yes. Brief:
 

@@ -154,8 +154,8 @@ End every review with: the level output, the load `status` printed beside the re
 (a cross-check's runner named; a reduction the user allowed, step 4's version-swap exception or a step 6 later round named as such; any other
 is a rule break: [record an incident](references/incidents.md)), each review finding with its tag, what happened to it (fixed, rejected and
 why, with any refuter's ruling) and, for a Blocker or Fix, a line on how you verified it, any Blocker found in round
-three, each commit after round three as unreviewed, each review finding the user settled (step 5) and their
-answer, any level notes, the shown output for the final state, the Door line (step 9), and any incident recorded.
+three, each commit after round three as unreviewed, each `spec-mandated` one or one rejected as the user's wish,
+and the user's answer, any level notes, the shown output for the final state, the Door line (step 9), and any incident recorded.
 Never a secret's value.
 The guard's known holes: [references/known-holes.md](references/known-holes.md).
 

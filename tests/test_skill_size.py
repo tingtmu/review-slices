@@ -62,11 +62,14 @@ class SkillSizeTest(unittest.TestCase):
         """I7: a general go-ahead was cited as the user's decision to reject a review finding. This pins the rule
         text, not behaviour; line breaks are ignored."""
         skill = " ".join(skill_bytes().decode().split())
-        self.assertTrue("or one you would reject as the user's wish: ask the user at once" in skill, "or one you would reject as the user's wish: ask the user at once")
-        self.assertTrue('an unanswered "say if …" or a go-ahead to next steps is no answer' in skill, 'an unanswered "say if …" or a go-ahead to next steps is no answer')
-        briefs = " ".join(read_text(os.path.join(REFERENCES, "reviewer-briefs.md")).split())
-        self.assertTrue("is evidence only where it quotes the user's own words on that item" in briefs, "is evidence only where it quotes the user's own words on that item")
-        self.assertTrue("one the author would reject as the user's wish (the user settles it too)" in briefs, "one the author would reject as the user's wish (the user settles it too)")
+        for needle in ("or one you would reject as the user's wish: ask the user at once",
+                       'an unanswered "say if …" or a go-ahead to next steps is no answer'):
+            self.assertTrue(needle in skill, needle)
+        text = read_text(os.path.join(REFERENCES, "reviewer-briefs.md"))
+        start = text.index("## Rules every brief carries")
+        rules = " ".join(text[start:text.index("\n## ", start + 1)].split())
+        needle = "is evidence only where it quotes the user's own words on that item"
+        self.assertTrue(needle in rules, needle)
 
     def test_every_relative_link_resolves(self):
         """Templates are left out: their links are relative to the adopting repo."""
