@@ -96,7 +96,8 @@ Read each of these in full when it applies:
    - Fix: fix it, or reject it with the reason in your report; it is ruled on as a Blocker is.
    - Nit: fix it only if cheap.
    - Pre-existing: record it as an incident or a roadmap item, never just a label.
-   - `spec-mandated`: ask the user first; the answer settles it.
+   - `spec-mandated`, or one you would reject as the user's wish: ask the user at once, naming the item (an
+     unanswered "say if …" or a go-ahead to next steps is no answer); the answer settles it.
    - Level note (a reviewer's line that the level looks too high): put it in your report; the level of this change
      stays. Acting on one is a change to REVIEW.md's table of its own, reviewed, never part of the change that
      raised it.
@@ -153,8 +154,8 @@ End every review with: the level output, the load `status` printed beside the re
 (a cross-check's runner named; a reduction the user allowed, step 4's version-swap exception or a step 6 later round named as such; any other
 is a rule break: [record an incident](references/incidents.md)), each review finding with its tag, what happened to it (fixed, rejected and
 why, with any refuter's ruling) and, for a Blocker or Fix, a line on how you verified it, any Blocker found in round
-three, each commit after round three as unreviewed, each `spec-mandated` one and the user's answer,
-any level notes, the shown output for the final state, the Door line (step 9), and any incident recorded.
+three, each commit after round three as unreviewed, each review finding the user settled (step 5) and their
+answer, any level notes, the shown output for the final state, the Door line (step 9), and any incident recorded.
 Never a secret's value.
 The guard's known holes: [references/known-holes.md](references/known-holes.md).
 

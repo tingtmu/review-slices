@@ -58,6 +58,16 @@ class SkillSizeTest(unittest.TestCase):
         self.assertLess(guard, GUARD_BEFORE)
         self.assertIn(("`%s`" % MARKER).encode(), text[:guard])
 
+    def test_a_rejection_on_the_user_s_wish_goes_to_the_user(self):
+        """I7: a general go-ahead was cited as the user's decision to reject a review finding. This pins the rule
+        text, not behaviour; line breaks are ignored."""
+        skill = " ".join(skill_bytes().decode().split())
+        self.assertTrue("or one you would reject as the user's wish: ask the user at once" in skill, "or one you would reject as the user's wish: ask the user at once")
+        self.assertTrue('an unanswered "say if …" or a go-ahead to next steps is no answer' in skill, 'an unanswered "say if …" or a go-ahead to next steps is no answer')
+        briefs = " ".join(read_text(os.path.join(REFERENCES, "reviewer-briefs.md")).split())
+        self.assertTrue("is evidence only where it quotes the user's own words on that item" in briefs, "is evidence only where it quotes the user's own words on that item")
+        self.assertTrue("one the author would reject as the user's wish (the user settles it too)" in briefs, "one the author would reject as the user's wish (the user settles it too)")
+
     def test_every_relative_link_resolves(self):
         """Templates are left out: their links are relative to the adopting repo."""
         paths = [SKILL, os.path.join(SKILL_DIR, "GLOSSARY.md"), os.path.join(ROOT, "README.md")] + [

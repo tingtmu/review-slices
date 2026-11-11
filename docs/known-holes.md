@@ -89,3 +89,6 @@ are known; reviewers and the user cover them.
   once that line is tagged `# I<n>` (only `.md`, `.txt` and `.rst` test paths are refused). Any of these counts as
   a working plug for the recurrence rule and the `(suite)` marker. The plug sits in a reviewed change to the
   incident log or REVIEW.md, and reviewers read it there (owner, 2026-11-09).
+- Reviewers cannot see the chat. A user decision the author cites counts only where it quotes the user's own words
+  on that item, and a rejection resting on one goes to the user (I7); consent claimed only in chat, or a quote
+  taken out of its context, is caught by the user alone.

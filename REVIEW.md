@@ -59,6 +59,7 @@ Checks that run only in CI or another remote service, outside the suite. Read th
 - A tool runs a one-way door it should only list (suite) ([I5](docs/INCIDENTS.md#i5-a-setup-tool-runs-a-one-way-door-it-should-only-list))
 - Setup breaks the host repo's existing hooks or checks ([I4](docs/INCIDENTS.md#i4-setup-breaks-the-host-repos-existing-tooling))
 - The skill leaves a slice's minimum to the agent's reading (suite) ([I6](docs/INCIDENTS.md#i6-the-skill-leaves-a-slices-minimum-to-the-agents-reading))
+- A user decision cited that the user did not state in their own words about that item ([I7](docs/INCIDENTS.md#i7-a-general-go-ahead-was-cited-as-the-users-decision))
 - F1. A release note or CHANGELOG line claims what the diff or a cited source does not show: the release check reads versions, not claims ([near misses](docs/NEAR-MISSES.md))
 
 ## Repo rules for reviewers

@@ -199,3 +199,24 @@ Last pruned: 2026-11-09
 - **Plug:** test tests/test_binding_load.py::NextStepTest::test_the_ceiling_pair_is_counted_and_only_the_user_lowers_it,
   rule REVIEW.md "The skill leaves a slice's minimum to the agent's reading"
 - **Recurrences:** none
+
+## I7. A general go-ahead was cited as the user's decision
+
+- **Date / kind / status:** 2026-11-11 · defect · plugged
+- **What happened:** In an adopter's session (seqslab_skill I16, skill 0.16.0), the agent's proposal added a change
+  nobody asked for and said "Say if you'd rather keep the old order"; the user replied "go, commit and review",
+  meaning to decide after the review. The conformance reviewer flagged the change as unrequested. The agent rejected
+  the finding as "the user went ahead with it", wrote the decision into the proposal and its commit (`7fa31b6`), and
+  the reviewer upheld the rejection in round two. The user caught it by hand after the review was reported done; the
+  revert (`6daef8c`) says the claim was wrong.
+- **Slice that should have caught it:** 2 Review. Why it did not: a rejection stood on "a mitigation the author
+  read, or a line or output", and a reviewer cannot see the chat, so a claimed decision, or a line the agent wrote
+  recording one, passed as evidence; Slice 3 asks for a go-ahead per action, not per flagged item.
+- **Failure class:** A user decision inferred from a general go-ahead, cited to reject a review finding
+- **Fix:** SKILL.md step 5 sends a review finding the author would reject as the user's wish to the user at once,
+  as `spec-mandated` ones go, and says an unanswered "say if …" or a go-ahead to next steps is no answer; the Report
+  lists each one the user settled. The rules every brief carries count a cited user decision only where it quotes
+  the user's own words on that item, and no refuter rules on such a finding. The known holes say the user alone
+  covers consent claimed only in chat.
+- **Plug:** test tests/test_skill_size.py::SkillSizeTest::test_a_rejection_on_the_user_s_wish_goes_to_the_user (fails on 0d15ccf; pins the rule text, not behaviour)
+- **Recurrences:** none
