@@ -36,7 +36,8 @@ Last pruned: 2026-11-09
   test tests/test_agent_hook.py::SettingsTest::test_a_pth_file_in_a_virtualenv_on_path_never_runs_in_the_agent_hook,
   test tests/test_install.py::UpgradeAndDoctorTest::test_a_config_hook_never_imports_a_module_planted_beside_the_bootstrap,
   test tests/test_install.py::UpgradeAndDoctorTest::test_the_checkout_s_guard_in_adoption_never_imports_a_module_beside_it,
-  test tests/test_incidents.py::NoticeTest::test_a_near_miss_log_that_is_no_file_inside_the_repo_is_skipped
+  test tests/test_incidents.py::NoticeTest::test_a_near_miss_log_that_is_no_file_inside_the_repo_is_skipped,
+  test tests/test_status.py::StatusTest::test_the_none_needed_line_names_head_s_own_trailer
 - **Recurrences:**
   - 2026-10-24, review finding on 0.4.0: the agent hook ran the checkout's copy, which the agent can edit. The plug
     covered the guard and `ci`, not the agent hook added after it.
@@ -59,6 +60,10 @@ Last pruned: 2026-11-09
     path the change itself controls, through a committed symlink, so a note printed a file outside the repo and a
     FIFO hung `--check`. The plugs covered the guard and hooks, not a reader added to the incident checker. It now
     reads the file only when it is a regular file inside the repo.
+  - 2026-11-18, cross-check finding on the I8 fix (`28d5848`): the new `status` line echoed the words of HEAD's
+    `Review:` trailer, text the change controls, as written, and after the first fix still echoed a hex value that
+    names no commit. The plugs covered what the guard runs and trusts, not what it prints back. It now prints the
+    level the guard reads and the base only as the commit it resolves to.
 
 ## I2. The guard fails open on unexpected input
 

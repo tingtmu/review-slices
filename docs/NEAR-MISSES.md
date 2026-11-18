@@ -26,3 +26,6 @@ reviewers gave no tag, so they count as `none`.
 - A brief tells the author to run, unsandboxed, a command a sandboxed reviewer names — 2026-11-18 613f25b Blocker
 - A command run after `cd` reads a relative input path inside the worktree under review — 2026-11-18 d23085d Fix
 - A fallback reviewer is started fresh without the findings it is asked to confirm — 2026-11-18 7dbb28c Fix
+- A new branch keys on a value a fallback also produces (open_unit's HEAD fallback read as "HEAD carries a trailer") — 2026-11-18 28d5848 Fix
+- An incident's plug pins only the instance that slipped while its `(suite)` line claims the whole class — 2026-11-18 28d5848 Fix
+- Two reads of the working tree in one command can disagree, so its lines contradict each other — 2026-11-18 28d5848 Fix
