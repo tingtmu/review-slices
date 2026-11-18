@@ -25,3 +25,4 @@ reviewers gave no tag, so they count as `none`.
 - A plan step on an untracked file (ROADMAP.md) is skipped because no diff shows it — 2026-11-09 01461a9 Fix
 - A brief tells the author to run, unsandboxed, a command a sandboxed reviewer names — 2026-11-18 613f25b Blocker
 - A command run after `cd` reads a relative input path inside the worktree under review — 2026-11-18 d23085d Fix
+- A fallback reviewer is started fresh without the findings it is asked to confirm — 2026-11-18 7dbb28c Fix

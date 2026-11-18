@@ -37,7 +37,8 @@ starts: give it the standing ones.
    - Codex: `resume` takes neither `-C` nor `-s`, so it runs where it starts and the sandbox goes in as `-c`:
      `(cd "$wt" && codex exec resume -c sandbox_mode='"workspace-write"' -c approval_policy='"never"'
      -c memories.use_memories=false -c memories.generate_memories=false
-     -c 'plugins."<memory plugin>".enabled=false' <id> - < "$brief")`. If it fails, start a fresh one as in step 3.
+     -c 'plugins."<memory plugin>".enabled=false' <id> - < "$brief")`. If it fails, start a fresh one as in
+     step 3 on the whole unit, with its earlier findings and what happened to each.
    - Claude: from `$wt`, `claude -p --resume <id>` with step 3's flags.
    After the unit's last round, `git worktree remove --force "$wt"` (never `git worktree prune`: it acts on every
    worktree of the repo).
