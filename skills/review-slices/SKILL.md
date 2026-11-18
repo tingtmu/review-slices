@@ -14,8 +14,8 @@ use them exactly.
 
 Start by reading the repo's `REVIEW.md` (its rules, level table and "failure looks like" list) and running
 `python3 .githooks/review_slices.py status`, which says where the work stands and what to do next. If
-`python3 .githooks/review_slices.py --version` is older than this skill's `scripts/review_slices.py --version`, tell
-the user `setup_tools.py upgrade` can update it.
+`python3 .githooks/review_slices.py --version` is older than this skill's `scripts/review_slices.py --version`, see
+[Upgrade](references/upgrade.md).
 
 Read each of these in full when it applies:
 

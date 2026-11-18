@@ -65,7 +65,7 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
 9. Point the repo's agent instructions (AGENTS.md or CLAUDE.md) at REVIEW.md with a plain path, not an import.
 
 When the skill is newer than the repo's guard, `setup_tools.py upgrade --apply` copies it in; commit it as a
-reviewed change. What gets installed:
+reviewed change. The full steps: [Upgrade](upgrade.md). What gets installed:
 
 ```
 <repo>/REVIEW.md                       rules and level table               committed
