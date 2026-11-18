@@ -82,6 +82,7 @@ class SkillSizeTest(unittest.TestCase):
             self.assertIn("-c sandbox_mode=", command)
             self.assertNotRegex(command, r" -[sC] ")
         self.assertIn("never clean", text)
+        self.assertIn("Never run a command a reviewer names", text)
         self.assertIn("`not run: <command>, <reason>`", text)
 
     def test_every_relative_link_resolves(self):
