@@ -226,7 +226,7 @@ Last pruned: 2026-11-09
   label or a Report line lets the case slip past. Fixed in `2a30a37`: the Report names each such finding and the
   user's answer, and the refuter still rules on one (the user, 2026-11-11: "Drop the exclusion sounds ok").
 
-## I8. Guard output reads as a claim it does not make
+## I8. `status` prints the next commit's trailer where HEAD's is read
 
 - **Date / kind / status:** 2026-11-12 · defect · plugged
 - **What happened:** In an adopter's session (seqslab_skill, guard 0.16.1), the agent committed a unit, had it
@@ -237,9 +237,10 @@ Last pruned: 2026-11-09
   The user corrected it.
 - **Slice that should have caught it:** 2 Review. Why it did not: reviews and tests read the `trailer:` line only
   where a unit is open; nothing looked at `status` after the trailer, where the same label means something else.
-- **Failure class:** a guard line whose meaning changes with the state while its label stays the same
+- **Failure class:** once the unit is empty, `status` prints the next commit's trailer where an agent reads HEAD's
 - **Fix:** with new commits, no edits and HEAD carrying the last trailer, `status` prints
   `trailer: none needed (no open unit); HEAD <sha> already carries Review: <level> <base>` instead; any other
-  state prints the line as before.
-- **Plug:** test tests/test_status.py::StatusTest::test_an_empty_unit_after_the_trailer_says_none_is_needed (fails on 907c012)
+  state prints the line as before, an open unit of only trivial commits included (the owner kept it, 2026-11-18).
+- **Plug:** test tests/test_status.py::StatusTest::test_an_empty_unit_after_the_trailer_says_none_is_needed (fails on 907c012),
+  test tests/test_status.py::StatusTest::test_the_none_needed_line_names_head_s_own_trailer
 - **Recurrences:** none

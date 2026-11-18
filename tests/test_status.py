@@ -66,6 +66,30 @@ class StatusTest(unittest.TestCase):
         repo.write("src/b.py")
         self.assertIn("trailer: Review: simple %s\n" % head, self.status())
 
+    def test_the_none_needed_line_names_head_s_own_trailer(self):  # I8's other shapes: at commit, two units, too low
+        repo = self.repo
+        shapes = (("core/a.py", "critical", "origin/main", "next: run the suite"),
+                  ("src/b.py", "simple", "HEAD", "next: run the suite"),
+                  ("core/c.py", "simple", "HEAD", "next: fix the trailers"))
+        for path, level, base, step in shapes:
+            with self.subTest(path=path):
+                base = repo.out("rev-parse", "--short=12", base)
+                repo.write(path)
+                repo.commit(path, trailer=repo.trailer(level, base))
+                out = self.status()
+                self.assertIn("trailer: none needed (no open unit); HEAD %s already carries Review: %s %s\n"
+                              % (repo.out("rev-parse", "--short=12", "HEAD"), level, base), out)
+                self.assertTrue(self.next_step().startswith(step), out)
+
+    def test_an_empty_root_commit_without_a_trailer_keeps_the_trailer_line(self):
+        repo = self.repo
+        repo.git("switch", "-q", "--orphan", "fresh")
+        repo.write("REVIEW.md", review_md())
+        with open(os.path.join(repo.path, ".git", "info", "exclude"), "a", encoding="utf-8") as handle:
+            handle.write("/REVIEW.md\n")
+        repo.commit("root", all_files=False)
+        self.assertIn("trailer: Review: trivial %s\n" % repo.out("rev-parse", "--short=12", "HEAD"), self.status())
+
     def test_status_names_the_standing_rules_and_the_hook(self):
         out = self.status()
         self.assertIn("standing rules: REVIEW.md at", out)
