@@ -64,6 +64,10 @@ Last pruned: 2026-11-09
     `Review:` trailer, text the change controls, as written, and after the first fix still echoed a hex value that
     names no commit. The plugs covered what the guard runs and trusts, not what it prints back. It now prints the
     level the guard reads and the base only as the commit it resolves to.
+  - 2026-11-18, cross-check findings on the upgrade guide (`419aeb8`, `fee27b0`): it left a 0.1.0 repo's
+    `.githooks/pre-push`, which runs the checkout's guard, to `upgrade`'s one-time output and ran `doctor` after the
+    push. The plugs test the guard and hooks, not a guide that hands their wiring to the reader. The guide now states
+    the deletion and its condition and runs `doctor` before the commit.
 
 ## I2. The guard fails open on unexpected input
 
@@ -170,6 +174,10 @@ Last pruned: 2026-11-09
     blanket `# ruff: noqa` and `# flake8: noqa` (PGH004). No plug checked the headers (the executable test reads
     only the mode bit), and they were tried with ruff's default rules only. The headers now exempt PGH004 too,
     checked on ruff 0.1.15 to 0.17.2, and a test pins them; ruff's preview rules still need the exclude in SKILL.md.
+  - 2026-11-18, cross-check findings on the upgrade guide (`419aeb8`, `fee27b0`): it did not say how to see that
+    `upgrade --apply` finished or how to back an upgrade out. The plugs test `install` against existing tooling, not
+    the upgrade path a guide describes. The guide now asks for a clean tree, a check run that reports the copies
+    current, and a back-out order.
 
 ## I5. A setup tool runs a one-way door it should only list
 

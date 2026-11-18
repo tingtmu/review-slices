@@ -18,7 +18,7 @@ promote one: its references/incidents.md. No check reads this file, so REVIEW.md
 Lines go below. The first ones were seeded on 2026-11-09 from notes kept before this file existed; their
 reviewers gave no tag, so they count as `none`.
 
-- F1 A release note or CHANGELOG line claims what the diff or a cited source does not show — 2026-10-30 bcaed43 Fix, 2026-11-08 6504a70 Fix
+- F1 A release note or CHANGELOG line claims what the diff or a cited source does not show — 2026-10-30 bcaed43 Fix, 2026-11-08 6504a70 Fix, 2026-11-18 419aeb8 Fix
 - A test passes without exercising the claim it names (a branch the fixture never reaches) — 2026-11-06 b657054 Fix, 2026-11-18 d23085d Fix
 - A notice tells the agent to delete a record a later step reads (the 90-day note on plugged and promoted near-miss lines) — 2026-11-09 01461a9 Fix; plugged: test tests/test_incidents.py::NoticeTest::test_a_stale_one_sighting_near_miss_is_a_notice
 - Wording written during a build sets agent behaviour or an exit rule the plan never decided — 2026-11-09 01461a9 Fix
@@ -30,3 +30,8 @@ reviewers gave no tag, so they count as `none`.
 - An incident's plug pins only the instance that slipped while its `(suite)` line claims the whole class — 2026-11-18 28d5848 Fix
 - Two reads of the working tree in one command can disagree, so its lines contradict each other — 2026-11-18 28d5848 Fix
 - A plan restates the brief's condition more narrowly and drops a case (a pushed HEAD that carries its trailer) — 2026-11-18 ba44a1c Fix
+- A step reads a version after an earlier step or run replaced the copy it reads — 2026-11-18 fee27b0 Fix
+- A doc states a rule broader than the code enforces (every new block line waits; every doctor problem names a fix) — 2026-11-18 419aeb8 Fix
+- A doc's command fails on an old version it still covers (a 0.1.0 guard has no `--version`) — 2026-11-18 419aeb8 Fix
+- A doc's range is left open where the code bounds it (release notes past the installed skill's version) — 2026-11-18 419aeb8 Fix
+- A command written into docs is not shown run (Slice 0) — 2026-11-18 419aeb8 Fix
