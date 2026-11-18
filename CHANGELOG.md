@@ -11,15 +11,16 @@ up with it, to a newer release: how to tell which version is where (the skill's 
 tree, read the CHANGELOG entries newer than the repo's version and carry over only what they name, run `doctor`
 before the commit, and commit and review it all as one unit. SKILL.md, set-up.md and the README link it. From this
 release on, an entry carries an `Upgrading:` line only when its release needs a step beyond the guide's five.
-`status` no longer prints the next commit's trailer once the open unit is empty (incident I8, from an adopter's
-session whose agent read `trailer: Review: trivial <HEAD>` as the trailer HEAD should carry): with no edits and HEAD
-carrying the last trailer, pushed or not, it says no trailer is needed and which level and base HEAD carries,
-printing the base only as the commit it names. The Codex cross-check resume now runs where it should:
+`status` no longer prints the next commit's trailer where HEAD already carries the last one (incident I8, from an
+adopter's session whose agent read `trailer: Review: trivial <HEAD>` as the trailer HEAD should carry): with no edits
+and HEAD carrying the last trailer, pushed or not, it says no trailer is needed and which level and base HEAD
+carries, printing the base only as the commit it names; an empty unit whose HEAD has no trailer still prints the
+line. The Codex cross-check resume now runs where it should:
 `codex exec resume` takes neither `-C` nor `-s`, so reviewer-briefs.md step 4 runs it inside the reviewer's
 worktree with the sandbox and approval given as `-c`, and steps 3 and 4 read the brief from `$brief`, an absolute
-path outside that worktree. A failed resume falls back to a fresh reviewer given the earlier findings and what
-happened to each; a test a reviewer's sandbox blocked is reported `not run`, never clean, and the author never runs
-a command a reviewer names or loosens its sandbox. This repo only: incident I8 and its REVIEW.md line, the I7
+path outside that worktree. A failed Codex resume falls back to a fresh reviewer given the earlier findings and
+what happened to each; a test a reviewer's sandbox blocked is reported `not run`, never clean, and the author never
+runs a command a reviewer names or loosens its sandbox (`run-suite` runs the suite on the host). This repo only: incident I8 and its REVIEW.md line, the I7
 recurrence from 0.16.1's own review, I1 and I4 recurrences, and near-miss lines from this release's reviews.
 Guard change: `status` only, which `setup_tools.py upgrade` carries.
 
