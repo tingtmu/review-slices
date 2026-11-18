@@ -50,6 +50,22 @@ class StatusTest(unittest.TestCase):
         self.assertNotIn("src/later.py", repo.out("show", "--name-only", "--format=", "HEAD"))
         self.assertIn("Review: critical", repo.out("log", "-1", "--format=%B"))
 
+    def test_an_empty_unit_after_the_trailer_says_none_is_needed(self):  # I8: read as HEAD's trailer, seqslab
+        repo = self.repo
+        repo.write("core/a.py")
+        repo.commit("change")
+        step = self.next_step()
+        repo.git(*shlex.split(step[step.index("`git -c"):].strip("`"))[1:])
+        head, base = repo.out("rev-parse", "--short=12", "HEAD"), repo.out("rev-parse", "--short=12", "origin/main")
+        out = self.status()
+        self.assertIn("trailer: none needed (no open unit); HEAD %s already carries Review: critical %s\n"
+                      % (head, base), out)
+        self.assertNotIn("Review: trivial", out)
+        step = self.next_step()
+        self.assertEqual(step, "next: run the suite: python3 .githooks/review_slices.py run-suite")
+        repo.write("src/b.py")
+        self.assertIn("trailer: Review: simple %s\n" % head, self.status())
+
     def test_status_names_the_standing_rules_and_the_hook(self):
         out = self.status()
         self.assertIn("standing rules: REVIEW.md at", out)

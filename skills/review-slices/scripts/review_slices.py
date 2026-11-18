@@ -657,7 +657,12 @@ def cmd_status(args):
     print("level: %s" % level)
     for row in rows[:20]:
         print("  %s  (%s)" % (row.path, row.pattern))
-    print("trailer: Review: %s %s" % (level, start[:12]))
+    if commits and not paths and start == commits[-1]:  # HEAD carries the last trailer and nothing follows it
+        carried = git("log", "-1", "--no-show-signature", "--format=%(trailers:key=Review,valueonly,unfold)", start)
+        print("trailer: none needed (no open unit); HEAD %s already carries Review: %s"
+              % (start[:12], " ".join(carried.splitlines()[-1].split()[:2])))
+    else:
+        print("trailer: Review: %s %s" % (level, start[:12]))
     uncommitted = sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
     load, escalate = None, None
     if level in ("important", "critical"):

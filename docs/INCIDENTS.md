@@ -225,3 +225,21 @@ Last pruned: 2026-11-09
   picks, so an author who never asked also escaped the fresh reviewer. The plug pins the rule text, not where a
   label or a Report line lets the case slip past. Fixed in `2a30a37`: the Report names each such finding and the
   user's answer, and the refuter still rules on one (the user, 2026-11-11: "Drop the exclusion sounds ok").
+
+## I8. Guard output reads as a claim it does not make
+
+- **Date / kind / status:** 2026-11-12 · defect · plugged
+- **What happened:** In an adopter's session (seqslab_skill, guard 0.16.1), the agent committed a unit, had it
+  reviewed and amended its trailer `Review: important 173d68f379aa` onto it. `status` then printed
+  `level: trivial` and `trailer: Review: trivial a0d702405a45`: the open unit was empty, so the line was the trailer
+  for a commit not yet made, with the new HEAD as its base. The agent read it as the trailer HEAD should carry,
+  reported a mismatch and proposed amending a correct trailer; `ci origin/main HEAD` said every commit was covered.
+  The user corrected it.
+- **Slice that should have caught it:** 2 Review. Why it did not: reviews and tests read the `trailer:` line only
+  where a unit is open; nothing looked at `status` after the trailer, where the same label means something else.
+- **Failure class:** a guard line whose meaning changes with the state while its label stays the same
+- **Fix:** with new commits, no edits and HEAD carrying the last trailer, `status` prints
+  `trailer: none needed (no open unit); HEAD <sha> already carries Review: <level> <base>` instead; any other
+  state prints the line as before.
+- **Plug:** test tests/test_status.py::StatusTest::test_an_empty_unit_after_the_trailer_says_none_is_needed (fails on 907c012)
+- **Recurrences:** none
