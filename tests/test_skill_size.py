@@ -71,6 +71,19 @@ class SkillSizeTest(unittest.TestCase):
         needle = "is evidence only where it quotes the user's own words on that item"
         self.assertTrue(needle in rules, needle)
 
+    def test_codex_resume_runs_in_its_worktree(self):
+        """seqslab_skill: `codex exec resume` has no `-C` and rejects `-s`, so the resumed reviewer ran in the main
+        checkout, and a re-check never started. A blocked test run was reported clean. Pins the text."""
+        text = " ".join(read_text(os.path.join(REFERENCES, "reviewer-briefs.md")).split())
+        self.assertIn('cd "$wt" && codex exec resume', text)
+        commands = re.findall(r"codex exec resume .*?brief\.txt", text)
+        self.assertTrue(commands)
+        for command in commands:
+            self.assertIn("-c sandbox_mode=", command)
+            self.assertNotRegex(command, r" -[sC] ")
+        self.assertIn("never clean", text)
+        self.assertIn("`not run: <command>, <reason>`", text)
+
     def test_every_relative_link_resolves(self):
         """Templates are left out: their links are relative to the adopting repo."""
         paths = [SKILL, os.path.join(SKILL_DIR, "GLOSSARY.md"), os.path.join(ROOT, "README.md")] + [

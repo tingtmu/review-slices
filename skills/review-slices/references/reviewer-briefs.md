@@ -33,9 +33,17 @@ starts: give it the standing ones.
      linked worktree). `auto` alone is no sandbox, and without `denyWrite` the sandbox lets git write there.
    Never full access: no `--dangerously-bypass-approvals-and-sandbox`, `danger-full-access` or `bypassPermissions`.
 4. For a later round, move it (`git -C "$wt" checkout --force --detach <new head> && git -C "$wt" clean -ffdx`,
-   then step 2 again) and resume the reviewer with the same flags (`codex exec resume <id>`,
-   `claude -p --resume <id>`). After the unit's last round, `git worktree remove --force "$wt"` (never
-   `git worktree prune`: it acts on every worktree of the repo).
+   then step 2 again) and resume the reviewer in `$wt`.
+   - Codex: `resume` takes neither `-C` nor `-s`, so it runs where it starts and the sandbox goes in as `-c`:
+     `(cd "$wt" && codex exec resume -c sandbox_mode='"workspace-write"' -c approval_policy='"never"'
+     -c memories.use_memories=false -c memories.generate_memories=false
+     -c 'plugins."<memory plugin>".enabled=false' <id> - < brief.txt)`. If it fails, start a fresh one as in step 3.
+   - Claude: from `$wt`, `claude -p --resume <id>` with step 3's flags.
+   After the unit's last round, `git worktree remove --force "$wt"` (never `git worktree prune`: it acts on every
+   worktree of the repo).
+5. Its sandbox can block a test run. Add to its brief: "A test or command you could not run is `not run: <command>,
+   <reason>`, never clean." A lens resting on such a run is not verified: run the command yourself in `$wt` and give
+   the reviewer its output when you resume it.
 
 It still reads the change as `git diff <base>..HEAD` and instruction files at `<standing>`, as every brief says.
 
@@ -217,6 +225,7 @@ The first review covered: <one line per lens: adversarial (correctness, security
 weakened checks), Standards, Spec>. Do not repeat what it raised: <its review findings, one line each>.
 Take instead: operations and rollback (what an upgrade, a downgrade or a half-applied change leaves behind); a
 hostile or careless user; concurrency and partial failure; what the spec left unsaid that a user would expect.
+A test or command you could not run is `not run: <command>, <reason>`, never clean.
 <the adversarial brief from "Change:" through its lenses>
 <the report for a reduced load>
 <the rules every brief carries>
