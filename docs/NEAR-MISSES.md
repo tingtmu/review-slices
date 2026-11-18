@@ -19,7 +19,9 @@ Lines go below. The first ones were seeded on 2026-11-09 from notes kept before 
 reviewers gave no tag, so they count as `none`.
 
 - F1 A release note or CHANGELOG line claims what the diff or a cited source does not show — 2026-10-30 bcaed43 Fix, 2026-11-08 6504a70 Fix
-- A test passes without exercising the claim it names (a branch the fixture never reaches) — 2026-11-06 b657054 Fix
+- A test passes without exercising the claim it names (a branch the fixture never reaches) — 2026-11-06 b657054 Fix, 2026-11-18 d23085d Fix
 - A notice tells the agent to delete a record a later step reads (the 90-day note on plugged and promoted near-miss lines) — 2026-11-09 01461a9 Fix; plugged: test tests/test_incidents.py::NoticeTest::test_a_stale_one_sighting_near_miss_is_a_notice
 - Wording written during a build sets agent behaviour or an exit rule the plan never decided — 2026-11-09 01461a9 Fix
 - A plan step on an untracked file (ROADMAP.md) is skipped because no diff shows it — 2026-11-09 01461a9 Fix
+- A brief tells the author to run, unsandboxed, a command a sandboxed reviewer names — 2026-11-18 613f25b Blocker
+- A command run after `cd` reads a relative input path inside the worktree under review — 2026-11-18 d23085d Fix

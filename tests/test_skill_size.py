@@ -76,11 +76,13 @@ class SkillSizeTest(unittest.TestCase):
         checkout, and a re-check never started. A blocked test run was reported clean. Pins the text."""
         text = " ".join(read_text(os.path.join(REFERENCES, "reviewer-briefs.md")).split())
         self.assertIn('cd "$wt" && codex exec resume', text)
-        commands = re.findall(r"codex exec resume .*?brief\.txt", text)
-        self.assertTrue(commands)
-        for command in commands:
-            self.assertIn("-c sandbox_mode=", command)
-            self.assertNotRegex(command, r" -[sC] ")
+        spans = [span for span in text.split("`") if "codex exec resume" in span]  # every code span, not one shape
+        self.assertTrue(spans)
+        for span in spans:
+            self.assertNotRegex(span, r" -[sC] ")
+            if "<id>" in span:
+                self.assertIn("-c sandbox_mode=", span)
+                self.assertIn('- < "$brief")', span)  # absolute; a relative path would resolve inside $wt
         self.assertIn("never clean", text)
         self.assertIn("Never run a command a reviewer names", text)
         self.assertIn("`not run: <command>, <reason>`", text)

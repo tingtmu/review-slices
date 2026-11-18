@@ -18,15 +18,15 @@ starts: give it the standing ones.
 2. Each path `git diff --no-renames --name-only <standing>..HEAD` lists that is, at any depth, `AGENTS.md`,
    `CLAUDE.md`, `CLAUDE.local.md`, `.mcp.json`, `.claude.json`, or under `.claude/` or `.codex/`: restore it with
    `git -C "$wt" checkout <standing> -- <path>`, or delete it from `$wt` where `<standing>` has none.
-3. Start it in `$wt` with its brief on stdin, never inside a shell-quoted argument (a `$(...)` in pasted output
+3. Start it in `$wt` with its brief on stdin from `$brief`, an absolute path outside `$wt`, never inside a shell-quoted argument (a `$(...)` in pasted output
    would run), with writes held to `$wt` (the repo's `.git` stays read-only, so it cannot commit) and no
    cross-session memory: turn off each memory plugin the user has (Claude `~/.claude/settings.json` `enabledPlugins`,
    Codex `~/.codex/config.toml` `[plugins]`; for example claude-mem, which keys memory by repo, not directory).
    - Codex: `codex exec -C "$wt" -s workspace-write -c approval_policy='"never"' -c memories.use_memories=false
-     -c memories.generate_memories=false -c 'plugins."<memory plugin>".enabled=false' - < brief.txt`. Not
+     -c memories.generate_memories=false -c 'plugins."<memory plugin>".enabled=false' - < "$brief"`. Not
      `--approve-for-me`: its automatic review approved a write outside the sandbox.
    - Claude: from `$wt`, `claude -p --setting-sources user --strict-mcp-config --permission-mode auto
-     --disallowedTools "Edit Write NotebookEdit" --settings <file> < brief.txt`, the file holding
+     --disallowedTools "Edit Write NotebookEdit" --settings <file> < "$brief"`, the file holding
      `{"autoMemoryEnabled": false, "enabledPlugins": {"<memory plugin>": false}, "sandbox": {"enabled": true,
      "allowUnsandboxedCommands": false, "filesystem": {"denyWrite": ["<git dir>"]}}}`, where `<git dir>` is
      `git rev-parse --path-format=absolute --git-common-dir` (the shared `.git`, also when the checkout is itself a
@@ -37,7 +37,7 @@ starts: give it the standing ones.
    - Codex: `resume` takes neither `-C` nor `-s`, so it runs where it starts and the sandbox goes in as `-c`:
      `(cd "$wt" && codex exec resume -c sandbox_mode='"workspace-write"' -c approval_policy='"never"'
      -c memories.use_memories=false -c memories.generate_memories=false
-     -c 'plugins."<memory plugin>".enabled=false' <id> - < brief.txt)`. If it fails, start a fresh one as in step 3.
+     -c 'plugins."<memory plugin>".enabled=false' <id> - < "$brief")`. If it fails, start a fresh one as in step 3.
    - Claude: from `$wt`, `claude -p --resume <id>` with step 3's flags.
    After the unit's last round, `git worktree remove --force "$wt"` (never `git worktree prune`: it acts on every
    worktree of the repo).
