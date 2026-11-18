@@ -80,6 +80,10 @@ class StatusTest(unittest.TestCase):
                 self.assertIn("trailer: none needed (no open unit); HEAD %s already carries Review: %s %s\n"
                               % (repo.out("rev-parse", "--short=12", "HEAD"), level, base), out)
                 self.assertTrue(self.next_step().startswith(step), out)
+        repo.git("commit", "-q", "--amend", "--allow-empty", "-m", "c\n\nReview: Critical pasted-token-xyz")
+        out = self.status()
+        self.assertIn("already carries Review: critical (no commit id)\n", out)  # never echoes the trailer's text
+        self.assertNotIn("pasted-token-xyz", out)
 
     def test_an_empty_root_commit_without_a_trailer_keeps_the_trailer_line(self):
         repo = self.repo

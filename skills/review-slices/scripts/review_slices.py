@@ -658,9 +658,11 @@ def cmd_status(args):
     for row in rows[:20]:
         print("  %s  (%s)" % (row.path, row.pattern))
     if commits and not paths and start == commits[-1] and trailer_level(start):  # nothing follows HEAD's trailer
-        carried = git("log", "-1", "--no-show-signature", "--format=%(trailers:key=Review,valueonly,unfold)", start)
-        print("trailer: none needed (no open unit); HEAD %s already carries Review: %s"
-              % (start[:12], " ".join(carried.splitlines()[-1].split()[:2])))
+        words = git("log", "-1", "--no-show-signature", "--format=%(trailers:key=Review,valueonly,unfold)",
+                    start).splitlines()[-1].split()  # only a level and a hex base are echoed, never other text
+        base = words[1] if len(words) > 1 and re.fullmatch(r"[0-9a-f]{4,64}", words[1]) else "(no commit id)"
+        print("trailer: none needed (no open unit); HEAD %s already carries Review: %s %s"
+              % (start[:12], trailer_level(start), base))
     else:
         print("trailer: Review: %s %s" % (level, start[:12]))
     uncommitted = sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
