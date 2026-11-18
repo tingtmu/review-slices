@@ -658,7 +658,7 @@ def cmd_status(args):
     print("level: %s" % level)
     for row in rows[:20]:
         print("  %s  (%s)" % (row.path, row.pattern))
-    if commits and not paths and start == commits[-1] and trailer_level(start):  # nothing follows HEAD's trailer
+    if not paths and start == git("rev-parse", "HEAD") and trailer_level(start):  # nothing follows HEAD's trailer
         words = git("log", "-1", "--no-show-signature", "--format=%(trailers:key=Review,valueonly,unfold)",
                     start).splitlines()[-1].split()  # echo only the level and the commit the base names
         base = len(words) > 1 and re.fullmatch(r"[0-9a-f]{4,64}", words[1]) and git(

@@ -63,6 +63,12 @@ class StatusTest(unittest.TestCase):
         self.assertNotIn("Review: trivial", out)
         step = self.next_step()
         self.assertEqual(step, "next: run the suite: python3 .githooks/review_slices.py run-suite")
+        self.assertEqual(repo.run_suite().returncode, 0)
+        self.assertEqual(repo.try_push().returncode, 0)
+        out = self.status()  # pushed: no new commits, and HEAD still carries its trailer
+        self.assertIn("trailer: none needed (no open unit); HEAD %s already carries Review: critical %s\n"
+                      % (head, base), out)
+        self.assertIn("next: nothing to push\n", out)
         repo.write("src/b.py")
         self.assertIn("trailer: Review: simple %s\n" % head, self.status())
 

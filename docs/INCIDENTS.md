@@ -243,7 +243,7 @@ Last pruned: 2026-11-09
 - **Slice that should have caught it:** 2 Review. Why it did not: reviews and tests read the `trailer:` line only
   where a unit is open; nothing looked at `status` after the trailer, where the same label means something else.
 - **Failure class:** once the unit is empty, `status` prints the next commit's trailer where an agent reads HEAD's
-- **Fix:** with new commits, no edits and HEAD carrying the last trailer, `status` prints
+- **Fix:** with no edits and HEAD carrying the last trailer, pushed or not, `status` prints
   `trailer: none needed (no open unit); HEAD <sha> already carries Review: <level> <base>` instead; any other
   state prints the line as before, an open unit of only trivial commits included (the owner kept it, 2026-11-18).
 - **Plug:** test tests/test_status.py::StatusTest::test_an_empty_unit_after_the_trailer_says_none_is_needed (fails on 907c012),

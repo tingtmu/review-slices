@@ -29,3 +29,4 @@ reviewers gave no tag, so they count as `none`.
 - A new branch keys on a value a fallback also produces (open_unit's HEAD fallback read as "HEAD carries a trailer") — 2026-11-18 28d5848 Fix
 - An incident's plug pins only the instance that slipped while its `(suite)` line claims the whole class — 2026-11-18 28d5848 Fix
 - Two reads of the working tree in one command can disagree, so its lines contradict each other — 2026-11-18 28d5848 Fix
+- A plan restates the brief's condition more narrowly and drops a case (a pushed HEAD that carries its trailer) — 2026-11-18 ba44a1c Fix
