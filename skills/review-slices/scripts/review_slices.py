@@ -629,12 +629,12 @@ def status_tips(args):
     return tuple(tip for tip in (base_tip()[1], push) if tip)
 
 
-def open_unit(commits, tips):
+def open_unit(commits, tips, uncommitted):
     """(start, paths): where the open review unit starts, and every path it and the working tree change: the new
-    commits no trailer reaches, plus edits and new files."""
+    commits no trailer reaches, plus UNCOMMITTED, the edits and new files."""
     _units, uncovered = review_units(commits, tips)
     last = last_trailer(commits)
-    paths = set(changed_paths("HEAD")) | set(untracked_paths()) | set(paths_of(uncovered))
+    paths = set(uncommitted) | set(paths_of(uncovered))
     first = git("rev-parse", "--verify", "--quiet", commits[0] + "^", check=False) if commits else None
     return last or first or git("rev-parse", "HEAD"), sorted(paths)
 
@@ -652,20 +652,21 @@ def cmd_status(args):
         raise GuardError("no REVIEW.md with a review-slices block here or where this branch left %s; to set one "
                          "up, follow the skill's \"Set up a repo\"" % tip_name)
     commits = new_commits("HEAD", tips)
-    start, paths = open_unit(commits, tips)
+    uncommitted = sorted(set(changed_paths("HEAD")) | set(untracked_paths()))  # read once, for every line below
+    start, paths = open_unit(commits, tips, uncommitted)
     level, rows = range_level(config, paths)
     print("level: %s" % level)
     for row in rows[:20]:
         print("  %s  (%s)" % (row.path, row.pattern))
     if commits and not paths and start == commits[-1] and trailer_level(start):  # nothing follows HEAD's trailer
         words = git("log", "-1", "--no-show-signature", "--format=%(trailers:key=Review,valueonly,unfold)",
-                    start).splitlines()[-1].split()  # only a level and a hex base are echoed, never other text
-        base = words[1] if len(words) > 1 and re.fullmatch(r"[0-9a-f]{4,64}", words[1]) else "(no commit id)"
+                    start).splitlines()[-1].split()  # echo only the level and the commit the base names
+        base = len(words) > 1 and re.fullmatch(r"[0-9a-f]{4,64}", words[1]) and git(
+            "rev-parse", "--verify", "--quiet", words[1] + "^{commit}", check=False)
         print("trailer: none needed (no open unit); HEAD %s already carries Review: %s %s"
-              % (start[:12], trailer_level(start), base))
+              % (start[:12], trailer_level(start), base[:12] if base else "(no commit id)"))
     else:
         print("trailer: Review: %s %s" % (level, start[:12]))
-    uncommitted = sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
     load, escalate = None, None
     if level in ("important", "critical"):
         load, escalate = ((("three reviewers", "a BASE was given, so the branch is not measured whole"), None)
