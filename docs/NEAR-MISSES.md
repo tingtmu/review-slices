@@ -35,3 +35,8 @@ reviewers gave no tag, so they count as `none`.
 - A doc's command fails on an old version it still covers (a 0.1.0 guard has no `--version`) — 2026-11-18 419aeb8 Fix
 - A doc's range is left open where the code bounds it (release notes past the installed skill's version) — 2026-11-18 419aeb8 Fix
 - A command written into docs is not shown run (Slice 0) — 2026-11-18 419aeb8 Fix
+- A config's comment claims more coverage than its check gives (ruff silently skipped the noqa-headed guard scripts) — 2026-11-19 2d438d7 Fix
+- A rule turned off to pass a check, with a reason the code does not bear out (PLW1510; `git_version` read only stdout) — 2026-11-19 2d438d7 Fix
+- A new file that configures a suite check takes the default level, so a later edit can empty the check under a lighter review — 2026-11-19 2d438d7 Fix
+- A plan line dropped while trimming SKILL.md to its size ceiling (never skip the pre-commit hooks) — 2026-11-19 2d438d7 Fix
+- A hook's file filter misses the files that configure it (a config-only change skipped the lint hook) — 2026-11-19 cb214d6 Fix
