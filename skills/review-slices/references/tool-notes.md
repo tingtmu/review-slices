@@ -4,9 +4,10 @@ Optional guidance for [Set up a repo](set-up.md) step 1, for choosing the lint a
 when the repo has no lint or type-check setup of its own, or runs a tool on its defaults only. The repo's own config
 always wins.
 
-Agent-written code needs checks that catch bugs, not style. In studies of LLM-written code, the most common bugs
-include made-up objects and attributes, wrong argument counts or types, and undefined or unused names
-([Tambon et al.](https://arxiv.org/abs/2403.08937), [Liu et al.](https://arxiv.org/abs/2307.12596)).
+Agent-written code needs checks that catch bugs, not style. Among the bug patterns of LLM-written code,
+[Tambon et al.](https://arxiv.org/abs/2403.08937) report hallucinated objects and wrong attributes;
+[Liu et al.](https://arxiv.org/abs/2307.12596) report type mismatches and undefined variables among runtime errors,
+and unused variables as a code smell.
 
 ## Principles
 
@@ -27,8 +28,12 @@ include made-up objects and attributes, wrong argument counts or types, and unde
 6. **Give agents no complexity or coverage thresholds.** An agent will game the number
    ([Pstrucha, "Stop Prompting"](https://finance.biggo.com/podcast/6e17bccdea629159)).
 7. **The commit hook previews the suite:**
-   - It runs the same command as the suite's `test:` line, on the same tree (no per-file arguments).
-   - It also triggers on the tool's own config files, so a config-only commit with a bad rule name fails.
+   - It runs the same command as the suite's `test:` line on the whole tree (no per-file arguments). The hook
+     tools set unstaged edits aside first, and untracked files are linted, as the pass stamp includes them.
+   - Neither command may fix files: pass the linter's no-fix flag, since a `fix` setting in the config makes the
+     check rewrite files and pass.
+   - It also triggers on every file that holds the tool's config (a shared one such as `pyproject.toml` too), so a
+     config-only commit with a bad rule name fails.
    - It is installed so that it passes where the config does not exist yet (older branches).
 
 ## Tested examples
@@ -65,8 +70,10 @@ static check (the 13th is a bad keyword passed through `**kwargs`). Re-check on 
 - Air 0.13.0 is a formatter only.
 
 **Commit hook: prek 0.5.11 (pre-commit-compatible config).**
-- A local hook with `entry: ruff check .`, `pass_filenames: false` and
-  `files: '(\.py|^ruff\.toml|^\.pre-commit-config\.yaml)$'`.
+- A local hook with `entry: ruff check --no-fix .`, `pass_filenames: false` and
+  `files: '(\.py|^ruff\.toml|^\.pre-commit-config\.yaml)$'` (add `pyproject.toml` where it holds ruff's config).
+- With `fix = true` in ruff.toml, `ruff check .` deleted an unused import and exited 0; `--no-fix` reported it and
+  exited 1.
 - Installed with `prek install --allow-missing-config`. A plain install blocked every commit on a branch from
   before the config file.
 

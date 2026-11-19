@@ -178,6 +178,11 @@ Last pruned: 2026-11-09
     `upgrade --apply` finished or how to back an upgrade out. The plugs test `install` against existing tooling, not
     the upgrade path a guide describes. The guide now asks for a clean tree, a check run that reports the copies
     current, and a back-out order.
+  - 2026-11-19, cross-check findings on the fast-checks work (`cb214d6`, `6a4b8aa`): the dogfood commit hook,
+    installed plainly, blocked every commit on a branch from before its config, and the suite's new `ruff check .`
+    needed ruff on PATH with nothing saying so; the tool notes' example let a `fix = true` config rewrite files and
+    pass. The plugs test what `install` writes, not lint and hook guidance a repo applies by hand. The hook now
+    installs with `--allow-missing-config`, REVIEW.md names ruff 0.17.5, and the notes pass `--no-fix`.
 
 ## I5. A setup tool runs a one-way door it should only list
 

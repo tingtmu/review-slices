@@ -40,3 +40,8 @@ reviewers gave no tag, so they count as `none`.
 - A new file that configures a suite check takes the default level, so a later edit can empty the check under a lighter review — 2026-11-19 2d438d7 Fix
 - A plan line dropped while trimming SKILL.md to its size ceiling (never skip the pre-commit hooks) — 2026-11-19 2d438d7 Fix
 - A hook's file filter misses the files that configure it (a config-only change skipped the lint hook) — 2026-11-19 cb214d6 Fix
+- A doc's principle and its own example disagree (turn off only None reports, yet the example also turned off argument types and lost a real bug) — 2026-11-19 d85db6b Fix
+- A new doc uses a GLOSSARY Avoid word for a defined term ("gate" for the suite) — 2026-11-19 d85db6b Fix
+- A doc pools several sources into one claim none of them makes alone — 2026-11-19 6a4b8aa Fix
+- A hook's trigger list omits a shared config file that can hold the tool's settings (`pyproject.toml`) — 2026-11-19 6a4b8aa Fix
+- A doc claims the hook and the gate see the same tree where they differ (unstaged edits set aside) — 2026-11-19 6a4b8aa Fix
