@@ -6,7 +6,7 @@ repos:
     hooks:
       - id: ruff-check
         name: ruff check (bug-only rules)
-        entry: ruff check --no-fix .
+        entry: ruff check --no-fix --no-fix-only .
         language: system
         pass_filenames: false
-        files: '(\.py|^ruff\.toml|^\.pre-commit-config\.yaml)$'
+        files: '(\.py|(^|/)(\.?ruff\.toml|pyproject\.toml)|^\.pre-commit-config\.yaml)$'

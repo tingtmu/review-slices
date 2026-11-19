@@ -30,8 +30,11 @@ and unused variables as a code smell.
 7. **The commit hook previews the suite:**
    - It runs the same command as the suite's `test:` line on the whole tree (no per-file arguments). The hook
      tools set unstaged edits aside first, and untracked files are linted, as the pass stamp includes them.
-   - Neither command may fix files: pass the linter's no-fix flag, since a `fix` setting in the config makes the
-     check rewrite files and pass.
+   - Neither command may fix files: pass every flag that turns the linter's fix modes off, since a fix setting in
+     the config makes the check rewrite files and pass. As a backstop, the hook tools fail a hook that modifies
+     files, and `run-suite` writes no stamp when a file changes during the run.
+   - The config, the hook and the `test:` line go in, and come out, together: the command left behind after its
+     config is removed runs the tool's defaults.
    - It also triggers on every file that holds the tool's config (a shared one such as `pyproject.toml` too), so a
      config-only commit with a bad rule name fails.
    - It is installed so that it passes where the config does not exist yet (older branches).
@@ -70,10 +73,11 @@ static check (the 13th is a bad keyword passed through `**kwargs`). Re-check on 
 - Air 0.13.0 is a formatter only.
 
 **Commit hook: prek 0.5.11 (pre-commit-compatible config).**
-- A local hook with `entry: ruff check --no-fix .`, `pass_filenames: false` and
-  `files: '(\.py|^ruff\.toml|^\.pre-commit-config\.yaml)$'` (add `pyproject.toml` where it holds ruff's config).
+- A local hook with `entry: ruff check --no-fix --no-fix-only .`, `pass_filenames: false` and
+  `files: '(\.py|(^|/)(\.?ruff\.toml|pyproject\.toml)|^\.pre-commit-config\.yaml)$'`.
 - With `fix = true` in ruff.toml, `ruff check .` deleted an unused import and exited 0; `--no-fix` reported it and
-  exited 1.
+  exited 1. With `fix-only = true`, `--no-fix` alone still deleted it and exited 0; `--no-fix --no-fix-only`
+  reported it and exited 1. prek failed that hook: "files were modified by this hook".
 - Installed with `prek install --allow-missing-config`. A plain install blocked every commit on a branch from
   before the config file.
 

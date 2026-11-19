@@ -44,4 +44,4 @@ reviewers gave no tag, so they count as `none`.
 - A new doc uses a GLOSSARY Avoid word for a defined term ("gate" for the suite) — 2026-11-19 d85db6b Fix
 - A doc pools several sources into one claim none of them makes alone — 2026-11-19 6a4b8aa Fix
 - A hook's trigger list omits a shared config file that can hold the tool's settings (`pyproject.toml`) — 2026-11-19 6a4b8aa Fix
-- A doc claims the hook and the gate see the same tree where they differ (unstaged edits set aside) — 2026-11-19 6a4b8aa Fix
+- A doc claims the hook and the suite see the same tree where they differ (unstaged edits set aside) — 2026-11-19 6a4b8aa Fix
