@@ -11,6 +11,7 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    write files (with `.gitignore` entries), and the remote checks for REVIEW.md. Prefer checks that catch bugs (a
    linter's correctness rules, a type checker) over formatters and style rules, each with an explicit rule selection
    in the repo's config: a tool's unconfigured default can be mostly style, or check almost nothing.
+   Principles and tested examples: [Tool notes](tool-notes.md).
 2. Copy [templates/REVIEW.md](../templates/REVIEW.md) to the repo root and fill in its level table (one glob per
    line), its `test:` lines and remote checks from step 1, and its failure list. If a REVIEW.md is already there,
    keep its text and add the template's sections to it. Copy [templates/INCIDENTS.md](../templates/INCIDENTS.md) to
