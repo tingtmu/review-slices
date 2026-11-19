@@ -10,7 +10,7 @@ defines every term used here. This file holds what is specific to this repo. Inc
 The guard computes a change's level from this block: the highest level any changed path matches.
 
 ```review-slices
-test: ruff check .
+test: ruff check --no-fix .
 test: python3 -m unittest discover -s tests -q
 test: python3 skills/review-slices/scripts/incidents.py --check
 secrets: gitleaks
