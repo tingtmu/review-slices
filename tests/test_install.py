@@ -120,7 +120,7 @@ class InstallTest(unittest.TestCase):
             self.assertTrue(os.access(os.path.join(repo.path, ".githooks", name), os.X_OK), name)
 
     def test_copied_scripts_tell_strict_linters_to_skip_them(self):
-        # `ruff check --select ALL` flags a blanket `# ruff: noqa` or `# flake8: noqa` (PGH004) unless it is exempted
+        # `ruff check --select ALL` flags a blanket ruff or flake8 file-level noqa (PGH004) unless it is exempted
         header = ["# ruff: noqa", "# flake8: noqa", "# ruff: noqa: PGH004", "# pylint: skip-file",
                   "# mypy: ignore-errors", "# isort: skip_file"]
         for name in ("review_slices.py", "agent_hook.py", "incidents.py", "secret_scan.py", "merged_reviewer.py",

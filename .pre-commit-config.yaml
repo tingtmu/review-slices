@@ -1,0 +1,10 @@
+# Fast bug-only check before each commit (prek or pre-commit). The same command is a `test:` line in REVIEW.md,
+# so run-suite still enforces it; this hook only catches it before review. Rules live in ruff.toml.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check (bug-only rules)
+        entry: ruff check --force-exclude
+        language: system
+        types: [python]

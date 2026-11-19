@@ -8,7 +8,9 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    `test:` line only if the user wants one); it runs nothing. With the user's go-ahead (it runs the repo's commands),
    `discover.py --run` on a clean tree runs each local check and prints the `test:` lines that passed, the checks
    already red (record each as an incident or a roadmap item and leave it out of the suite), the checks that
-   write files (with `.gitignore` entries), and the remote checks for REVIEW.md.
+   write files (with `.gitignore` entries), and the remote checks for REVIEW.md. Prefer checks that catch bugs (a
+   linter's correctness rules, a type checker) over formatters and style rules, each with an explicit rule selection
+   in the repo's config: a tool's unconfigured default can be mostly style, or check almost nothing.
 2. Copy [templates/REVIEW.md](../templates/REVIEW.md) to the repo root and fill in its level table (one glob per
    line), its `test:` lines and remote checks from step 1, and its failure list. If a REVIEW.md is already there,
    keep its text and add the template's sections to it. Copy [templates/INCIDENTS.md](../templates/INCIDENTS.md) to

@@ -110,7 +110,8 @@ Lenses, in order:
    than observed from a real reply.
 4. Instructions an agent would follow wrongly: placeholders it cannot fill, commands nobody ran.
 5. Checks weakened elsewhere: the suite's test lines, skip markers, test config (addopts, coverage thresholds),
-   package scripts, CI files; a test loosened in this same diff; error handling or validation removed; new or bumped
+   package scripts, CI files; a new lint or type suppression (`noqa`, `type: ignore`, any `*-ignore` comment) with
+   no reason on its line; a test loosened in this same diff; error handling or validation removed; new or bumped
    dependencies, install scripts and lockfiles.
 <the rules every brief carries>
 ```

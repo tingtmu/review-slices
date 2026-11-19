@@ -112,7 +112,7 @@ class NoCreditTest(unittest.TestCase):
 
 class ParseTest(unittest.TestCase):
     def test_copy_credit_globs_add_up_and_default_to_none(self):
-        parse = lambda rules: GUARD.parse_config("```review-slices\n%s```\n" % rules)  # noqa: E731
+        parse = lambda rules: GUARD.parse_config("```review-slices\n%s```\n" % rules)
         config = parse("copy-credit: a/* b/*\ncopy-credit: c/*\n")
         self.assertEqual((config["copy-credit"], config["errors"]), (["a/*", "b/*", "c/*"], []))
         self.assertEqual(parse("test: true\n")["copy-credit"], [])
