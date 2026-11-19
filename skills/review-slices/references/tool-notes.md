@@ -32,7 +32,8 @@ include made-up objects and attributes, wrong argument counts or types, and unde
 
 ## Tested examples
 
-Measured 2026-11-19 on this skill's own repo and on a file seeded with 12 bugs. Re-check on newer versions.
+Measured 2026-11-19 on this skill's own repo and on an untyped file seeded with 13 bugs, 12 of them visible to a
+static check (the 13th is a bad keyword passed through `**kwargs`). Re-check on newer versions.
 
 **Python: ruff 0.17.5.**
 - Its default (about 400 rules since 0.16) gave 382 findings here, 308 of them `UP031` (old-style `%`
@@ -47,11 +48,11 @@ Measured 2026-11-19 on this skill's own repo and on a file seeded with 12 bugs. 
 - The style families it leaves out: UP, SIM, C4, I, E/W (except E9), N, D, ANN, FURB, PERF, TRY, RET, PTH.
 
 **Python: type checkers.**
-- pyright 1.1.413 in standard mode caught 12 of 12 seeded bugs with no config. With `reportOptionalMemberAccess`,
-  `reportOptionalSubscript`, `reportOptionalOperand` and `reportArgumentType` off, it caught 9 of 12, and its
-  findings on this repo fell from 57 to 11.
-- pyrefly 1.5.0 with no config falls back to its `basic` preset and caught 0 of 12. With `preset = "default"` it
-  caught 12 of 12. It reports "possibly None" under the same error kind as a truly missing attribute, so that noise
+- pyright 1.1.413 in standard mode caught all 12 visible seeded bugs with no config. With
+  `reportOptionalMemberAccess`, `reportOptionalSubscript`, `reportOptionalOperand` and `reportArgumentType` off, it
+  caught 9 of them, and its findings on this skill's scripts fell from 57 to 15.
+- pyrefly 1.5.0 with no config falls back to its `basic` preset and caught none of them. With `preset = "default"`
+  it caught all 12. It reports "possibly None" under the same error kind as a truly missing attribute, so that noise
   cannot be turned off on its own.
 - mypy skips functions that have no annotations unless given `--check-untyped-defs`.
 
