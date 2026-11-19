@@ -37,7 +37,8 @@ Read each of these in full when it applies:
 
 1. **Work with shown output.** Never write "done", "fixed" or "passes" without the output that shows it.
 2. **Commit locally, without a trailer.** Reviewers read committed work. A local commit needs no go-ahead and is
-   not a claim of done. Run the suite's lint and type-check lines first; never add a suppression to pass one.
+   not a claim of done. Run the suite's lint and type-check lines; never skip the pre-commit hooks or add a
+   suppression to pass one.
    Where REVIEW.md has `secrets: gitleaks`, first run `gitleaks git --pre-commit --staged --redact --no-banner -v`;
    if it finds anything, do not commit: see [A secret turns up](references/secrets.md).
 3. **Run `python3 .githooks/review_slices.py status`** (`level` is the same). It prints the review level of the

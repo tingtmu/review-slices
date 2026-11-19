@@ -89,7 +89,7 @@ def remote_checks(found):
 
 def status(root):
     """{path: XY} from `git status --porcelain`, read in its -z form so odd names survive."""
-    done = subprocess.run(("git",) + guard.GIT_SETTINGS + ("status", "--porcelain", "-z"), cwd=root,
+    done = subprocess.run(("git",) + guard.GIT_SETTINGS + ("status", "--porcelain", "-z"), check=False, cwd=root,
                           capture_output=True, text=True, errors="replace")
     if done.returncode != 0:
         raise guard.GuardError("git status failed: %s" % done.stderr.strip())

@@ -50,7 +50,7 @@ def load_guard():
 
 
 def git_version():
-    out = subprocess.run(("git", "--version"), capture_output=True, text=True, env=ENV).stdout
+    out = subprocess.run(("git", "--version"), check=True, capture_output=True, text=True, env=ENV).stdout
     return tuple(int(part) for part in re.findall(r"\d+", out)[:2])
 
 
@@ -87,7 +87,7 @@ class Repo:
 
     @staticmethod
     def run_git(cwd, *args, check=True, env=None, input=None):
-        done = subprocess.run(("git",) + args, cwd=cwd, capture_output=True, text=True, input=input,
+        done = subprocess.run(("git",) + args, check=False, cwd=cwd, capture_output=True, text=True, input=input,
                               env=dict(ENV, **(env or {})))
         if check and done.returncode != 0:
             raise AssertionError("git %s failed (%d):\n%s%s" % (" ".join(args), done.returncode, done.stdout,
@@ -123,11 +123,11 @@ class Repo:
 
     def guard(self, *args, input=None, env=None, cwd=None):
         """Run the skill's guard (not the repo's copy) in this repo."""
-        return subprocess.run((sys.executable, GUARD) + args, cwd=cwd or self.path, capture_output=True,
+        return subprocess.run((sys.executable, GUARD) + args, check=False, cwd=cwd or self.path, capture_output=True,
                               text=True, input=input, env=dict(ENV, **(env or {})))
 
     def setup(self, *args, env=None):
-        return subprocess.run((sys.executable, SETUP) + args, cwd=self.path, capture_output=True, text=True,
+        return subprocess.run((sys.executable, SETUP) + args, check=False, cwd=self.path, capture_output=True, text=True,
                               env=dict(ENV, **(env or {})))
 
     def install(self):

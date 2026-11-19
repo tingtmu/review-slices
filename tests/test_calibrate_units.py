@@ -125,7 +125,7 @@ class UnitsTest(unittest.TestCase):
         self.repo.git("push", "-q", "origin", "main")  # review: a shallow clone hid the earlier trailer
         clone = os.path.join(self.repo.tmp, "shallow")
         Repo.run_git(self.repo.tmp, "clone", "-q", "--depth", "4", "file://" + self.repo.remote, clone)
-        done = subprocess.run((sys.executable, CALIBRATE, "--list-candidates", "200", "9"), cwd=clone,
+        done = subprocess.run((sys.executable, CALIBRATE, "--list-candidates", "200", "9"), check=False, cwd=clone,
                               capture_output=True, text=True, env=ENV, timeout=120)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("note: 1 unit(s) left out of what follows: cut short", done.stdout)
@@ -345,7 +345,7 @@ class UnitsTest(unittest.TestCase):
             return Repo.run_git(clone, "rev-list", "--objects", "--missing=print", "--all").stdout.count("\n?")
 
         before = missing()
-        done = subprocess.run((sys.executable, CALIBRATE, "--rules", os.path.join(repo.path, "REVIEW.md")), cwd=clone,
+        done = subprocess.run((sys.executable, CALIBRATE, "--rules", os.path.join(repo.path, "REVIEW.md")), check=False, cwd=clone,
                               capture_output=True, text=True, env=ENV, timeout=120)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("glob attribution", done.stdout)

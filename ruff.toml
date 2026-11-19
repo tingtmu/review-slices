@@ -1,8 +1,9 @@
 # Bug-catching rules only: this repo's code is written by agents, so style rules add churn without catching bugs.
-# Never ruff's unconfigured default (mostly style). The vendored .githooks/ copies carry their own skip headers.
+# Never ruff's unconfigured default (mostly style). Not linted here: the guard's scripts in skills/review-slices/scripts/
+# that are copied to .githooks/ carry a file-level `# ruff: noqa` header (so adopting repos' linters skip them), and
+# ruff honours it in their source too.
 [lint]
 select = ["F", "E9", "B", "PLE", "BLE001", "S110", "S112", "ASYNC", "T100", "PGH003", "PGH004",
           "RUF006", "RUF008", "RUF009", "RUF012", "RUF016", "RUF018", "RUF024", "RUF100",
           "PLW0177", "PLW1508", "PLW1510"]
-# PLW1510 off here only: every subprocess.run in this repo reads returncode itself.
-ignore = ["B008", "B028", "B905", "PLW1510"]
+ignore = ["B008", "B028", "B905"]

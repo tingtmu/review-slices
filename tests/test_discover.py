@@ -59,7 +59,7 @@ jobs:
 
 def discover(repo, *args, cwd=None, env=None):
     env = dict(ENV, GIT_CEILING_DIRECTORIES=os.path.dirname(repo.tmp), **(env or {}))
-    return subprocess.run((PYTHON, DISCOVER) + args, cwd=cwd or repo.path, capture_output=True, text=True,
+    return subprocess.run((PYTHON, DISCOVER) + args, check=False, cwd=cwd or repo.path, capture_output=True, text=True,
                           env=env, timeout=120)
 
 

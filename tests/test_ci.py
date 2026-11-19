@@ -14,7 +14,7 @@ class CiTest(unittest.TestCase):
         self.repo.git("switch", "-q", "-c", "feature")
 
     def ci(self, base, head):
-        return subprocess.run((sys.executable, GUARD, "ci", base, head), cwd=self.repo.path, capture_output=True,
+        return subprocess.run((sys.executable, GUARD, "ci", base, head), check=False, cwd=self.repo.path, capture_output=True,
                               text=True, env=ENV)
 
     def test_covered_commits_pass(self):
@@ -63,7 +63,7 @@ class CiTest(unittest.TestCase):
                                                                 "def cmd_ci(args):\n    return 0\n", 1))
         repo.write("core/a.py")
         head = repo.commit("unreviewed, with a friendlier guard")
-        done = subprocess.run((sys.executable, path, "ci", self.base, head), cwd=repo.path, capture_output=True,
+        done = subprocess.run((sys.executable, path, "ci", self.base, head), check=False, cwd=repo.path, capture_output=True,
                               text=True, env=ENV)
         self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
 

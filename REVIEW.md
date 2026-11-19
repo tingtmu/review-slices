@@ -25,6 +25,8 @@ important: .github/*
 important: .claude/*
 important: .codex/*
 important: tests/*
+important: ruff.toml
+important: .pre-commit-config.yaml
 simple: README.md
 simple: CHANGELOG.md
 trivial: docs/NEAR-MISSES.md

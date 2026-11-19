@@ -54,13 +54,13 @@ class RunSuiteTest(unittest.TestCase):
     def test_the_repo_copy_runs_the_suite_wrapper_beside_it(self):
         repo = Repo(self)
         guard = os.path.join(repo.path, ".githooks", "review_slices.py")
-        done = subprocess.run((sys.executable, guard, "run-suite"), cwd=repo.path, capture_output=True, text=True,
+        done = subprocess.run((sys.executable, guard, "run-suite"), check=False, cwd=repo.path, capture_output=True, text=True,
                               env=ENV)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("stamped tree", done.stdout)
         repo.remove(".githooks/run_suite.py")
         repo.commit("lose the suite wrapper")
-        done = subprocess.run((sys.executable, guard, "run-suite"), cwd=repo.path, capture_output=True, text=True,
+        done = subprocess.run((sys.executable, guard, "run-suite"), check=False, cwd=repo.path, capture_output=True, text=True,
                               env=ENV)
         self.assertEqual(done.returncode, 2)
         self.assertIn("run_suite.py did not load (FileNotFoundError", done.stderr)
@@ -72,7 +72,7 @@ class RunSuiteTest(unittest.TestCase):
         repo.commit("a branch's own suite wrapper")
         self.assertEqual(repo.run_suite().returncode, 0)  # the skill's guard runs the skill's
         guard = os.path.join(repo.path, ".githooks", "review_slices.py")
-        done = subprocess.run((sys.executable, guard, "run-suite"), cwd=repo.path, capture_output=True, text=True,
+        done = subprocess.run((sys.executable, guard, "run-suite"), check=False, cwd=repo.path, capture_output=True, text=True,
                               env=ENV)
         self.assertEqual(done.returncode, 7)
 
@@ -80,7 +80,7 @@ class RunSuiteTest(unittest.TestCase):
         repo = Repo(self)
         repo.write(".githooks/run_suite.py", 'VERSION = "0.7.0"\n')
         repo.commit("a suite wrapper with no run()")
-        done = subprocess.run((sys.executable, os.path.join(repo.path, ".githooks", "review_slices.py"), "run-suite"),
+        done = subprocess.run((sys.executable, os.path.join(repo.path, ".githooks", "review_slices.py"), "run-suite"), check=False,
                               cwd=repo.path, capture_output=True, text=True, env=ENV)
         self.assertEqual(done.returncode, 2)
         self.assertIn("run_suite.py did not load (AttributeError", done.stderr)

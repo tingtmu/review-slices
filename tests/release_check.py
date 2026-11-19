@@ -28,7 +28,7 @@ def fail(message):
 
 
 def git(*args, ok=(0,)):
-    done = subprocess.run(("git",) + args, capture_output=True)
+    done = subprocess.run(("git",) + args, check=False, capture_output=True)
     if done.returncode not in ok:
         fail("git %s failed: %s" % (" ".join(args), done.stderr.decode(errors="replace").strip()))
     return done.stdout
@@ -36,7 +36,7 @@ def git(*args, ok=(0,)):
 
 def blob(commit, path):
     """The file's bytes at `commit`, or None when it has no such file."""
-    done = subprocess.run(("git", "cat-file", "blob", "%s:%s" % (commit, path)), capture_output=True)
+    done = subprocess.run(("git", "cat-file", "blob", "%s:%s" % (commit, path)), check=False, capture_output=True)
     return done.stdout if done.returncode == 0 else None
 
 

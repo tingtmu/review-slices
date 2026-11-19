@@ -235,7 +235,7 @@ class RealGitleaksTest(SecretScanCase):
         repo.git("switch", "-q", "work")
 
     def ci(self, repo, base, head):
-        return subprocess.run((sys.executable, GUARD, "ci", base, head), cwd=repo.path, capture_output=True,
+        return subprocess.run((sys.executable, GUARD, "ci", base, head), check=False, cwd=repo.path, capture_output=True,
                               text=True, env=ENV)
 
     def test_a_secret_added_then_removed_is_refused_and_never_printed(self):

@@ -51,7 +51,7 @@ class ReleaseCheckTest(unittest.TestCase):
 
     def check(self, *args, stdin=None, cwd=None):
         command = (sys.executable, "-I", "-" if stdin else CHECK, "--base", self.base) + args
-        return subprocess.run(command, cwd=cwd or self.repo.path, capture_output=True, text=True, input=stdin,
+        return subprocess.run(command, check=False, cwd=cwd or self.repo.path, capture_output=True, text=True, input=stdin,
                               env=ENV)
 
     def problems(self, cwd=None):
@@ -127,7 +127,7 @@ class ReleaseCheckTest(unittest.TestCase):
         self.assertEqual(self.problems(), ["version: 1.1.9 is not higher than the base's 1.2.0"])
 
     def test_a_bad_base_exits_2(self):
-        done = subprocess.run((sys.executable, "-I", CHECK, "--base", "no-such-commit"), cwd=self.repo.path,
+        done = subprocess.run((sys.executable, "-I", CHECK, "--base", "no-such-commit"), check=False, cwd=self.repo.path,
                               capture_output=True, text=True, env=ENV)
         self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
         self.assertIn("release check: git rev-parse", done.stderr)

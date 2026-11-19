@@ -55,7 +55,7 @@ class LogRepo:
             handle.write(text)
 
     def run(self, *args, cwd=None, timeout=None):
-        return subprocess.run((sys.executable, INCIDENTS) + args, cwd=cwd or self.path, capture_output=True,
+        return subprocess.run((sys.executable, INCIDENTS) + args, check=False, cwd=cwd or self.path, capture_output=True,
                               text=True, env=ENV, timeout=timeout)
 
 
@@ -451,7 +451,7 @@ class ReportTest(unittest.TestCase):
 
     def test_text_a_strict_stdout_cannot_encode_is_escaped_not_a_traceback(self):
         repo = LogRepo(self, entry(1, "Café au lait"))
-        done = subprocess.run((sys.executable, INCIDENTS), cwd=repo.path, capture_output=True, text=True,
+        done = subprocess.run((sys.executable, INCIDENTS), check=False, cwd=repo.path, capture_output=True, text=True,
                               env=dict(ENV, PYTHONIOENCODING="ascii:strict"))
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("Caf\\xe9 au lait", done.stdout)
@@ -462,7 +462,7 @@ class ReportTest(unittest.TestCase):
         folder = os.path.join(os.fsencode(repo.path), b"logs-\xff")
         os.mkdir(folder)
         shutil.copy(os.path.join(os.fsencode(repo.path), b"docs", b"INCIDENTS.md"), folder)
-        done = subprocess.run((sys.executable, INCIDENTS, "--path", os.path.join(folder, b"INCIDENTS.md")),
+        done = subprocess.run((sys.executable, INCIDENTS, "--path", os.path.join(folder, b"INCIDENTS.md")), check=False,
                               cwd=repo.path, capture_output=True, env=dict(ENV, PYTHONIOENCODING="utf-8"))
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn(b"logs-\\udcff", done.stdout)

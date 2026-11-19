@@ -235,7 +235,7 @@ class StatusTest(unittest.TestCase):
     def repo_copy_status(self, **env):
         """Run the repo's own (edited) copy of the guard, not the skill's."""
         done = subprocess.run((sys.executable, os.path.join(self.repo.path, ".githooks", "review_slices.py"),
-                               "status"), cwd=self.repo.path, capture_output=True, text=True, env=dict(ENV, **env))
+                               "status"), check=False, cwd=self.repo.path, capture_output=True, text=True, env=dict(ENV, **env))
         self.assertEqual(done.returncode, 0, done.stderr)
         return done.stdout
 

@@ -28,7 +28,7 @@ class AgentHookTest(unittest.TestCase):
         repo = repo or self.repo
         payload = raw if raw is not None else json.dumps({"tool_name": tool, "tool_input": tool_input,
                                                           "cwd": repo.path, "hook_event_name": "PreToolUse"})
-        done = subprocess.run((sys.executable, AGENT_HOOK), input=payload, capture_output=True, text=True,
+        done = subprocess.run((sys.executable, AGENT_HOOK), check=False, input=payload, capture_output=True, text=True,
                               cwd=repo.path, env=ENV)
         self.assertEqual(done.returncode, 0, done.stderr)
         if not done.stdout.strip():
@@ -152,7 +152,7 @@ class AmendTest(unittest.TestCase):
 
     def decide(self, command):
         payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}, "cwd": self.repo.path})
-        done = subprocess.run((sys.executable, AGENT_HOOK), input=payload, capture_output=True, text=True,
+        done = subprocess.run((sys.executable, AGENT_HOOK), check=False, input=payload, capture_output=True, text=True,
                               cwd=self.repo.path, env=ENV)
         return done.stdout.strip() or None
 
@@ -193,7 +193,7 @@ class CdTest(unittest.TestCase):
 
     def decide(self, command, cwd):
         payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}, "cwd": cwd})
-        done = subprocess.run((sys.executable, AGENT_HOOK), input=payload, capture_output=True, text=True,
+        done = subprocess.run((sys.executable, AGENT_HOOK), check=False, input=payload, capture_output=True, text=True,
                               cwd=cwd, env=ENV)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(done.stderr, "")
@@ -285,7 +285,7 @@ class SettingsTest(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(repo.path, ".codex", "hooks.json")))
         self.assertTrue(os.path.exists(os.path.join(repo.path, ".githooks", "agent_hook.py")))
         self.assertIn("nothing to change", repo.setup("install", "--agent-hooks").stdout)
-        decided = subprocess.run(("sh", "-c", command), input=json.dumps(
+        decided = subprocess.run(("sh", "-c", command), check=False, input=json.dumps(
             {"tool_name": "Bash", "tool_input": {"command": "git push --no-verify"}, "cwd": repo.path}),
             capture_output=True, text=True, cwd=repo.path, env=dict(ENV, CLAUDE_PROJECT_DIR=repo.path))
         self.assertEqual(decided.returncode, 0)
@@ -299,7 +299,7 @@ class SettingsTest(unittest.TestCase):
         repo.git("fetch", "-q")
         repo.write(".githooks/agent_hook.py", "import sys\nsys.exit(0)\n")
         command = load_script("setup_tools", SETUP).AGENT_COMMAND
-        decided = subprocess.run(("sh", "-c", command), input=json.dumps(
+        decided = subprocess.run(("sh", "-c", command), check=False, input=json.dumps(
             {"tool_name": "Bash", "tool_input": {"command": "git push --no-verify"}, "cwd": repo.path}),
             capture_output=True, text=True, cwd=repo.path, env=dict(ENV, CLAUDE_PROJECT_DIR=repo.path))
         self.assertIn('"deny"', decided.stdout)
@@ -329,7 +329,7 @@ class SettingsTest(unittest.TestCase):
         payload = dict(fixture["payload"], cwd=repo.path)
         # Codex sets no CLAUDE_PROJECT_DIR; the command falls back to the directory Codex runs it in.
         env = {key: value for key, value in ENV.items() if key != "CLAUDE_PROJECT_DIR"}
-        decided = subprocess.run(("sh", "-c", command), input=json.dumps(payload), capture_output=True, text=True,
+        decided = subprocess.run(("sh", "-c", command), check=False, input=json.dumps(payload), capture_output=True, text=True,
                                  cwd=repo.path, env=env)
         self.assertEqual(json.loads(decided.stdout), fixture["response"])
 
@@ -338,7 +338,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(repo.setup("install", "--apply", "--agent-hooks").returncode, 0)
         command = load_script("setup_tools", SETUP).AGENT_COMMAND
         for agent_command in ("git -C %s push --no-verify" % repo.path, "cd %s && git push --no-verify" % repo.path):
-            decided = subprocess.run(("sh", "-c", command), input=json.dumps(
+            decided = subprocess.run(("sh", "-c", command), check=False, input=json.dumps(
                 {"tool_name": "Bash", "tool_input": {"command": agent_command}, "cwd": "/"}),
                 capture_output=True, text=True, cwd=repo.path, env=dict(ENV, CLAUDE_PROJECT_DIR=repo.path))
             self.assertIn('"deny"', decided.stdout, agent_command)
@@ -349,7 +349,7 @@ class SettingsTest(unittest.TestCase):
         for name in ("json", "re", "shlex", "subprocess"):  # each, imported, would end the hook: an allow
             repo.write(name + ".py", "raise SystemExit(0)\n")
         command = load_script("setup_tools", SETUP).AGENT_COMMAND
-        decided = subprocess.run(("sh", "-c", command), input=json.dumps(
+        decided = subprocess.run(("sh", "-c", command), check=False, input=json.dumps(
             {"tool_name": "Bash", "tool_input": {"command": "git push --no-verify"}, "cwd": repo.path}),
             capture_output=True, text=True, cwd=repo.path, env=dict(ENV, CLAUDE_PROJECT_DIR=repo.path))
         self.assertIn('"deny"', decided.stdout, decided.stderr)
@@ -363,7 +363,7 @@ class SettingsTest(unittest.TestCase):
             with open(os.path.join(site, "zz.pth"), "w", encoding="utf-8") as handle:
                 handle.write("import os; os._exit(0)\n")
         command = load_script("setup_tools", SETUP).AGENT_COMMAND
-        decided = subprocess.run(("sh", "-c", command), input=json.dumps(
+        decided = subprocess.run(("sh", "-c", command), check=False, input=json.dumps(
             {"tool_name": "Bash", "tool_input": {"command": "git push --no-verify"}, "cwd": repo.path}),
             capture_output=True, text=True, cwd=repo.path, env=dict(ENV, CLAUDE_PROJECT_DIR=repo.path,
                                                                      PATH=os.path.join(env_dir, "bin") + os.pathsep
@@ -378,7 +378,7 @@ class SettingsTest(unittest.TestCase):
         self.assertIn("not valid JSON", done.stdout)
 
     def test_a_broken_hook_allows_and_says_why(self):
-        done = subprocess.run((sys.executable, AGENT_HOOK), input="[]", capture_output=True, text=True,
+        done = subprocess.run((sys.executable, AGENT_HOOK), check=False, input="[]", capture_output=True, text=True,
                               env=ENV)
         self.assertEqual((done.returncode, done.stdout), (0, ""))
         self.assertIn("review-slices agent hook", done.stderr)
@@ -386,7 +386,7 @@ class SettingsTest(unittest.TestCase):
     def test_the_settings_command_allows_everything_where_the_hook_is_missing(self):
         repo = Repo(self)
         command = load_script("setup_tools", SETUP).AGENT_COMMAND
-        done = subprocess.run(("sh", "-c", command), input="{}", capture_output=True, text=True, cwd=repo.path,
+        done = subprocess.run(("sh", "-c", command), check=False, input="{}", capture_output=True, text=True, cwd=repo.path,
                               env=dict(ENV, CLAUDE_PROJECT_DIR=repo.path))
         self.assertEqual((done.returncode, done.stdout), (0, ""))
 

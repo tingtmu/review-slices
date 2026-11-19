@@ -12,7 +12,7 @@ CALIBRATE = os.path.join(SCRIPTS, "calibrate.py")
 
 
 def calibrate(repo, *args, cwd=None):
-    return subprocess.run((sys.executable, CALIBRATE) + args, cwd=cwd or repo.path, capture_output=True, text=True,
+    return subprocess.run((sys.executable, CALIBRATE) + args, check=False, cwd=cwd or repo.path, capture_output=True, text=True,
                           env=ENV, timeout=120)
 
 
@@ -139,7 +139,7 @@ class CalibrateTest(unittest.TestCase):
         repo.git("push", "-q", "origin", "main")
         clone = os.path.join(repo.tmp, "shallow")
         Repo.run_git(repo.tmp, "clone", "-q", "--depth", "2", "file://" + repo.remote, clone)
-        done = subprocess.run((sys.executable, CALIBRATE), cwd=clone, capture_output=True, text=True, env=ENV)
+        done = subprocess.run((sys.executable, CALIBRATE), check=False, cwd=clone, capture_output=True, text=True, env=ENV)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("calibrate: 1 first-parent commit(s)", done.stdout)
         self.assertShare(done.stdout, "trivial", 1, 100)
@@ -169,7 +169,7 @@ class CalibrateTest(unittest.TestCase):
         Repo.run_git(path, "init", "-q", "-b", "main", ".")
         with open(os.path.join(path, "REVIEW.md"), "w", encoding="utf-8") as handle:
             handle.write(review_md())
-        done = subprocess.run((sys.executable, CALIBRATE), cwd=path, capture_output=True, text=True, env=ENV)
+        done = subprocess.run((sys.executable, CALIBRATE), check=False, cwd=path, capture_output=True, text=True, env=ENV)
         self.assertEqual(done.returncode, 2)
         self.assertIn("no commits yet", done.stderr)
         self.assertNotIn("Traceback", done.stderr)
