@@ -1,10 +1,12 @@
 # Fast bug-only check before each commit (prek or pre-commit). The same command is a `test:` line in REVIEW.md,
 # so run-suite still enforces it; this hook only catches it before review. Rules live in ruff.toml.
+# Install: `prek install --allow-missing-config` (or pre-commit's same flag): branches from before this file exist.
 repos:
   - repo: local
     hooks:
       - id: ruff-check
         name: ruff check (bug-only rules)
-        entry: ruff check --force-exclude
+        entry: ruff check .
         language: system
-        types: [python]
+        pass_filenames: false
+        files: '(\.py|^ruff\.toml|^\.pre-commit-config\.yaml)$'

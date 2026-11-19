@@ -10,9 +10,9 @@ defines every term used here. This file holds what is specific to this repo. Inc
 The guard computes a change's level from this block: the highest level any changed path matches.
 
 ```review-slices
+test: ruff check .
 test: python3 -m unittest discover -s tests -q
 test: python3 skills/review-slices/scripts/incidents.py --check
-test: ruff check .
 secrets: gitleaks
 base: main
 cross-check: on
@@ -31,6 +31,9 @@ simple: README.md
 simple: CHANGELOG.md
 trivial: docs/NEAR-MISSES.md
 ```
+
+The suite needs `ruff` (0.17.5 tested; `uv tool install ruff==0.17.5`) and `gitleaks` on PATH. The commit hook:
+`prek install --allow-missing-config`, since branches from before `.pre-commit-config.yaml` have none.
 
 Planned actions that make a change Critical: a release tag; a change to the pass stamp or review trailer
 format, or to how the hook is installed, since every adopting clone depends on them.
