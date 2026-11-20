@@ -12,8 +12,8 @@ optional Tool notes on choosing bug-focused checks, with measured examples for R
 and prek examples, and pointers to defaults for other languages. The pyright example keeps `reportArgumentType`
 enabled. This repo adds a bug-focused Ruff configuration and runs the same no-fix command in the local suite and
 the commit hook. The hook instructions use `--allow-missing-config` for older branches. The hook triggers on
-`.py`, `.pyi`, `.ipynb`, and the listed Ruff and hook configuration paths. The hook test pins those triggers,
-rejects non-plain config keys and requires every declared hook repo to be local. A separate suite check lints
+`.py`, `.pyi`, `.ipynb`, and the listed Ruff and hook configuration paths. The test checks that representative paths
+match the hook filter, rejects non-plain config keys and checks the parsed repo values. A separate suite check lints
 the six vendored scripts after blanking standalone comments that begin with a Ruff or Flake8 `noqa` directive,
 with flexible spacing and case-insensitive `noqa`. It leaves docstring examples and per-line suppressions intact.
 The lint cleanup makes existing subprocess error handling explicit, chains exceptions where needed, and retains
@@ -28,6 +28,7 @@ how to handle findings in copied files, and how to check the merge or recover fr
 rollback. In dry run and with `--apply`, `setup_tools.py upgrade` names each installed copy it finds already
 current, using the same read to classify and report it. This repo records I4, I6 and I7 recurrences and the
 reviews' near misses, including the shown-output sighting, and drops the `(suite)` mark from I6.
+Upgrading: `run-suite` now needs Python with `fcntl` (available on Linux and macOS). Native Windows Python is unsupported.
 
 ## 0.17.0 (2026-11-18)
 
