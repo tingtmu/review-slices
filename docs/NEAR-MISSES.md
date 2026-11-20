@@ -18,7 +18,7 @@ promote one: its references/incidents.md. No check reads this file, so REVIEW.md
 Lines go below. The first ones were seeded on 2026-11-09 from notes kept before this file existed; their
 reviewers gave no tag, so they count as `none`.
 
-- F1 A release note or CHANGELOG line claims what the diff or a cited source does not show — 2026-10-30 bcaed43 Fix, 2026-11-08 6504a70 Fix, 2026-11-18 419aeb8 Fix
+- F1 A release note or CHANGELOG line claims what the diff or a cited source does not show — 2026-10-30 bcaed43 Fix, 2026-11-08 6504a70 Fix, 2026-11-18 419aeb8 Fix, 2026-11-20 581f6a4 Fix
 - A test passes without exercising the claim it names (a branch the fixture never reaches) — 2026-11-06 b657054 Fix, 2026-11-18 d23085d Fix
 - A notice tells the agent to delete a record a later step reads (the 90-day note on plugged and promoted near-miss lines) — 2026-11-09 01461a9 Fix; plugged: test tests/test_incidents.py::NoticeTest::test_a_stale_one_sighting_near_miss_is_a_notice
 - Wording written during a build sets agent behaviour or an exit rule the plan never decided — 2026-11-09 01461a9 Fix
@@ -46,3 +46,7 @@ reviewers gave no tag, so they count as `none`.
 - A doc claims the hook and the suite see the same tree where they differ (unstaged edits set aside) — 2026-11-19 6a4b8aa Fix
 - A hand-written config reader takes a shape the real parser reads otherwise (a quoted or spaced key, a tab-led comment, `repo:` after `rev:`), so the check it feeds passes — 2026-11-20 0b1fb62 Fix
 - A doc keeps recommending the config its own change shows too narrow (tool notes' hook filter) — 2026-11-20 0b1fb62 Fix
+- A guide's command names the base branch other than the guard's own lookup (`review-slices.base`, unset before 0.3.0, then origin's default) — 2026-11-20 8767bfc Fix, 2026-11-20 1d8d5fc Fix
+- A guide's recovery step undoes edits but not the untracked files the interrupted command added (`git restore` after `upgrade --apply`) — 2026-11-20 8767bfc Fix
+- Two docs state one behaviour and only one keeps its fallback (set-up.md vs upgrade.md on the handoff of `status`) — 2026-11-20 8767bfc Fix
+- A guide's expected output assumes the checkout has the merge (`guard: <new>, this copy` on a stale local base) — 2026-11-20 1d8d5fc Fix
