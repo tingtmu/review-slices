@@ -25,7 +25,8 @@ changes the repo; `<skill>` is this skill's directory (for a global `npx skills`
 2. **Refresh the repo's copies.** From the repo, on a branch (one that is not the base branch) with a clean working
    tree, first note the repo's version, the lower of `python3 .githooks/review_slices.py --version` and `status`'s
    `guard:` line (a branch may already carry a newer copy): step 3 starts from it, and `--apply` replaces the
-   checkout's copy. `python3 <skill>/scripts/setup_tools.py upgrade` lists each copy in `.githooks/` it would replace;
+   checkout's copy. `python3 <skill>/scripts/setup_tools.py upgrade` lists each copy in `.githooks/` it would replace
+   and names each current one as `already this skill's (<VERSION>): .githooks/<name>` (`--apply` too);
    with the user's go-ahead run it again with `--apply`, then once more without: it must say `the repo's copies are
    this skill's`. A 0.1.0 repo also deletes `.githooks/pre-push` in this unit, once every clone has run `install` (the
    dry run and `--apply` say so; the check run does not). It refreshes `review_slices.py` (with no guard there, run
