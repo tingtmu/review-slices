@@ -14,12 +14,12 @@ enabled. This repo adds a bug-focused Ruff configuration and runs the same no-fi
 the commit hook. The hook instructions use `--allow-missing-config` for older branches. The hook triggers on
 `.py`, `.pyi`, `.ipynb`, and the listed Ruff and hook configuration paths. The hook test pins those triggers,
 rejects non-plain config keys and requires every declared hook repo to be local. A separate suite check lints
-the six vendored scripts after blanking file-level `noqa` directive comments with the spacing and `noqa`
-capitalization Ruff accepts. It leaves docstring examples and per-line suppressions intact. The lint cleanup
-makes existing subprocess error handling explicit, chains exceptions where needed, and retains three deliberate
-broad catches with reasoned per-line suppressions. `status` tells the reader to run it again if its closing
-check sees that HEAD or the changed paths differ from the opening snapshot. Its empty-unit trailer line prints
-`(no commit id)` when the trailer's base names an object other than a commit, including an annotated tag object.
+the six vendored scripts after blanking standalone comments that begin with a Ruff or Flake8 `noqa` directive,
+with flexible spacing and case-insensitive `noqa`. It leaves docstring examples and per-line suppressions intact.
+The lint cleanup makes existing subprocess error handling explicit, chains exceptions where needed, and retains
+three deliberate broad catches with reasoned per-line suppressions. `status` tells the reader to run it again if
+its closing check sees that HEAD or the changed paths differ from the opening snapshot. Its empty-unit trailer line
+prints `(no commit id)` when the trailer's base names an object other than a commit, including an annotated tag object.
 `run-suite` locks stamp updates and replaces the stamp file atomically. The lock coordinates worktrees of the
 same clone once every worktree runs 0.17.1 or later, since an older writer still writes unlocked. The upgrade
 guide explains when to expect the base guard's output, how to read its version when `status` cannot report it,
@@ -27,8 +27,7 @@ and how to follow the review load it prints. It also covers which checks and edi
 how to handle findings in copied files, and how to check the merge or recover from an interrupted upgrade or a
 rollback. In dry run and with `--apply`, `setup_tools.py upgrade` names each installed copy it finds already
 current, using the same read to classify and report it. This repo records I4, I6 and I7 recurrences and the
-reviews' near misses, including the release-claim and shown-output sightings, and drops the `(suite)` mark from
-I6.
+reviews' near misses, including the shown-output sighting, and drops the `(suite)` mark from I6.
 
 ## 0.17.0 (2026-11-18)
 
