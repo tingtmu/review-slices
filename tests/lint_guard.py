@@ -18,7 +18,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = "skills/review-slices/scripts"
 EXPECTED = tuple("%s/%s.py" % (SCRIPTS, name) for name in (
     "agent_hook", "incidents", "merged_reviewer", "review_slices", "run_suite", "secret_scan"))
-HEADER = re.compile(r"^# (ruff|flake8): noqa\b.*$", re.M)
+# Ruff requires a lowercase tool name but accepts mixed case in "noqa".
+HEADER = re.compile(r"^[^\S\n]*#[^\S\n]*(?:ruff|flake8)[^\S\n]*:[^\S\n]*(?i:noqa)(?=[^\S\n]|:|$).*$", re.M)
 BLANKET = "# ruff: noqa"
 
 

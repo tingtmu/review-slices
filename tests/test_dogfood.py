@@ -1,9 +1,26 @@
 """This repo uses its own skill: its guard copy and rules must stay in step with the skill."""
 import os
 import re
+import tempfile
 import unittest
+from unittest import mock
 
+import lint_guard
 from support import GUARD, ROOT, SCRIPTS, load_guard
+
+
+class GuardLintTest(unittest.TestCase):
+    def test_discovers_and_blanks_file_level_noqa_variants(self):
+        headers = ("#ruff: noqa", "#  ruff: noqa", "\t# flake8 :\tNoQa", "# ruff:NOQA: PGH004")
+        body = "undefined_name()  # noqa: F821\n"
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(lint_guard, "ROOT", root):
+            for header in headers:
+                with self.subTest(header=header):
+                    source = header + "\n" + body
+                    with open(os.path.join(root, "guard.py"), "w", encoding="utf-8") as handle:
+                        handle.write(source)
+                    self.assertTrue(lint_guard.headed("guard.py"))
+                    self.assertEqual(lint_guard.HEADER.sub("", source), "\n" + body)
 
 
 class DogfoodTest(unittest.TestCase):

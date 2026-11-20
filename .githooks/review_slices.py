@@ -641,15 +641,15 @@ def open_unit(commits, tips, uncommitted):
     return last or first or git("rev-parse", "HEAD"), sorted(paths)
 
 
-def working_state():
-    """(HEAD, the paths a commit would carry: edits and new files)."""
-    return git("rev-parse", "HEAD"), sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
+def working_paths():
+    """The paths a commit would carry: edits and new files."""
+    return sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
 
 
 def cmd_status(args):
     """Where this work stands. The level covers the open review unit: new commits since the last trailer, plus
     the edits and new files a commit would carry."""
-    measured = working_state()  # read once, before anything else reads HEAD, for every line below
+    measured = (git("rev-parse", "HEAD"), working_paths())  # read HEAD before the opening path scans
     root = git("rev-parse", "--show-toplevel")
     working = working_config(root)
     tips, tip_name = status_tips(args), base_tip()[0]
@@ -707,7 +707,8 @@ def cmd_status(args):
                                                        "not scanned (REVIEW.md has no secrets: line)")))
     step = ("deal with the secret scan before review: " + secret[0].splitlines()[0] if secret else
             next_step(config, level, start, commits, uncommitted, tips, load and load[0]))
-    if working_state() != measured:
+    paths_now = working_paths()
+    if (git("rev-parse", "HEAD"), paths_now) != measured:  # a commit can land during the closing path scan
         step = "the working tree or HEAD changed while status ran; run status again"  # the lines above are stale
     print("next: " + step)
     return 0

@@ -28,14 +28,14 @@ reviewers gave no tag, so they count as `none`.
 - A fallback reviewer is started fresh without the findings it is asked to confirm — 2026-11-18 7dbb28c Fix
 - A new branch keys on a value a fallback also produces (open_unit's HEAD fallback read as "HEAD carries a trailer") — 2026-11-18 28d5848 Fix
 - An incident's plug pins only the instance that slipped while its `(suite)` line claims the whole class — 2026-11-18 28d5848 Fix
-- Two reads of the working tree in one command can disagree, so its lines contradict each other — 2026-11-18 28d5848 Fix
+- Two reads of the working tree in one command can disagree, so its lines contradict each other (a commit during the closing status scan, or a copy changing between upgrade's reads) — 2026-11-18 28d5848 Fix, 2026-11-20 0fe5921 Fix
 - A plan restates the brief's condition more narrowly and drops a case (a pushed HEAD that carries its trailer) — 2026-11-18 ba44a1c Fix
 - A step reads a version after an earlier step or run replaced the copy it reads — 2026-11-18 fee27b0 Fix
 - A doc states a rule broader than the code enforces (every new block line waits; every doctor problem names a fix) — 2026-11-18 419aeb8 Fix
 - A doc's command fails on an old version it still covers (a 0.1.0 guard has no `--version`) — 2026-11-18 419aeb8 Fix
 - A doc's range is left open where the code bounds it (release notes past the installed skill's version) — 2026-11-18 419aeb8 Fix
 - A command written into docs is not shown run (Slice 0) — 2026-11-18 419aeb8 Fix, 2026-11-20 24b392f Fix
-- A config's comment claims more coverage than its check gives (ruff silently skipped the noqa-headed guard scripts) — 2026-11-19 2d438d7 Fix, 2026-11-20 87d7cff Fix
+- A config's comment claims more coverage than its check gives (ruff silently skipped the noqa-headed guard scripts, including other spellings of the header) — 2026-11-19 2d438d7 Fix, 2026-11-20 87d7cff Fix, 2026-11-20 0fe5921 Fix
 - A rule turned off to pass a check, with a reason the code does not bear out (PLW1510; `git_version` read only stdout) — 2026-11-19 2d438d7 Fix
 - A new file that configures a suite check takes the default level, so a later edit can empty the check under a lighter review — 2026-11-19 2d438d7 Fix
 - A plan line dropped while trimming SKILL.md to its size ceiling (never skip the pre-commit hooks) — 2026-11-19 2d438d7 Fix

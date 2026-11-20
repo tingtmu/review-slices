@@ -374,7 +374,8 @@ def cmd_upgrade(args):
     wrapper always, the agent hook and the incident report only where the repo already has them, the secret scan
     also where REVIEW.md says secrets:."""
     root, _common, _bootstrap = paths()
-    current = read(os.path.join(root, guard.GUARD_PATH))
+    guard_copy = os.path.join(root, guard.GUARD_PATH)
+    current = read(guard_copy)
     if current is None:
         print("no %s here: run install first" % guard.GUARD_PATH)
         return 1
@@ -383,22 +384,27 @@ def cmd_upgrade(args):
         print("the repo's guard (%s) is newer than this skill's (%s): update the skill instead" % (
             ".".join(map(str, have)), guard.VERSION))
         return 1
-    copies = [(source, os.path.join(root, ".githooks", os.path.basename(source))) for source in COPIED]
-    stale = [(source, copy) for source, copy in copies if read(copy) not in (None, read(source))
-             or (read(copy) is None and (source in (SKILL_MERGED, SKILL_SUITE)
-                                         or source == SKILL_SCANNER and wants_scanner(root)))]
-    for source, copy in copies:
-        if (source, copy) not in stale and read(copy) is not None:
+    stale = []
+    for source in COPIED:
+        copy = os.path.join(root, ".githooks", os.path.basename(source))
+        installed = current if copy == guard_copy else read(copy)
+        if installed is None and not (source in (SKILL_MERGED, SKILL_SUITE)
+                                      or source == SKILL_SCANNER and wants_scanner(root)):
+            continue
+        target = read(source)
+        if installed is not None and installed == target:
             print("already this skill's (%s): %s" % (guard.VERSION, os.path.relpath(copy, root)))
+        else:
+            stale.append((source, copy, target))
     if not stale:
         print("the repo's copies are this skill's (%s)" % guard.VERSION)
         return 0
-    for source, copy in stale:
+    for source, copy, target in stale:
         print("copy this skill's %s (%s) over %s%s" % (os.path.basename(source), guard.VERSION,
                                                        os.path.relpath(copy, root),
                                                        "" if "--apply" in args else "; add --apply to do it"))
         if "--apply" in args:
-            write(copy, read(source), 0o755)
+            write(copy, target, 0o755)
     print("then commit them as a reviewed change (REVIEW.md puts .githooks/ at important or higher); the guard "
           "judges pushes once it is on the base branch")
     if os.path.exists(os.path.join(root, ".githooks", "pre-push")):

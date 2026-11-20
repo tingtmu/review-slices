@@ -1,11 +1,14 @@
 """`status`: where the work stands, and the next step, at every point of the procedure."""
+import contextlib
+import io
 import os
 import shlex
 import subprocess
 import sys
 import unittest
+from unittest import mock
 
-from support import ENV, RULES, Repo, review_md
+from support import ENV, RULES, Repo, load_guard, review_md
 
 
 class StatusTest(unittest.TestCase):
@@ -20,6 +23,36 @@ class StatusTest(unittest.TestCase):
 
     def next_step(self):
         return [line for line in self.status().splitlines() if line.startswith("next: ")][0]
+
+    def test_a_commit_during_the_closing_path_scan_invalidates_next_step(self):
+        repo = self.repo
+        repo.write("src/a.py")
+        repo.commit("reviewed change", trailer=repo.trailer("simple"))
+        self.assertEqual(repo.run_suite().returncode, 0)
+        push_step = "ask the user's go-ahead, then push"
+        self.assertEqual(self.next_step(), "next: " + push_step)
+        guard = load_guard()
+        scan_paths = guard.untracked_paths
+
+        def finish_scan():
+            paths = scan_paths()
+            if next_step.called:
+                repo.write("src/late.py")
+                repo.commit("concurrent commit")
+            return paths
+
+        output = io.StringIO()
+        cwd = os.getcwd()
+        try:
+            os.chdir(repo.path)
+            with mock.patch.object(guard, "next_step", wraps=guard.next_step) as next_step, \
+                    mock.patch.object(guard, "untracked_paths", side_effect=finish_scan), \
+                    contextlib.redirect_stdout(output):
+                self.assertEqual(guard.cmd_status([]), 0)
+            self.assertTrue(next_step.called)
+        finally:
+            os.chdir(cwd)
+        self.assertIn("next: the working tree or HEAD changed while status ran; run status again", output.getvalue())
 
     def test_the_procedure_from_edit_to_push(self):
         repo = self.repo
