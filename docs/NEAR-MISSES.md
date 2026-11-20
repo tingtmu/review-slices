@@ -44,3 +44,5 @@ reviewers gave no tag, so they count as `none`.
 - A new doc uses a GLOSSARY Avoid word for a defined term ("gate" for the suite) — 2026-11-19 d85db6b Fix
 - A doc pools several sources into one claim none of them makes alone — 2026-11-19 6a4b8aa Fix
 - A doc claims the hook and the suite see the same tree where they differ (unstaged edits set aside) — 2026-11-19 6a4b8aa Fix
+- A hand-written config reader takes a shape the real parser reads otherwise (a quoted or spaced key, a tab-led comment, `repo:` after `rev:`), so the check it feeds passes — 2026-11-20 0b1fb62 Fix
+- A doc keeps recommending the config its own change shows too narrow (tool notes' hook filter) — 2026-11-20 0b1fb62 Fix
