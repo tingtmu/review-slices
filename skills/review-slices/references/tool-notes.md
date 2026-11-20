@@ -74,7 +74,7 @@ static check (the 13th is a bad keyword passed through `**kwargs`). Re-check on 
 
 **Commit hook: prek 0.5.11 (pre-commit-compatible config).**
 - A local hook with `entry: ruff check --no-fix --no-fix-only .`, `pass_filenames: false` and
-  `files: '(\.py|(^|/)(\.?ruff\.toml|pyproject\.toml)|^\.pre-commit-config\.yaml)$'`.
+  `files: '(\.pyi?|\.ipynb|(^|/)(\.?ruff\.toml|pyproject\.toml)|^\.pre-commit-config\.yaml)$'`.
 - With `fix = true` in ruff.toml, `ruff check .` deleted an unused import and exited 0; `--no-fix` reported it and
   exited 1. With `fix-only = true`, `--no-fix` alone still deleted it and exited 0; `--no-fix --no-fix-only`
   reported it and exited 1. prek failed that hook: "files were modified by this hook".
