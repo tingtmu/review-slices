@@ -66,6 +66,10 @@ def read_hook(text, hook_id):
     """The top-level keys, every repo: value and one hook's keys of a .pre-commit-config.yaml, without a YAML
     library. Fails on any shape it does not read, so a filter it cannot see fails the test instead of passing it."""
     lines = [line for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    for line in lines:
+        key, sep, _ = line.strip().lstrip("- ").partition(":")
+        if sep and not re.fullmatch("[a-z_]+", key):
+            raise AssertionError("cannot read the key in %r" % line)
     top = [line.split(":", 1)[0] for line in lines if _indent(line) == 0]
     starts = [i for i, line in enumerate(lines) if line.strip() == "- id: " + hook_id]
     if len(starts) != 1:
