@@ -34,13 +34,19 @@ reviewers gave no tag, so they count as `none`.
 - A doc states a rule broader than the code enforces (every new block line waits; every doctor problem names a fix) — 2026-11-18 419aeb8 Fix
 - A doc's command fails on an old version it still covers (a 0.1.0 guard has no `--version`) — 2026-11-18 419aeb8 Fix
 - A doc's range is left open where the code bounds it (release notes past the installed skill's version) — 2026-11-18 419aeb8 Fix
-- A command written into docs is not shown run (Slice 0) — 2026-11-18 419aeb8 Fix
+- A command written into docs is not shown run (Slice 0) — 2026-11-18 419aeb8 Fix, 2026-11-20 24b392f Fix
 - A config's comment claims more coverage than its check gives (ruff silently skipped the noqa-headed guard scripts) — 2026-11-19 2d438d7 Fix, 2026-11-20 87d7cff Fix
 - A rule turned off to pass a check, with a reason the code does not bear out (PLW1510; `git_version` read only stdout) — 2026-11-19 2d438d7 Fix
 - A new file that configures a suite check takes the default level, so a later edit can empty the check under a lighter review — 2026-11-19 2d438d7 Fix
 - A plan line dropped while trimming SKILL.md to its size ceiling (never skip the pre-commit hooks) — 2026-11-19 2d438d7 Fix
-- A hook's file filter misses the files that configure it (a config-only change skipped the lint hook; then `pyproject.toml`, `.ruff.toml`, nested configs) — 2026-11-19 cb214d6 Fix, 2026-11-19 6a4b8aa Fix
+- A hook's file filter misses the files that configure it (a config-only change skipped the lint hook; then `pyproject.toml`, `.ruff.toml`, nested configs) — 2026-11-19 cb214d6 Fix, 2026-11-19 6a4b8aa Fix; plugged: test tests/test_dogfood.py::HookTriggerTest::test_the_ruff_hook_runs_on_every_file_that_configures_it
 - A doc's principle and its own example disagree (turn off only None reports, yet the example also turned off argument types and lost a real bug) — 2026-11-19 d85db6b Fix
 - A new doc uses a GLOSSARY Avoid word for a defined term ("gate" for the suite) — 2026-11-19 d85db6b Fix
 - A doc pools several sources into one claim none of them makes alone — 2026-11-19 6a4b8aa Fix
 - A doc claims the hook and the suite see the same tree where they differ (unstaged edits set aside) — 2026-11-19 6a4b8aa Fix
+- A hand-written config reader takes a shape the real parser reads otherwise (a quoted or spaced key, a tab-led comment, `repo:` after `rev:`), so the check it feeds passes — 2026-11-20 0b1fb62 Fix
+- A doc keeps recommending the config its own change shows too narrow (tool notes' hook filter) — 2026-11-20 0b1fb62 Fix
+- A guide's command names the base branch other than the guard's own lookup (`review-slices.base`, unset before 0.3.0, then origin's default) — 2026-11-20 8767bfc Fix
+- A guide's recovery step undoes edits but not the untracked files the interrupted command added (`git restore` after `upgrade --apply`) — 2026-11-20 8767bfc Fix
+- Two docs state one behaviour and only one keeps its fallback (set-up.md vs upgrade.md on the handoff of `status`) — 2026-11-20 8767bfc Fix
+- A guide's expected output assumes the checkout has the merge (`guard: <new>, this copy` on a stale local base) — 2026-11-20 1d8d5fc Fix

@@ -216,7 +216,11 @@ Last pruned: 2026-11-09
   Report, the conformance brief, templates/REVIEW.md and the known holes say the same.
 - **Plug:** test tests/test_binding_load.py::NextStepTest::test_the_ceiling_pair_is_counted_and_only_the_user_lowers_it,
   rule REVIEW.md "The skill leaves a slice's minimum to the agent's reading"
-- **Recurrences:** none
+- **Recurrences:** 2026-11-20, a review finding on the upgrade guide (`8767bfc`), found by the adversarial and
+  conformance reviewers before release: its load sentence said a base branch guard that prints `review:` asks for the
+  pair, which would have told an adopter on a 0.9.0 to 0.12.x base, whose guard prints `three reviewers` for a floor
+  path, to run two; caught in review, never run. The plug pins `next:` and SKILL.md's text, not a reference doc that
+  restates a load. Fixed in `1d8d5fc`: the guide says to review at the load the base branch's guard prints.
 
 ## I7. A general go-ahead was cited as the user's decision
 
@@ -243,6 +247,11 @@ Last pruned: 2026-11-09
   picks, so an author who never asked also escaped the fresh reviewer. The plug pins the rule text, not where a
   label or a Report line lets the case slip past. Fixed in `2a30a37`: the Report names each such finding and the
   user's answer, and the refuter still rules on one (the user, 2026-11-11: "Drop the exclusion sounds ok").
+  2026-11-20, a review finding on the upgrade guide (`8767bfc`), found by the adversarial reviewer before release: a
+  plan decision relayed by the coordinator became "whether to push copies with a known defect ... is the user's
+  call", which would let a user's decision stand over a Blocker that SKILL.md step 5 keeps blocking. The plug pins
+  step 5's rule text, not a reference doc that hands a review finding to the user. Fixed in `1d8d5fc`: a Blocker
+  still blocks, and the user's call covers the rest (the owner, 2026-11-20: "Yes, keep narrowing").
 
 ## I8. `status` prints the next commit's trailer where HEAD's is read
 
