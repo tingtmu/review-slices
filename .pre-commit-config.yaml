@@ -9,4 +9,4 @@ repos:
         entry: ruff check --no-fix --no-fix-only .
         language: system
         pass_filenames: false
-        files: '(\.py|(^|/)(\.?ruff\.toml|pyproject\.toml)|^\.pre-commit-config\.yaml)$'
+        files: '(\.pyi?|\.ipynb|(^|/)(\.?ruff\.toml|pyproject\.toml)|^\.pre-commit-config\.yaml)$'
