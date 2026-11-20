@@ -76,7 +76,7 @@ def read_hook(text, hook_id):
         if _indent(line) < key_indent:
             break
         key, sep, value = line.strip().partition(":")
-        if _indent(line) > key_indent or not sep or not value.strip():
+        if _indent(line) > key_indent or not re.fullmatch("[a-z_]+", key) or not sep or not value.strip():
             raise AssertionError("cannot read the hook line %r" % line)
         hook[key] = _scalar(value.strip())
     return top, hook
