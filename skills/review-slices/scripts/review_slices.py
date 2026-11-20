@@ -649,6 +649,7 @@ def working_state():
 def cmd_status(args):
     """Where this work stands. The level covers the open review unit: new commits since the last trailer, plus
     the edits and new files a commit would carry."""
+    measured = working_state()  # read once, before anything else reads HEAD, for every line below
     root = git("rev-parse", "--show-toplevel")
     working = working_config(root)
     tips, tip_name = status_tips(args), base_tip()[0]
@@ -659,7 +660,6 @@ def cmd_status(args):
         raise GuardError("no REVIEW.md with a review-slices block here or where this branch left %s; to set one "
                          "up, follow the skill's \"Set up a repo\"" % tip_name)
     commits = new_commits("HEAD", tips)
-    measured = working_state()  # read once, for every line below
     uncommitted = measured[1]
     start, paths = open_unit(commits, tips, uncommitted)
     level, rows = range_level(config, paths)
