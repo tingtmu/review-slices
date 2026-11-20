@@ -63,16 +63,16 @@ def _scalar(value):
 
 
 def read_hook(text, hook_id):
-    """The top-level keys and one hook's keys (and its repo) of a .pre-commit-config.yaml, without a YAML
+    """The top-level keys, every repo: value and one hook's keys of a .pre-commit-config.yaml, without a YAML
     library. Fails on any shape it does not read, so a filter it cannot see fails the test instead of passing it."""
     lines = [line for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
     top = [line.split(":", 1)[0] for line in lines if _indent(line) == 0]
     starts = [i for i, line in enumerate(lines) if line.strip() == "- id: " + hook_id]
     if len(starts) != 1:
         raise AssertionError("expected one hook %r, found %d" % (hook_id, len(starts)))
-    repos = [line for line in lines[:starts[0]] if line.lstrip().startswith("- repo:")]
+    repos = [_scalar(line.split(":", 1)[1].strip()) for line in lines if re.match(r"\s*(- )?repo:", line)]
     key_indent = _indent(lines[starts[0]]) + 2
-    hook = {"id": hook_id, "repo": _scalar(repos[-1].split(":", 1)[1].strip()) if repos else None}
+    hook = {"id": hook_id}
     for line in lines[starts[0] + 1:]:
         if _indent(line) < key_indent:
             break
@@ -80,7 +80,7 @@ def read_hook(text, hook_id):
         if _indent(line) > key_indent or not re.fullmatch("[a-z_]+", key) or not sep or not value.strip():
             raise AssertionError("cannot read the hook line %r" % line)
         hook[key] = _scalar(value.strip())
-    return top, hook
+    return top, repos, hook
 
 
 class HookTriggerTest(unittest.TestCase):
@@ -88,11 +88,11 @@ class HookTriggerTest(unittest.TestCase):
 
     def setUp(self):
         with open(os.path.join(ROOT, ".pre-commit-config.yaml"), encoding="utf-8") as handle:
-            self.top, self.hook = read_hook(handle.read(), "ruff-check")
+            self.top, self.repos, self.hook = read_hook(handle.read(), "ruff-check")
 
     def test_the_ruff_hook_runs_on_every_file_that_configures_it(self):
         self.assertEqual(self.top, ["repos"], "a top-level filter (files:, exclude:) applies to every hook")
-        self.assertEqual(self.hook["repo"], "local", "a remote hook's manifest can add filters this test cannot see")
+        self.assertEqual(set(self.repos), {"local"}, "a remote hook's manifest can add filters this test cannot see")
         self.assertEqual([key for key in HOOK_FILTERS if key in self.hook], [],
                          "this test models only the hook's files: regex")
         pattern = self.hook.get("files", "")
