@@ -57,7 +57,7 @@ def run(guard, _args):
     for number, command in enumerate(config["tests"], 1):
         print("run-suite: [%d/%d] %s" % (number, len(config["tests"]), command), flush=True)
         began = time.monotonic()
-        code = subprocess.run(command, shell=True, cwd=root).returncode
+        code = subprocess.run(command, shell=True, cwd=root, check=False).returncode
         times = times + [time.monotonic() - began]
         print("run-suite: [%d/%d] exit %d after %.0fs" % (number, len(config["tests"]), code, times[-1]), flush=True)
         if code != 0:

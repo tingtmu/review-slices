@@ -60,7 +60,7 @@ def preconditions(git, binary):
             dotted(MIN_GITLEAKS), INSTALL)
     try:
         found = version_tuple(subprocess.run((binary, "version"), capture_output=True, text=True,
-                                             timeout=60).stdout)
+                                             timeout=60, check=False).stdout)
     except (OSError, subprocess.SubprocessError) as error:
         return "gitleaks did not run: %s" % error
     if found < MIN_GITLEAKS:
@@ -131,7 +131,7 @@ def scan(git, at, head, tips):
         env = dict({key: value for key, value in os.environ.items() if key != "GIT_WORK_TREE"}, GIT_DIR=git_dir)
         try:
             done = subprocess.run(argv, cwd=tmp, env=env, capture_output=True, text=True, errors="replace",
-                                  timeout=TIMEOUT)
+                                  timeout=TIMEOUT, check=False)
         except subprocess.TimeoutExpired:
             return ["the secret scan timed out after %ds" % TIMEOUT], notes
         except OSError as error:

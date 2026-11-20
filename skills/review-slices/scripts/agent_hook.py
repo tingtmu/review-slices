@@ -65,7 +65,7 @@ FALLBACK = (re.compile(r"\bgit\b[^\n;&|]*\b(push|commit)\b[^\n;&|]*--no-verify")
 
 def git(cwd, *args):
     try:
-        done = subprocess.run(("git",) + args, capture_output=True, text=True, cwd=cwd)
+        done = subprocess.run(("git",) + args, capture_output=True, text=True, cwd=cwd, check=False)
     except OSError:  # CWD is missing or not a directory, so no repo is there
         return None
     return done.stdout.strip() if done.returncode == 0 else None
@@ -381,7 +381,7 @@ def reason_for(payload):
 def main():
     try:
         reason = reason_for(json.load(sys.stdin))
-    except Exception as error:  # never block an agent because this hook broke, but say so
+    except Exception as error:  # noqa: BLE001  never block an agent because this hook broke, but say so
         print("review-slices agent hook: %s: %s; the action is allowed" % (type(error).__name__, error),
               file=sys.stderr)
         return 0

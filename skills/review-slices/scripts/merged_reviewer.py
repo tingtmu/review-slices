@@ -59,7 +59,7 @@ Entry = collections.namedtuple("Entry", "time ref start head level load why")
 
 def read_patch(guard, *args):
     """git's patch output, read as bytes: Python's newline translation would split a line at a lone CR."""
-    done = subprocess.run(("git",) + guard.GIT_SETTINGS + args, capture_output=True)
+    done = subprocess.run(("git",) + guard.GIT_SETTINGS + args, capture_output=True, check=False)
     if done.returncode != 0:
         raise guard.GuardError("git %s failed: %s" % (args[0], done.stderr.decode("utf-8", "replace").strip()))
     return done.stdout.decode("utf-8", "surrogateescape")
@@ -165,7 +165,7 @@ def batch(guard, blobs):
     if not blobs:
         return ""
     done = subprocess.run(("git",) + guard.GIT_SETTINGS + ("cat-file", "--batch"), capture_output=True,
-                          input=("\n".join(blobs) + "\n").encode())
+                          input=("\n".join(blobs) + "\n").encode(), check=False)
     if done.returncode != 0:
         raise guard.GuardError("git cat-file failed: %s" % done.stderr.decode("utf-8", "replace").strip())
     return done.stdout.decode("utf-8", "surrogateescape")

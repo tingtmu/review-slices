@@ -758,7 +758,7 @@ def print_report(where, incidents, skipped, today):
 def repo_root():
     """The git top level of the current directory, or the current directory outside git."""
     try:
-        done = subprocess.run(("git", "rev-parse", "--show-toplevel"), capture_output=True, text=True)
+        done = subprocess.run(("git", "rev-parse", "--show-toplevel"), capture_output=True, text=True, check=False)
     except OSError:
         done = None
     return done.stdout.strip() if done and done.returncode == 0 and done.stdout.strip() else os.getcwd()
@@ -770,9 +770,9 @@ def report(path, root, check, today=None):
         with open(path, encoding="utf-8-sig") as handle:
             text = handle.read()
     except OSError as error:
-        raise IncidentError("cannot read %s: %s" % (path, error.strerror or error))
+        raise IncidentError("cannot read %s: %s" % (path, error.strerror or error)) from error
     except UnicodeDecodeError:
-        raise IncidentError("%s is not UTF-8 text" % path)
+        raise IncidentError("%s is not UTF-8 text" % path) from None
     today = today or datetime.date.today()
     incidents, problems, notes, skipped = parse_log(text)
     for incident in incidents:

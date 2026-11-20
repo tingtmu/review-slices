@@ -100,14 +100,16 @@ class GuardError(Exception):
 
 def git_raw(*args):
     """git's stdout, unstripped, or None if git failed."""
-    done = subprocess.run(("git",) + GIT_SETTINGS + args, capture_output=True, text=True, errors="surrogateescape")
+    done = subprocess.run(("git",) + GIT_SETTINGS + args, capture_output=True, text=True, errors="surrogateescape",
+                          check=False)
     return done.stdout if done.returncode == 0 else None
 
 
 def git(*args, check=True):
     """git's stripped stdout, or None if git failed (GuardError instead when CHECK). Paths that are not UTF-8 pass
     through as surrogate escapes, so they never crash a decode and go back to git unchanged."""
-    done = subprocess.run(("git",) + GIT_SETTINGS + args, capture_output=True, text=True, errors="surrogateescape")
+    done = subprocess.run(("git",) + GIT_SETTINGS + args, capture_output=True, text=True, errors="surrogateescape",
+                          check=False)
     if check and done.returncode != 0:
         raise GuardError("git %s failed: %s" % (" ".join(args), done.stderr.strip()))
     return done.stdout.strip() if done.returncode == 0 else None
@@ -321,7 +323,7 @@ def auto_merges_to(commit, base, parents, path):
             with open(name, "w", encoding="utf-8", errors="surrogateescape") as handle:
                 handle.write(blob)
         done = subprocess.run(("git", "merge-file", "-p", "-q") + tuple(names), capture_output=True, text=True,
-                              errors="surrogateescape")
+                              errors="surrogateescape", check=False)
     return done.returncode == 0 and done.stdout == blobs[3]
 
 
@@ -398,7 +400,7 @@ def secret_scan(config, judge, head, tips):
     try:
         exec(compile(source, SCANNER_PATH, "exec"), scanner.__dict__)
         return scanner.scan(git, at, head, tips)
-    except Exception as error:  # a broken scanner refuses by name, not with a traceback
+    except Exception as error:  # noqa: BLE001  a broken scanner refuses by name, not with a traceback
         return ["%s at %s did not run: %r" % (SCANNER_PATH, at[:12], error)], []
 
 
@@ -515,7 +517,7 @@ def handoff(command, args, data=None, judge=None):
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(source)
         return subprocess.run((sys.executable, "-I", "-S", path, command) + tuple(args), input=data, text=True,
-                              env=dict(os.environ, **{HANDOFF: "1"})).returncode
+                              env=dict(os.environ, **{HANDOFF: "1"}), check=False).returncode
 
 
 def print_rule_messages(standing, working, at):
@@ -574,7 +576,7 @@ def review_load(rules, level, rows, uncommitted, start):
             rules or {}).get("small") else (False, "%s at %s has no load(): it measures Important changes, under "
                                                    "no small: line, only" % (MERGED_PATH, at[:12]))
         return ("one merged reviewer" if allowed else "three reviewers", why), None
-    except Exception as error:  # a broken measure means three reviewers, not a traceback
+    except Exception as error:  # noqa: BLE001  a broken measure means three reviewers, not a traceback
         return ("three reviewers", "%s at %s did not run: %r" % (MERGED_PATH, at[:12], error)), None
 
 
@@ -717,7 +719,8 @@ def cmd_run_suite(args):
             exec(compile(handle.read(), path, "exec"), module.__dict__)
         run = module.run
     except Exception as error:  # a missing or broken suite wrapper is named, not a traceback
-        raise GuardError("%s did not load (%r): run the skill's setup_tools.py upgrade --apply" % (path, error))
+        raise GuardError("%s did not load (%r): run the skill's setup_tools.py upgrade --apply" % (
+            path, error)) from error
     return run(types.SimpleNamespace(**globals()), args)
 
 
