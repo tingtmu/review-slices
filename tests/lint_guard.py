@@ -24,7 +24,7 @@ BLANKET = "# ruff: noqa"
 
 def headed(path):
     with open(os.path.join(ROOT, path), encoding="utf-8") as handle:
-        return BLANKET in handle.read().splitlines()
+        return bool(HEADER.search(handle.read()))
 
 
 def lint(path):
