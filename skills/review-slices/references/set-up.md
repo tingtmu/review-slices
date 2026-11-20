@@ -67,9 +67,10 @@ Ask the user before each step; these change how the repo works. `<skill>` is thi
    checked even from clones that never installed the hook.
 9. Point the repo's agent instructions (AGENTS.md or CLAUDE.md) at REVIEW.md with a plain path, not an import.
 
-When the skill is newer than the repo's guard, `setup_tools.py upgrade --apply` copies it in; commit it as a
-reviewed change. Until it is on the base branch, `status`, `level` and `ci` run the base branch's guard too (where it
-has the command), so the new output shows only after the merge. The full steps: [Upgrade](upgrade.md). What gets installed:
+When the skill is newer than the repo's guard, `setup_tools.py upgrade --apply` copies it in; commit it as a reviewed
+change. Until it is on the base branch, `status`, `level` and `ci` run the base branch's guard instead, as the push
+does, where that guard has the command (else this copy runs and says so): expect the old output until the merge. The
+full steps: [Upgrade](upgrade.md). What gets installed:
 
 ```
 <repo>/REVIEW.md                       rules and level table               committed

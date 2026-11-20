@@ -12,7 +12,8 @@ changes the repo; `<skill>` is this skill's directory (for a global `npx skills`
 - The copy that judges pushes, the base branch's: `status`'s `guard:` line. It says `this copy` where the
   checkout's copy is the same, or the base branch has none (or one too old to run `status`). Where `status`
   cannot say (a checkout or a base branch guard too old to run it), read the base branch's copy directly:
-  `git show origin/<base>:.githooks/review_slices.py | grep -m1 -o 'skill version [0-9.]*'`.
+  `git show "$(git config --get review-slices.base)":.githooks/review_slices.py | grep -m1 -o 'skill version
+  [0-9.]*'` (`install` records the base branch there).
 
 `setup_tools.py doctor` adds a `note:` when the repo's guard is older than the skill.
 
@@ -32,8 +33,8 @@ changes the repo; `<skill>` is this skill's directory (for a global `npx skills`
    only where the repo already has them (copy `incidents.py` yourself to add it). It refuses a repo whose guard is
    newer than the skill: update the skill instead. If `--apply` stops partway, run it again before anything else: it
    rewrites only the copies that still differ, a cut-short one included, and if it cannot finish, `git restore
-   .githooks/` puts back the committed copies. The version you noted still holds, whatever the checkout's `--version`
-   now says.
+   .githooks/` puts back the committed copies (delete any copy it added that `git status` still shows untracked). The
+   version you noted still holds, whatever the checkout's `--version` now says.
 3. **Read the release notes**, which the installed skill does not carry: `CHANGELOG.md` at
    https://github.com/tingtmu/review-slices (from 0.9.2 on, the same notes as its GitHub Releases; offline, `git show
    origin/main:CHANGELOG.md` in a clone of it). Read every entry newer than the version you noted in step 2, up to the
@@ -52,11 +53,12 @@ changes the repo; `<skill>` is this skill's directory (for a global `npx skills`
    `Upgrading:` line says so, or its own `doctor` asks for it.
 5. **Commit and review it as one unit:** the `.githooks/` copies and any edits from steps 3 and 4 together. REVIEW.md
    puts `.githooks/` at Important or higher; run `status` and follow SKILL.md (review at the load it prints, the
-   trailer, `run-suite`, the user's go-ahead, push or pull request). `.githooks/` is a floor path, so a base branch
-   guard that prints a `review:` line asks for the pair (plus a cross-check where its REVIEW.md has `cross-check:
-   on`); with no `review:` line, SKILL.md step 4 gives the load. A review finding in a copied file is settled like any
-   other (SKILL.md step 5); also report it as an issue at the skill's repo, which is also where a Pre-existing one is
-   recorded. Whether to push copies with a known defect or wait for a fixed release is the user's call. The base
+   trailer, `run-suite`, the user's go-ahead, push or pull request). `.githooks/` is a floor path, so the unit
+   measures large: review at the load the base branch's guard prints (from 0.13.0 the pair, plus a cross-check where
+   its REVIEW.md has `cross-check: on`; 0.9.0 to 0.12.x `three reviewers`); with no `review:` line, SKILL.md step 4
+   gives the load. A review finding in a copied file is settled like any other (SKILL.md step 5); also report it as an
+   issue at the skill's repo, which is also where a Pre-existing one is recorded. A Blocker still blocks the trailer
+   as step 5 says; for any other, whether to push the copies or wait for a fixed release is the user's call. The base
    branch's old guard judges this push, and until the merge it also runs `status`, `level` and `ci` (where it has the
    command; else this copy runs and says so): on the branch, expect the old version's output and `guard: <old>, the
    base branch's copy`, and never change a trailer to match it. After the merge, fetch the base branch and re-run
