@@ -36,6 +36,7 @@ reviewers gave no tag, so they count as `none`.
 - A doc's range is left open where the code bounds it (release notes past the installed skill's version) — 2026-11-18 419aeb8 Fix
 - A command written into docs is not shown run (Slice 0) — 2026-11-18 419aeb8 Fix, 2026-11-20 24b392f Fix
 - A config's comment claims more coverage than its check gives (ruff silently skipped the noqa-headed guard scripts, including other spellings of the header) — 2026-11-19 2d438d7 Fix, 2026-11-20 87d7cff Fix, 2026-11-20 0fe5921 Fix
+- A source-text check mistakes an example in a string for a directive (an indented noqa in a docstring) — 2026-11-20 c13941e Fix
 - A rule turned off to pass a check, with a reason the code does not bear out (PLW1510; `git_version` read only stdout) — 2026-11-19 2d438d7 Fix
 - A new file that configures a suite check takes the default level, so a later edit can empty the check under a lighter review — 2026-11-19 2d438d7 Fix
 - A plan line dropped while trimming SKILL.md to its size ceiling (never skip the pre-commit hooks) — 2026-11-19 2d438d7 Fix

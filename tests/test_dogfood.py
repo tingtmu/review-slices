@@ -10,17 +10,28 @@ from support import GUARD, ROOT, SCRIPTS, load_guard
 
 
 class GuardLintTest(unittest.TestCase):
+    def test_a_noqa_example_inside_a_docstring_is_not_a_header(self):
+        source = '"""Example directive.\n\n    #  ruff: noqa\n"""\n'
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(lint_guard, "ROOT", root):
+            with open(os.path.join(root, "guard.py"), "w", encoding="utf-8") as handle:
+                handle.write(source)
+            self.assertFalse(lint_guard.headed("guard.py"))
+
     def test_discovers_and_blanks_file_level_noqa_variants(self):
         headers = ("#ruff: noqa", "#  ruff: noqa", "\t# flake8 :\tNoQa", "# ruff:NOQA: PGH004")
-        body = "undefined_name()  # noqa: F821\n"
+        body = '"""Example directive.\n\n    #  ruff: noqa\n"""\nundefined_name()  # noqa: F821\n'
         with tempfile.TemporaryDirectory() as root, mock.patch.object(lint_guard, "ROOT", root):
             for header in headers:
                 with self.subTest(header=header):
-                    source = header + "\n" + body
                     with open(os.path.join(root, "guard.py"), "w", encoding="utf-8") as handle:
-                        handle.write(source)
+                        handle.write(header + "\n" + body)
                     self.assertTrue(lint_guard.headed("guard.py"))
-                    self.assertEqual(lint_guard.HEADER.sub("", source), "\n" + body)
+                    with open(os.path.join(root, "guard.py"), "w", encoding="utf-8") as handle:
+                        handle.write("# ruff: noqa\n" + header + "\n" + body)
+                    with mock.patch.object(lint_guard.subprocess, "run") as ruff:
+                        ruff.return_value.returncode = 0
+                        self.assertEqual(lint_guard.lint("guard.py"), (True, ""))
+                    self.assertEqual(ruff.call_args.kwargs["input"], "\n\n" + body)
 
 
 class DogfoodTest(unittest.TestCase):
