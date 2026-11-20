@@ -57,21 +57,22 @@ def _scalar(value):
         if "'" in inner.replace("''", ""):
             raise AssertionError("cannot read the YAML value %r" % value)
         return inner.replace("''", "'")
-    if not value or value[0] in "'\"|>[{&*!%@`" or " #" in value:
+    if not value or value[0] in "'\"|>[{&*!%@`" or re.search(r"\s#", value):
         raise AssertionError("cannot read the YAML value %r" % value)
     return value
 
 
 def read_hook(text, hook_id):
-    """The top-level keys and one hook's keys of a .pre-commit-config.yaml, without a YAML library. Fails on
-    any shape it does not read, so a filter it cannot see fails the test instead of passing it."""
+    """The top-level keys and one hook's keys (and its repo) of a .pre-commit-config.yaml, without a YAML
+    library. Fails on any shape it does not read, so a filter it cannot see fails the test instead of passing it."""
     lines = [line for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
     top = [line.split(":", 1)[0] for line in lines if _indent(line) == 0]
     starts = [i for i, line in enumerate(lines) if line.strip() == "- id: " + hook_id]
     if len(starts) != 1:
         raise AssertionError("expected one hook %r, found %d" % (hook_id, len(starts)))
+    repos = [line for line in lines[:starts[0]] if line.lstrip().startswith("- repo:")]
     key_indent = _indent(lines[starts[0]]) + 2
-    hook = {"id": hook_id}
+    hook = {"id": hook_id, "repo": _scalar(repos[-1].split(":", 1)[1].strip()) if repos else None}
     for line in lines[starts[0] + 1:]:
         if _indent(line) < key_indent:
             break
@@ -91,6 +92,7 @@ class HookTriggerTest(unittest.TestCase):
 
     def test_the_ruff_hook_runs_on_every_file_that_configures_it(self):
         self.assertEqual(self.top, ["repos"], "a top-level filter (files:, exclude:) applies to every hook")
+        self.assertEqual(self.hook["repo"], "local", "a remote hook's manifest can add filters this test cannot see")
         self.assertEqual([key for key in HOOK_FILTERS if key in self.hook], [],
                          "this test models only the hook's files: regex")
         pattern = self.hook.get("files", "")
