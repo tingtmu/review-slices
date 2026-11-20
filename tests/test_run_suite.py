@@ -1,10 +1,14 @@
 """`run-suite`: run every check in the suite and stamp the tree only on a clean pass."""
+import fcntl
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
+import types
 import unittest
 
-from support import ENV, RULES, Repo, review_md
+from support import ENV, GUARD, RULES, SUITE, Repo, load_script, review_md
 
 
 class RunSuiteTest(unittest.TestCase):
@@ -25,6 +29,39 @@ class RunSuiteTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("[1/2] exit 0 after", done.stdout)
         self.assertIn("[2/2] exit 0 after", done.stdout)
+
+    def test_a_stamp_waits_for_another_writer(self):  # P1: two worktrees of one clone finishing together
+        repo = Repo(self)
+        os.makedirs(os.path.dirname(self.stamp_file(repo)), exist_ok=True)
+        with open(self.stamp_file(repo) + ".lock", "w", encoding="utf-8") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            run = subprocess.Popen((sys.executable, GUARD, "run-suite"), cwd=repo.path, env=ENV,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            with self.assertRaises(subprocess.TimeoutExpired):
+                run.wait(timeout=3)
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            _out, err = run.communicate(timeout=60)
+        self.assertEqual(run.returncode, 0, err)
+        with open(self.stamp_file(repo), encoding="utf-8") as handle:
+            self.assertIn(repo.out("rev-parse", "HEAD^{tree}"), handle.read())
+
+    def test_a_write_that_fails_keeps_the_earlier_stamps(self):  # P1: an interrupted write erased them
+        folder = tempfile.mkdtemp(prefix="review-slices-stamp-")
+        self.addCleanup(shutil.rmtree, folder, True)
+        path = os.path.join(folder, "suite-pass")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("a" * 40 + " 2026-01-01T00:00:00Z 1s 1s\n")
+
+        def broken():
+            raise OSError("interrupted")
+            yield
+
+        suite = load_script("run_suite", SUITE)
+        with self.assertRaises(OSError):
+            suite.write_stamp(types.SimpleNamespace(stamp_path=lambda: path), "b" * 40, 1.0, broken())
+        with open(path, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "a" * 40 + " 2026-01-01T00:00:00Z 1s 1s\n")
+        self.assertLessEqual(set(os.listdir(folder)), {"suite-pass", "suite-pass.lock"})
 
     def test_a_failure_writes_no_stamp(self):
         repo = Repo(self, rules=RULES.replace("test: true", "test: false"))

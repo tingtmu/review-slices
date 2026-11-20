@@ -11,11 +11,15 @@
 The guard loads this file from beside itself and calls run(); it is not run on its own. run-suite never hands off
 to the base branch's guard: it runs the working copy's own suite, so nothing here decides what a push needs. The
 base branch's guard reads the stamps it writes (the format is the guard's: tree, time, seconds, per-check seconds).
+Each write holds a lock beside the stamp file and replaces the file whole, so worktrees of one clone finishing
+together keep every stamp; that holds once every worktree runs 0.17.1 or later, as an older copy writes unlocked.
 """
 import datetime
+import fcntl
 import os
 import subprocess
 import sys
+import tempfile
 import time
 
 VERSION = "0.17.0"
@@ -25,15 +29,25 @@ STAMP_KEEP = 50
 def write_stamp(guard, tree, seconds, times=()):
     path = guard.stamp_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    try:
-        with open(path, encoding="utf-8") as handle:
-            lines = handle.read().splitlines()
-    except FileNotFoundError:
-        lines = []
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    with open(path, "w", encoding="utf-8") as handle:
-        line = "%s %s %.0fs %s" % (tree, now, seconds, ",".join("%.0fs" % taken for taken in times))
-        handle.write("\n".join((lines + [line.rstrip()])[-STAMP_KEEP:]) + "\n")
+    line = "%s %s %.0fs %s" % (tree, now, seconds, ",".join("%.0fs" % taken for taken in times))
+    with open(path + ".lock", "a", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)  # released when the file closes, or the process dies
+        try:
+            with open(path, encoding="utf-8") as handle:
+                lines = handle.read().splitlines()
+        except FileNotFoundError:
+            lines = []
+        fd, temp = tempfile.mkstemp(dir=os.path.dirname(path), prefix="suite-pass.")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write("\n".join((lines + [line.rstrip()])[-STAMP_KEEP:]) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp, path)
+        except BaseException:
+            os.unlink(temp)
+            raise
 
 
 def run(guard, _args):

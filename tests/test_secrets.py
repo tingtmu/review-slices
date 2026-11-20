@@ -19,6 +19,8 @@ import os, sys
 if sys.argv[1:2] == ["version"]:
     print(os.environ.get("FAKE_GITLEAKS_VERSION", "8.30.1"))
     sys.exit(0)
+if os.environ.get("FAKE_GITLEAKS_TOUCH"):  # an edit saved while the guard runs
+    open(os.environ["FAKE_GITLEAKS_TOUCH"], "w").close()
 sys.stderr.write(os.environ.get("FAKE_GITLEAKS_STDERR", "") + "\\n")
 sys.exit(int(os.environ.get("FAKE_GITLEAKS_EXIT", "0")))
 """
@@ -105,6 +107,16 @@ class OldGitTest(FakeGitleaksCase):
 @unittest.skipUnless(SCANS, "the secret scan needs git 2.36+")
 class FakeGitleaksTest(FakeGitleaksCase):
     """Each way the scan can pass or refuse, with a stand-in gitleaks."""
+
+    def test_an_edit_saved_while_status_runs_never_gets_push(self):  # X1, seqslab trial
+        repo = self.make_repo(env=self.fake())
+        self.commit_change(repo)
+        self.assertEqual(repo.run_suite().returncode, 0)
+        self.assertIn("next: ask the user's go-ahead, then push", repo.guard("status", env=self.fake()).stdout)
+        late = dict(self.fake(), FAKE_GITLEAKS_TOUCH=os.path.join(repo.path, "late.py"))
+        out = repo.guard("status", env=late).stdout
+        self.assertNotIn("then push", out)
+        self.assertIn("next: the working tree or HEAD changed while status ran; run status again", out)
 
     def test_without_the_line_nothing_is_scanned(self):
         repo = self.make_repo(rules=RULES, env=self.fake())

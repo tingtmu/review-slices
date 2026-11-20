@@ -641,6 +641,11 @@ def open_unit(commits, tips, uncommitted):
     return last or first or git("rev-parse", "HEAD"), sorted(paths)
 
 
+def working_state():
+    """(HEAD, the paths a commit would carry: edits and new files)."""
+    return git("rev-parse", "HEAD"), sorted(set(changed_paths("HEAD")) | set(untracked_paths()))
+
+
 def cmd_status(args):
     """Where this work stands. The level covers the open review unit: new commits since the last trailer, plus
     the edits and new files a commit would carry."""
@@ -654,7 +659,8 @@ def cmd_status(args):
         raise GuardError("no REVIEW.md with a review-slices block here or where this branch left %s; to set one "
                          "up, follow the skill's \"Set up a repo\"" % tip_name)
     commits = new_commits("HEAD", tips)
-    uncommitted = sorted(set(changed_paths("HEAD")) | set(untracked_paths()))  # read once, for every line below
+    measured = working_state()  # read once, for every line below
+    uncommitted = measured[1]
     start, paths = open_unit(commits, tips, uncommitted)
     level, rows = range_level(config, paths)
     print("level: %s" % level)
@@ -664,7 +670,8 @@ def cmd_status(args):
         words = git("log", "-1", "--no-show-signature", "--format=%(trailers:key=Review,valueonly,unfold)",
                     start).splitlines()[-1].split()  # echo only the level and the commit the base names
         base = len(words) > 1 and re.fullmatch(r"[0-9a-f]{4,64}", words[1]) and git(
-            "rev-parse", "--verify", "--quiet", words[1] + "^{commit}", check=False)
+            "cat-file", "-t", words[1], check=False) == "commit" and git("rev-parse", "--verify", "--quiet",
+                                                                          words[1], check=False)
         print("trailer: none needed (no open unit); HEAD %s already carries Review: %s %s"
               % (start[:12], trailer_level(start), base[:12] if base else "(no commit id)"))
     else:
@@ -698,8 +705,11 @@ def cmd_status(args):
     secret, notes = secret_scan(config, base_tip()[1], "HEAD", tips) if commits else ([], [])
     print("secrets: " + ("\n  ".join(secret + notes) or ("no new commits to scan" if config.get("secrets") else
                                                        "not scanned (REVIEW.md has no secrets: line)")))
-    print("next: " + ("deal with the secret scan before review: " + secret[0].splitlines()[0] if secret else
-                      next_step(config, level, start, commits, uncommitted, tips, load and load[0])))
+    step = ("deal with the secret scan before review: " + secret[0].splitlines()[0] if secret else
+            next_step(config, level, start, commits, uncommitted, tips, load and load[0]))
+    if working_state() != measured:
+        step = "the working tree or HEAD changed while status ran; run status again"  # the lines above are stale
+    print("next: " + step)
     return 0
 
 

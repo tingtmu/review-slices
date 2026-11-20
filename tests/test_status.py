@@ -86,7 +86,9 @@ class StatusTest(unittest.TestCase):
                 self.assertIn("trailer: none needed (no open unit); HEAD %s already carries Review: %s %s\n"
                               % (repo.out("rev-parse", "--short=12", "HEAD"), level, base), out)
                 self.assertTrue(self.next_step().startswith(step), out)
-        for text in ("pasted-token-xyz", repo.out("rev-parse", "HEAD:core/c.py")):  # not hex; hex but no commit
+        repo.git("tag", "-a", "-m", "a tag", "v1", "HEAD")
+        tag = repo.out("rev-parse", "v1")  # an annotated tag's own id: hex, peels to a commit, but is not one
+        for text in ("pasted-token-xyz", repo.out("rev-parse", "HEAD:core/c.py"), tag):  # not hex; hex, no commit
             repo.git("commit", "-q", "--amend", "--allow-empty", "-m", "c\n\nReview: Critical " + text)
             out = self.status()
             self.assertIn("already carries Review: critical (no commit id)\n", out)  # never echoes the trailer

@@ -387,6 +387,9 @@ def cmd_upgrade(args):
     stale = [(source, copy) for source, copy in copies if read(copy) not in (None, read(source))
              or (read(copy) is None and (source in (SKILL_MERGED, SKILL_SUITE)
                                          or source == SKILL_SCANNER and wants_scanner(root)))]
+    for source, copy in copies:
+        if (source, copy) not in stale and read(copy) is not None:
+            print("already this skill's (%s): %s" % (guard.VERSION, os.path.relpath(copy, root)))
     if not stale:
         print("the repo's copies are this skill's (%s)" % guard.VERSION)
         return 0

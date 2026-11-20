@@ -371,6 +371,18 @@ class UpgradeAndDoctorTest(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(repo.path, ".githooks", "agent_hook.py")))
         self.assertIn("are this skill's", repo.setup("upgrade").stdout)
 
+    def test_upgrade_names_the_copies_that_are_already_current(self):  # seqslab trial: incidents.py went unnamed
+        repo = Repo(self)
+        repo.write(".githooks/incidents.py", "# an old copy\n")
+        guard_line = "already this skill's (%s): .githooks/review_slices.py" % load_guard().VERSION
+        stale = repo.setup("upgrade").stdout
+        self.assertIn(guard_line, stale)
+        self.assertNotIn("already this skill's (%s): .githooks/incidents.py" % load_guard().VERSION, stale)
+        self.assertEqual(repo.setup("upgrade", "--apply").returncode, 0)
+        current = repo.setup("upgrade").stdout
+        self.assertIn(guard_line, current)
+        self.assertIn(".githooks/incidents.py", current)
+
     def test_the_secret_scan_is_copied_only_where_review_md_asks_for_it(self):
         self.assertNotIn("secret_scan.py", Repo(self).setup("install").stdout)
         repo = Repo(self, rules=RULES + "secrets: gitleaks\n")
