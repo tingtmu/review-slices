@@ -12,8 +12,9 @@ changes the repo; `<skill>` is this skill's directory (for a global `npx skills`
 - The copy that judges pushes, the base branch's: `status`'s `guard:` line. It says `this copy` where the
   checkout's copy is the same, or the base branch has none (or one too old to run `status`). Where `status`
   cannot say (a checkout or a base branch guard too old to run it), read the base branch's copy directly:
-  `git show "$(git config --get review-slices.base)":.githooks/review_slices.py | grep -m1 -o 'skill version
-  [0-9.]*'` (`install` records the base branch there).
+  `git show <base>:.githooks/review_slices.py | grep -m1 -o 'skill version [0-9.]*'`, where `<base>` is what `git
+  config --get review-slices.base` prints, or where that prints nothing (before 0.3.0), the base branch's
+  remote-tracking name, such as `origin/main`.
 
 `setup_tools.py doctor` adds a `note:` when the repo's guard is older than the skill.
 
@@ -62,10 +63,10 @@ changes the repo; `<skill>` is this skill's directory (for a global `npx skills`
    branch's old guard judges this push, and until the merge it also runs `status`, `level` and `ci` (where it has the
    command; else this copy runs and says so): on the branch, expect the old version's output and `guard: <old>, the
    base branch's copy`, and never change a trailer to match it. After the merge, fetch the base branch and re-run
-   `status`: it must say `guard: <new>, this copy`. To back out, revert that commit, after first reverting any later
-   change that needs the newer guard (such as a new block key); `install --apply` from the older skill rewires a clone
-   if `doctor` asks. After the revert lands, fetch the base branch and check its guard version again (`guard:`, or the
-   direct read above).
+   `status`: it must say `guard: <new>` (`this copy` once your checkout has the merge). To back out, revert that
+   commit, after first reverting any later change that needs the newer guard (such as a new block key); `install
+   --apply` from the older skill rewires a clone if `doctor` asks. After the revert lands, fetch the base branch and
+   check its guard version again (`guard:`, or the direct read above).
 
 ## The `Upgrading:` line
 
